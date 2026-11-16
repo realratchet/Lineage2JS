@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
+import { Group, Object3D, Mesh, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Color, LineBasicMaterial, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, Vector2, Bone, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip } from "three";
 import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -13,6 +13,7 @@ import VertMeshEmitter from "../../objects/emitters/vert-mesh-emitter";
 import BeamEmitter from "../../objects/emitters/beam-emitter";
 import RibbonEmitter from "../../objects/emitters/ribbon-emitter";
 import type { BaseEmitter } from "../../objects/emitters/base-emitter";
+import EmitterActor from "../../objects/emitter-actor";
 import DynamicLight, { ColorHSV } from "../../objects/dynamic-light";
 import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
 import MovableObject from "../../objects/movable-object";
@@ -22,19 +23,14 @@ import TerrainDecoration from "../../objects/terrain-decoration";
 import LocalSpaceSkeleton from "../../objects/local-space-skeleton";
 import BSPCollider from "../../objects/bsp-collider";
 import LitSkinnedMesh from "../../objects/lit-skinned-mesh";
-import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
-import Rotator from "../../utils/rotator";
-import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../../game/components";
-import { SCRIPT_NATIVE_EVENT, findScriptPropertyKey, getScriptPropertyName } from "../../game/script-component";
-import ActorOwnershipComponent, { setScriptObjectProperty } from "../../objects/components/actor-ownership-component";
-import { ENetRole_T } from "../unreal/un-aactor";
+import UnScriptVM from "../../ue-script/vm";
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
-import type { IEmitterSpawnSoundDecodeInfo, IEmitterActorDecodeInfo, IEmitterDecodeInfo, IMeshEmitterDecodeInfo, ISpriteEmitterDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
+import type { IEmitterActorDecodeInfo, IEmitterDecodeInfo, IMeshEmitterDecodeInfo, ISpriteEmitterDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 import type { ILightDecodeInfo, ISunLightDecodeInfo } from "@l2js/engine/contracts/light";
 import type { IBaseMaterialDecodeInfo, IMaterialGroupDecodeInfo, IShaderDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
-import type { IRotatingDecodeInfo, IEdgesObjectDecodeInfo, IStaticMeshObjectDecodeInfo, IStaticMeshActorDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { IEdgesObjectDecodeInfo, IStaticMeshObjectDecodeInfo, IStaticMeshActorDecodeInfo } from "@l2js/engine/contracts/mesh";
 import type { IBoneDecodeInfo, IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { ITerrainSegmentDecodeInfo, ITerrainDecorationDecodeInfo } from "@l2js/engine/contracts/terrain";
 import type { ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
@@ -43,7 +39,7 @@ import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T } from "@l2js/engine/
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheGeometriesByName = new Map<string, WeakRef<THREE.BufferGeometry>>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
-const tmpScriptLocation = new Vector3();
+const cacheAnimationBuffers = new WeakSet<IKeyframeDecodeInfo_T[]>();
 
 
 
@@ -78,10 +74,13 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
         geometry.setAttribute(`uv${i === 0 ? "" : i}`, new BufferAttribute(arrUv, 2));
     });
 
+    if (info.attributes.vertexAlpha) geometry.setAttribute("vertexAlpha", new BufferAttribute(info.attributes.vertexAlpha, 1, true));
     if (info.attributes.normals) geometry.setAttribute("normal", new BufferAttribute(info.attributes.normals, 3));
     if (info.attributes.positions) geometry.setAttribute("position", new BufferAttribute(info.attributes.positions, 3));
-    if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
-    if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
+    if (info.attributes.colors)
+        geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
+    if (info.attributes.colorsInstance)
+        geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.skinIndex2) geometry.setAttribute("skinIndex2", new BufferAttribute(info.attributes.skinIndex2, 4));
@@ -123,7 +122,29 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     return geometry;
 }
 
-function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
+function drainSteps<T>(steps: Generator<void, T>): T {
+    let step = steps.next();
+
+    while (!step.done) step = steps.next();
+
+    return step.value;
+}
+
+function* decodeChildren(library: DecodeLibrary, object: THREE.Object3D, info: Pick<IBaseObjectDecodeInfo, "children">): Generator<void, void> {
+    if (!info.children) return;
+
+    for (const ch of info.children) {
+        switch (ch.type) {
+            case "Group":
+            case "Level":
+            case "TerrainInfo": object.add(yield* decodeTerrainInfoSteps(library, ch as IBaseObjectDecodeInfo)); break;
+            default: object.add(decodeObject3D(library, ch)); break;
+        }
+        yield;
+    }
+}
+
+function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary, object: T, info: IBaseObjectDecodeInfo, children: boolean = true) {
 
     if (info.name) object.name = info.name;
     if (info.scriptClassId) {
@@ -136,205 +157,18 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
     if (info.quaternion) object.quaternion.fromArray(info.quaternion);
     else if (info.rotation) object.rotation.fromArray(info.rotation);
 
-    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    if (children && info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
     return object;
 }
 
 
-type EmitterSpawnSound_T = IEmitterSpawnSoundDecodeInfo & { dataUri: string };
-
-class EmitterActor extends GameObject {
-    public actorUuid: string;
-    public scriptClassId: string;
-    public scriptProperties: Map<string, ScriptValue_T>;
-    public spawnSound: EmitterSpawnSound_T = null;
-    public speedRate: number = 1;
-    public readonly emitterRotation = new Quaternion();
-    public readonly globalOffset = new Vector3();
-
-    protected emitterRotator: Rotator = null;
-    protected readonly inverseInitialRotation = new Quaternion();
-    protected ratePitch: number = 0;
-    protected rateYaw: number = 0;
-    protected rateRoll: number = 0;
-    protected rotationTime: number;
-
-    public constructor() {
-        super();
-
-        (this as any).isEmitterActor = true;
-        this.addComponent(new ActorOwnershipComponent());
-    }
-
-    public getUnrealScriptProperty(id: string): ScriptValue_T {
-        const name = getScriptPropertyName(id);
-
-        if (name === "location") return this.getWorldPosition(tmpScriptLocation).toArray();
-        const key = findScriptPropertyKey(this.scriptProperties, name);
-
-        return key === undefined ? null : this.scriptProperties.get(key);
-    }
-
-    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
-        const name = getScriptPropertyName(id);
-
-        if (name === "location") {
-            tmpScriptLocation.fromArray(value as number[]);
-            if (this.parent) this.parent.worldToLocal(tmpScriptLocation);
-            this.position.copy(tmpScriptLocation);
-            this.updateMatrix();
-        }
-
-        if (name === "level") return setScriptObjectProperty(this, id, value);
-        const key = findScriptPropertyKey(this.scriptProperties, name) ?? id.slice(id.lastIndexOf(".") + 1);
-
-        this.scriptProperties.set(key, value);
-    }
-
-    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
-        if (call.context === this && call.name.toLowerCase() === "kill") { this.kill(); return undefined; }
-        const result = this.dispatchComponentEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
-
-        if (result !== COMPONENT_EVENT_NOT_HANDLED) return result;
-        // Preserve UnScriptVM.invokeNative's outer-self dispatch for actor contexts.
-        if (call.self !== this && call.self.callUnrealNative) return call.self.callUnrealNative(call);
-
-        throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
-    }
-
-    public kill(): void {
-        // Engine.dll AEmitter::Kill 0x105d2990..0x105d2a23.
-        for (const emitter of this.scriptProperties.get("Emitters") as BaseEmitter[])
-            if (emitter) emitter.kill();
-
-        this.scriptProperties.set("AutoReset", false);
-        this.scriptProperties.set("AutoDestroy", true);
-    }
-
-    public getSpeedRate(): number {
-        const speedRate = (this as any).scriptProperties?.get("SpeedRate") ?? this.speedRate;
-
-        if (!Number.isFinite(speedRate)) throw new Error(`Emitter '${this.name}' has invalid SpeedRate '${speedRate}'.`);
-
-        return speedRate;
-    }
-
-    protected sampleEmitterRanges(): void {
-        const range = this.scriptProperties.get("GlobalOffsetRange") as any;
-        const resetRange = this.scriptProperties.get("TimeTillResetRange") as any;
-
-        if (!range || !resetRange) throw new Error(`Emitter '${this.name}' has no parent ranges.`);
-        for (const value of [range.X, range.Y, range.Z, resetRange])
-            if (!value || !Number.isFinite(value.Min) || !Number.isFinite(value.Max)) throw new Error(`Emitter '${this.name}' has invalid parent ranges.`);
-
-        // Core.dll FRangeVector::GetRand 101101E0 samples Y before X and Z.
-        this.globalOffset.y = Math.fround(range.Y.Max + Math.random() * (range.Y.Min - range.Y.Max));
-        this.globalOffset.x = Math.fround(range.X.Max + Math.random() * (range.X.Min - range.X.Max));
-        this.globalOffset.z = Math.fround(range.Z.Max + Math.random() * (range.Z.Min - range.Z.Max));
-        this.scriptProperties.set("GlobalOffset", this.globalOffset.toArray());
-        this.scriptProperties.set("TimeTillReset", Math.fround(resetRange.Max + Math.random() * (resetRange.Min - resetRange.Max)));
-    }
-
-    public updateEmitters(currentTime: number, deltaTime: number): boolean {
-        const properties = this.scriptProperties;
-        const emitters = properties.get("Emitters") as unknown as BaseEmitter[];
-
-        const dt = Math.fround(deltaTime * this.getSpeedRate());
-        let noNormalChild = true, noEnabledChild = true, pendingInitialDelay = false;
-
-        if (!properties.get("Initialized")) {
-            this.sampleEmitterRanges();
-            properties.set("Initialized", 1);
-        } else this.globalOffset.fromArray(properties.get("GlobalOffset") as number[]);
-
-        for (const emitter of emitters) {
-            const branch = emitter.update(currentTime, deltaTime);
-
-            if (branch === "disabled") continue;
-            noEnabledChild = false;
-            if (branch === "delayed") pendingInitialDelay = true;
-            if (branch === "normal") noNormalChild = false;
-        }
-
-        // Engine.dll AEmitter::Tick 105D571D uses branch outcomes, not final particle counts.
-        if (noNormalChild && !noEnabledChild && emitters.length !== 0 && properties.get("AutoDestroy") && !pendingInitialDelay) {
-            if (properties.get("bStatic") || properties.get("bNoDelete")) return false;
-            if (properties.get("bDeleteMe")) return false;
-            if (properties.get("Role") !== ENetRole_T.ROLE_Authority && !properties.get("bNetTemporary")) return false;
-
-            properties.set("bDeleteMe", true);
-            return true;
-        }
-
-        if (noNormalChild && properties.get("AutoReset") && !properties.get("AutoDestroy")) {
-            const timeTillReset = properties.get("TimeTillReset") as number;
-
-            if (!Number.isFinite(timeTillReset)) throw new Error(`Emitter '${this.name}' has invalid TimeTillReset.`);
-
-            const remaining = Math.fround(timeTillReset - dt);
-
-            if (remaining > 0) properties.set("TimeTillReset", remaining);
-            else {
-                this.sampleEmitterRanges();
-                for (const emitter of emitters) emitter.reset();
-                properties.set("FirstSpawnParticle", false);
-            }
-        }
-
-        return false;
-    }
-
-    public adjustParticleLife(lifetime: number): void {
-        if (!Number.isFinite(lifetime) || lifetime < 0) throw new Error(`Invalid emitter lifetime '${lifetime}'.`);
-
-        const emitters = this.scriptProperties.get("Emitters") as unknown as BaseEmitter[];
-        let maxLifetime = 0;
-
-        for (const emitter of emitters) maxLifetime = Math.max(maxLifetime, emitter.getForcedLifeTime());
-
-        const delta = lifetime - maxLifetime;
-        const lightLifeSpan = this.scriptProperties.get("EL_LifeSpan") as number;
-
-        if (!Number.isFinite(lightLifeSpan)) throw new Error(`Emitter '${this.name}' has no EL_LifeSpan default.`);
-
-        // Engine.dll SetParticleLifeTimeRange 0x8a2e09 / SpawnEmitterLight 0x8a3b3a.
-        this.scriptProperties.set("EL_LifeSpan", lightLifeSpan + delta);
-
-        for (const emitter of emitters) emitter.adjustParticleLife(lifetime, delta);
-    }
-
-    public setRotating(info: IRotatingDecodeInfo): void {
-        this.emitterRotator = new Rotator(...info.rotator);
-        this.emitterRotator.toQuaternion(this.inverseInitialRotation).invert();
-        [this.ratePitch, this.rateYaw, this.rateRoll] = info.rate;
-    }
-
-    public updateEmitterRotation(currentTime: number): void {
-        if (!this.emitterRotator) return;
-        if (this.rotationTime === currentTime) return;
-
-        if (this.rotationTime === undefined) {
-            this.rotationTime = currentTime;
-            return;
-        }
-
-        const dt = (currentTime - this.rotationTime) / 1000 * this.getSpeedRate();
-
-        this.emitterRotator.pitch += this.ratePitch * dt;
-        this.emitterRotator.yaw += this.rateYaw * dt;
-        this.emitterRotator.roll += this.rateRoll * dt;
-        this.emitterRotator.toQuaternion(this.emitterRotation).premultiply(this.inverseInitialRotation);
-        this.rotationTime = currentTime;
-    }
-}
-
 function decodeEmitterObject(library: DecodeLibrary, info: IEmitterActorDecodeInfo) {
-    const object = decodeSimpleObject(library, EmitterActor, info);
+    const object = decodeSimpleObject(library, EmitterActor, info) as EmitterActor;
 
     object.actorUuid = info.uuid;
 
-    object.scriptProperties.set("Emitters", object.children.slice());
+    object.scriptProperties.set("Emitters", object.children.slice() as BaseEmitter[]);
     object.scriptProperties.set("FirstSpawnParticle", false);
     object.speedRate = info.speedRate;
 
@@ -441,7 +275,18 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, isSpecialLit: info.isSpecialLit, permeatingLights: info.permeatingLights, forcedRegionTag: info.forcedRegionTag, forcedRegion: info.forcedRegion, ambient, collision: info.collision, staticMeshCollision, collisionIndex };
     const accessories = info.agit ? info.agit.accessories.map(accessory => {
         const decoded = decodeStaticMeshInstance(library, { ...instanceInfo, mesh: accessory.mesh, attributes: {}, lights: null }, fetchGeometry);
-        return new LitActorMesh({ geometry: decoded.geometry, materials: canonicalizeStaticMeshMaterials(decoded.materials), lightInfo: null, scaledGlow, isSunAffected, isSpecialLit: info.isSpecialLit, permeatingLights: info.permeatingLights, forcedRegionTag: info.forcedRegionTag, forcedRegion: info.forcedRegion, ambient: { ...ambient, hardwareLighting: true } });
+        return new LitActorMesh({
+            geometry: decoded.geometry,
+            materials: canonicalizeStaticMeshMaterials(decoded.materials),
+            lightInfo: null,
+            scaledGlow,
+            isSunAffected,
+            isSpecialLit: info.isSpecialLit,
+            permeatingLights: info.permeatingLights,
+            forcedRegionTag: info.forcedRegionTag,
+            forcedRegion: info.forcedRegion,
+            ambient: { ...ambient, hardwareLighting: true }
+        });
     }) : null;
     const object = info.agit ? new AgitStaticMeshActor(props, info.agit, accessories)
         : info.mover ? new MovableObject({ ...props, mover: info.mover })
@@ -487,7 +332,9 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     return object;
 }
 
-function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
+function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) { return drainSteps(decodeZoneObjectSteps(library, info)); }
+
+function* decodeZoneObjectSteps(library: DecodeLibrary, info: IBaseZoneDecodeInfo): Generator<void, ZoneObject> {
     const object = new ZoneObject();
 
     if (info.name) object.name = info.name;
@@ -506,7 +353,7 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
             object.skyOrigin.fromArray((info as any).location);
         }
     }
-    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    yield* decodeChildren(library, object, info);
 
     // object.visible = false;
 
@@ -539,6 +386,25 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
 
     (Array.isArray(materials) ? materials : [materials]).forEach(m => {
         if (!m) return;
+        const material = m as any;
+        if (material.defines && material.defines.USE_RANGE_FADE === undefined) {
+            material.defines.USE_RANGE_FADE = "";
+            material.defines.USE_RANGE_FADE_FRAGMENT = ""; // BSP polygons are too large to interpolate the distance per vertex
+            if (!sectionInfo.isOutdoor) material.defines.USE_INDOOR_RANGE_IGNORED = "";
+            material.needsUpdate = true;
+        }
+        if (!sectionInfo.isUnlit && sectionInfo.isOutdoor && material.uniforms?.ambient?.value?.color && material.defines) {
+            if (material.defines.USE_LIGHTMAP !== undefined) {
+                if (!sectionInfo.isUnlit && material.defines.USE_BSP_AMBIENT === undefined) {
+                    material.defines.USE_BSP_AMBIENT = "";
+                    material.defines.USE_AMBIENT = "";
+                    material.needsUpdate = true;
+                }
+            } else if (material.defines.USE_AMBIENT === undefined) {
+                material.defines.USE_AMBIENT = "";
+                material.needsUpdate = true;
+            }
+        }
         if (sectionInfo.depthWrite !== undefined) m.depthWrite = sectionInfo.depthWrite;
         if (sectionInfo.depthTest !== undefined) m.depthTest = sectionInfo.depthTest;
         if (sectionInfo.side !== undefined) m.side = sectionInfo.side;
@@ -552,6 +418,7 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
 
     mesh.name = `BSPSection_${sectionInfo.sectionName}`;
     (mesh as any).sectionIndex = sectionIndex;
+    (mesh as any).isBSPSection = true;
     (mesh as any).priority = sectionInfo.priority;
 
     return mesh;
@@ -590,14 +457,17 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo | ISunLightD
     // };
 }
 
-export function decodeSectorCore(library: DecodeLibrary) {
+export function decodeSectorCore(library: DecodeLibrary) { return drainSteps(decodeSectorCoreSteps(library)); }
+
+export function* decodeSectorCoreSteps(library: DecodeLibrary): Generator<void, SectorObject> {
     const sector = new SectorObject();
 
     sector.name = library.name;
     sector.brightness = library.brightness;
     sector.levelInfo = library.levelInfo;
     sector.levelActorUuids = library.levelActorUuids;
-    sector.scriptVM = new UnScriptVM(library);
+    sector.scriptVM = new UnScriptVM(library, true);
+    yield* sector.scriptVM.loadSteps();
     sector.scriptVM.initializeLevel(sector);
 
     if (library.sector) {
@@ -609,11 +479,17 @@ export function decodeSectorCore(library: DecodeLibrary) {
         sector.gridBounds.max.set(minX + sectorSize, 262144, minZ + sectorSize);
     }
 
-    library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
+    yield;
+    for (const bspZone of library.bspZones) sector.zones.add(yield* decodeZoneObjectSteps(library, bspZone.zoneInfo));
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
+    yield;
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
-    library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
+    yield;
+    for (const info of library.skyZoneInfos) {
+        sector.add(decodeObject3D(library, info));
+        yield;
+    }
     sector.musicVolumeInfos = library.musicVolumes;
     sector.musicVolumes = library.musicVolumes.filter(volume => library.audioList.some(info => info.uuid === volume.uuid));
     sector.waterVolumes = library.waterVolumes;
@@ -628,6 +504,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.nodeToSection = library.nodeToSection;
     sector.nodeZoneMasks = library.nodeZoneMasks;
 
+    yield;
     if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes, library.bspRootOutside, library.levelInfoCollisionRadius));
 
     for (const info of library.blockingVolumes) {
@@ -637,6 +514,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
         volume.actorUuid = info.uuid;
         applySimpleProperties(library, volume, info);
         sector.add(volume);
+        yield;
     }
 
     if (library.bspSections && library.bspSections.length > 0) {
@@ -657,7 +535,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
             }
         });
 
-        opaqueSections.forEach(section => {
+        for (const section of opaqueSections) {
             try {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
@@ -667,9 +545,10 @@ export function decodeSectorCore(library: DecodeLibrary) {
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
-        });
+            yield;
+        }
 
-        transparentSections.forEach(section => {
+        for (const section of transparentSections) {
             try {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
@@ -679,7 +558,8 @@ export function decodeSectorCore(library: DecodeLibrary) {
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
-        });
+            yield;
+        }
 
         sector.add(bspGroup);
     }
@@ -870,9 +750,12 @@ function attachMoveEventActors(sector: SectorObject) {
     });
 }
 
-function decodeTerrainInfo(library: DecodeLibrary, info: IBaseObjectDecodeInfo) {
+function decodeTerrainInfo(library: DecodeLibrary, info: IBaseObjectDecodeInfo) { return drainSteps(decodeTerrainInfoSteps(library, info)); }
+
+function* decodeTerrainInfoSteps(library: DecodeLibrary, info: IBaseObjectDecodeInfo): Generator<void, Object3D> {
     const group = new Object3D();
-    applySimpleProperties(library, group, info);
+    applySimpleProperties(library, group, info, false);
+    yield* decodeChildren(library, group, info);
 
     const sectors: Terrain[] = [];
     const decorations: TerrainDecoration[] = [];
@@ -892,6 +775,7 @@ function decodeTerrainInfo(library: DecodeLibrary, info: IBaseObjectDecodeInfo) 
         decoration.setTerrain(terrain);
     });
 
+    yield;
     batchTerrainSectors(library, group, sectors);
 
     return group;
@@ -923,6 +807,9 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     applySimpleProperties(library, terrain, info);
     terrain.terrainSegmentUuid = info.uuid;
     terrain.terrainInfoUuid = terrainInfo.terrainInfoUuid;
+    if (!Number.isInteger(terrainInfo.terrainSectorIndex) || !terrainInfo.decorationCenter || terrainInfo.decorationCenter.length !== 3) throw new Error(`Terrain '${info.name}' has no decoration sector data.`);
+    terrain.terrainSectorIndex = terrainInfo.terrainSectorIndex;
+    terrain.decorationCenter.fromArray(terrainInfo.decorationCenter);
 
     return terrain;
 }
@@ -941,7 +828,7 @@ function decodeTerrainDecoration(library: DecodeLibrary, info: ITerrainDecoratio
     return new TerrainDecoration(geometry, materials, info);
 }
 
-function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
+function decodeBone(_library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
     const bone = new Bone();
 
     // Bone poses use quaternions; Euler synchronization is unused.
@@ -994,7 +881,25 @@ function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
     return bones;
 }
 
-function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], sequence: IAnimationSequenceDecodeInfo, notifications: IAnimationNotifyDecodeInfo[], skinNotify: ISkinNotifyDecodeInfo) {
+function decodeAnimation(_library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], sequence: IAnimationSequenceDecodeInfo, notifications: IAnimationNotifyDecodeInfo[], skinNotify: ISkinNotifyDecodeInfo) {
+    if (!cacheAnimationBuffers.has(info)) {
+        let size = 0, offset = 0;
+        for (const track of info) size += track.times.length + track.values.length;
+        const buffer = new ArrayBuffer(size * 4);
+
+        for (const track of info) {
+            const times = new Float32Array(buffer, offset, track.times.length);
+            offset += times.byteLength;
+            const values = new Float32Array(buffer, offset, track.values.length);
+            offset += values.byteLength;
+            times.set(track.times);
+            values.set(track.values);
+            track.times = times;
+            track.values = values;
+        }
+        cacheAnimationBuffers.add(info);
+    }
+
     const tracks = info.map(info => {
         let KeyframeTrackConstructor: typeof KeyframeTrack;
 
@@ -1011,6 +916,7 @@ function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDe
     (clip as any).attackEffectFrame = sequence.attackEffectFrame;
     (clip as any).attackEndEffectFrame = sequence.attackEndEffectFrame;
     (clip as any).framerate = sequence.framerate;
+    (clip as any).groupNames = sequence.groupNames;
     (clip as any).animationNotifies = notifications;
     (clip as any).skinNotify = skinNotify;
 
@@ -1066,11 +972,12 @@ export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObje
             return uuid;
         });
 
-        infoMats = { ...group, materials };
+        infoMats = { ...group, materials } as IMaterialGroupDecodeInfo;
     }
 
     // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
-    if (!geometry.getAttribute("normal")) geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array), 3));
+    if (!geometry.getAttribute("normal"))
+        geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array as Uint8Array | Uint16Array | Uint32Array), 3));
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const extendedBoneInfluences = geometry.getAttribute("skinWeight2") !== undefined;
@@ -1192,16 +1099,19 @@ function decodeVertMeshEmitter(library: DecodeLibrary, info: any) {
     const geometry = info.mesh ? fetchGeometry(info.mesh.geometry) : null;
 
     if (geometry) {
-        geometry.morphAttributes.position = info.mesh.frames.map(frame => new BufferAttribute(frame, 3));
-        geometry.morphAttributes.normal = info.mesh.normals.map(frame => new BufferAttribute(frame, 3));
+        geometry.morphAttributes.position = info.mesh.frames.map((frame: Float32Array) => new BufferAttribute(frame, 3));
+        geometry.morphAttributes.normal = info.mesh.normals.map((frame: Float32Array) => new BufferAttribute(frame, 3));
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
     }
 
-    const materials = info.mesh ? info.mesh.materials.map(material => info.useMeshBlendMode
+    const materials = info.mesh ? info.mesh.materials.map((material: string) => info.useMeshBlendMode
         ? decodeMaterial(library, library.materials[material])
         : decodeMaterial(library, { materialType: "particle", material, opacity: info.opacity, blendingMode: info.blendingMode } as IParticleMaterialDecodeInfo)) : [];
-    const emitter = new VertMeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials, framerate: info.mesh ? info.mesh.framerate : 0, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }));
+    const emitter = new VertMeshEmitter(Object.assign(
+        decodeEmitterConfig(info),
+        { geometry, materials, framerate: info.mesh ? info.mesh.framerate : 0, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }
+    ));
 
     applySimpleProperties(library, emitter, info);
 
@@ -1257,7 +1167,7 @@ function decodeRibbonEmitter(library: DecodeLibrary, info: any) {
     return emitter;
 }
 
-function decodeFogInfo(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
+function decodeFogInfo(_library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     const object = new FogInfoObject();
 
     if (info.name) object.name = info.name;

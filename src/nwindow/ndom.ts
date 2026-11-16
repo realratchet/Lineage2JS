@@ -7,7 +7,7 @@ const CARET_BLINK = 500;
 const TEXT_COLOR = 0xffdcdcdc;
 const LABEL_ENABLED = 0xffe6dcbe;
 const LABEL_DISABLED = 0xffa0a0a0;
-const ATLAS_WIDTH = 2048;
+const ATLAS_WIDTH = 256; // chrome drops idle decoded images, a repaint then decodes whole pages while the frame waits
 const MIN_THUMB = 15;
 
 type AtlasFrame_T = { url: string, x: number, y: number, atlasWidth: number, atlasHeight: number };
@@ -57,7 +57,7 @@ export class NDomLayer {
     protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
     protected readonly windowOrder = new WeakMap<HTMLElement, HTMLElement[]>();
-    protected arrRootWindows = [this.consoleRoot, this.root];
+    protected arrRootWindows: HTMLElement[] = [this.consoleRoot, this.root];
     protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
     protected readonly arrModalWindows: ModalWindow_T[] = [];
     protected readonly modalBlocker = document.createElement("div");
@@ -119,6 +119,7 @@ export class NDomLayer {
     public resize() {
         const canvas = this.manager.canvas;
 
+        this.root.querySelectorAll<HTMLElement>(".ndom-tooltip:popover-open").forEach(tooltip => tooltip.hidePopover());
         this.root.style.width = `${canvas.width}px`;
         this.root.style.height = `${canvas.height}px`;
         this.root.style.transform = `scale(${canvas.cssScale})`;
@@ -202,6 +203,9 @@ export class NDomLayer {
 
     protected activateVisibleWindows(records: MutationRecord[]) {
         if (records.length) this.updateInputAdmission();
+        for (const { target } of records)
+            if (target instanceof HTMLElement && target.hidden)
+                target.querySelectorAll<HTMLElement>(".ndom-tooltip:popover-open").forEach(tooltip => tooltip.hidePopover());
         for (const { target } of records)
             if (target instanceof HTMLElement && target !== this.consoleRoot && (target.parentElement === this.root || target.parentElement === this.consoleRoot) && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
     }
@@ -290,7 +294,10 @@ export class NDomLayer {
     public cancelDrag() { if (this.stopDrag) this.stopDrag(); }
 
     public dragWindow(element: HTMLElement, event: MouseEvent, place: (x: number, y: number) => void = (x, y) => this.place(element, x, y)) {
-        const x = this.toUI(event.clientX) - element.offsetLeft, y = this.toUI(event.clientY) - element.offsetTop, startX = element.offsetLeft, startY = element.offsetTop;
+        const x = this.toUI(event.clientX) - element.offsetLeft;
+        const y = this.toUI(event.clientY) - element.offsetTop;
+        const startX = element.offsetLeft;
+        const startY = element.offsetTop;
 
         this.beginDrag(moveEvent => {
             const [nextX, nextY] = this.manager.snapWindow(this.toUI(moveEvent.clientX) - x, this.toUI(moveEvent.clientY) - y, element.offsetWidth, element.offsetHeight, element);
@@ -319,13 +326,15 @@ export class NDomLayer {
         for (const [element, position] of this.windowPositions) this.place(element, position[0], position[1]);
     }
 
-    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true) { // tinted copies share atlas pages of the same call
+    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true, atlasWidth = ATLAS_WIDTH) { // tinted copies share atlas pages of the same call
         const canvas = this.manager.canvas;
 
         await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)], useIntrinsicAlpha);
 
         const requests = [...new Map<string, [string, number]>([...paths.map(path => [path, 0xffffff] as [string, number]), ...tinted].map(([path, tint]) => {
-            const key = path.replace(/^\?/, "").toLowerCase(), imageKey = canvas.getTextureKey(key, useIntrinsicAlpha), atlasKey = tint === 0xffffff ? imageKey : `${imageKey}:${tint & 0xffffff}`;
+            const key = path.replace(/^\?/, "").toLowerCase();
+            const imageKey = canvas.getTextureKey(key, useIntrinsicAlpha);
+            const atlasKey = tint === 0xffffff ? imageKey : `${imageKey}:${tint & 0xffffff}`;
 
             return [atlasKey, [key, tint]];
         })).entries()].filter(([atlasKey, [key]]) => !this.atlas.has(atlasKey) && canvas.hasTexture(key, useIntrinsicAlpha));
@@ -335,20 +344,18 @@ export class NDomLayer {
         const keys = requests.map(([atlasKey]) => atlasKey);
         const animations: { frames: (ImageBitmap | HTMLCanvasElement)[], frameTime: number }[] = requests.map(([, [key, tint]]) => tint === 0xffffff ? canvas.getTextureAnimation(key, useIntrinsicAlpha) : { frames: [canvas.getTintedImage(key, tint, -1, useIntrinsicAlpha)], frameTime: 0 });
         const images = animations.flatMap(image => image.frames);
-        const atlasWidth = Math.max(ATLAS_WIDTH, ...images.map(image => image.width));
-        const atlasHeight = Math.max(ATLAS_WIDTH, ...images.map(image => image.height));
         const places: [number, number][] = [];
         const arrPages: number[][] = [[]];
         let x = 0, y = 0, shelf = 0;
 
         for (const i of images.map((_, i) => i).sort((a, b) => images[b].height - images[a].height)) {
-            if (x + images[i].width > atlasWidth) {
+            if (x > 0 && x + images[i].width > atlasWidth) {
                 x = 0;
                 y += shelf + 1;
                 shelf = 0;
             }
 
-            if (y + images[i].height > atlasHeight) {
+            if (y > 0 && y + images[i].height > atlasWidth) {
                 arrPages.push([]);
                 x = y = shelf = 0;
             }
@@ -364,7 +371,7 @@ export class NDomLayer {
         for (const page of arrPages) {
             const atlas = document.createElement("canvas");
 
-            atlas.width = atlasWidth;
+            atlas.width = Math.max(...page.map(i => places[i][0] + images[i].width + 1));
             atlas.height = Math.max(...page.map(i => places[i][1] + images[i].height));
 
             const context = atlas.getContext("2d", { willReadFrequently: true });
@@ -373,7 +380,8 @@ export class NDomLayer {
 
             const url = URL.createObjectURL(encodeBitmap(atlas));
 
-            page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth, atlasHeight: atlas.height });
+            page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth: atlas.width, atlasHeight: atlas.height });
+            atlas.width = atlas.height = 0;
         }
 
         let first = 0;
@@ -648,7 +656,19 @@ export class NDomLayer {
             onSelect();
             this.manager.playWindowSound();
         };
-        const tab = this.button(parent, x, y, w, h, normal, label ? normal : selected, label ? normal === selected || !this.hasTexture(`${normal}_over`) ? normal : `${normal}_over` : selected, label, null, isDown => { if (isDown) select(); });
+        const tab = this.button(
+            parent,
+            x,
+            y,
+            w,
+            h,
+            normal,
+            label ? normal : selected,
+            label ? normal === selected || !this.hasTexture(`${normal}_over`) ? normal : `${normal}_over` : selected,
+            label,
+            null,
+            isDown => { if (isDown) select(); }
+        );
         const setTextures = tab.setTextures, setEnabled = tab.setEnabled;
 
         tab.setTextures = (normal, down) => {
@@ -1045,7 +1065,15 @@ export class NDomLayer {
             else input.maxLength = maxLength;
         };
         element.getValue = () => isNumeric ? input.value.replace(/,/g, "") : input.value;
-        element.setValue = value => { input.value = value; if (isNumeric) { isNumericInputEnabled = true; input.setSelectionRange(value.length, value.length); formatNumber(); } draw(); };
+        element.setValue = value => {
+            input.value = value;
+            if (isNumeric) {
+            isNumericInputEnabled = true;
+            input.setSelectionRange(value.length, value.length);
+            formatNumber();
+        }
+            draw();
+        };
         element.appendValue = value => {
             if (isNumeric && !isNumericInputEnabled) return;
 

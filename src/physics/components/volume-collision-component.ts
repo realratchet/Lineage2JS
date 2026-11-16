@@ -31,7 +31,18 @@ export class VolumeCollisionComponent extends ObjectComponent<PhysicsVolume | Mu
     public getCollisionProfile(): ActorCollisionProfile_T {
         const actor = this.getParent();
 
-        return { collideActors: !!actor.getUnrealScriptProperty("bCollideActors"), collideWorld: !!actor.getUnrealScriptProperty("bCollideWorld"), blockActors: !!actor.getUnrealScriptProperty("bBlockActors"), blockPlayers: !!actor.getUnrealScriptProperty("bBlockPlayers"), blockZeroExtent: !!actor.getUnrealScriptProperty("bBlockZeroExtentTraces"), blockNonZeroExtent: !!actor.getUnrealScriptProperty("bBlockNonZeroExtentTraces"), worldGeometry: !!actor.getUnrealScriptProperty("bWorldGeometry"), useCylinderCollision: this.primitive.kind === "cylinder", collisionRadius: actor.getUnrealScriptProperty("CollisionRadius") as number, collisionHeight: actor.getUnrealScriptProperty("CollisionHeight") as number };
+        return {
+            collideActors: !!actor.getUnrealScriptProperty("bCollideActors"),
+            collideWorld: !!actor.getUnrealScriptProperty("bCollideWorld"),
+            blockActors: !!actor.getUnrealScriptProperty("bBlockActors"),
+            blockPlayers: !!actor.getUnrealScriptProperty("bBlockPlayers"),
+            blockZeroExtent: !!actor.getUnrealScriptProperty("bBlockZeroExtentTraces"),
+            blockNonZeroExtent: !!actor.getUnrealScriptProperty("bBlockNonZeroExtentTraces"),
+            worldGeometry: !!actor.getUnrealScriptProperty("bWorldGeometry"),
+            useCylinderCollision: this.primitive.kind === "cylinder",
+            collisionRadius: actor.getUnrealScriptProperty("CollisionRadius") as number,
+            collisionHeight: actor.getUnrealScriptProperty("CollisionHeight") as number
+        };
     }
 
     public removeCollision(): void {
@@ -60,7 +71,7 @@ export class VolumeCollisionComponent extends ObjectComponent<PhysicsVolume | Mu
         this.tree.updateActor(actor.actorUuid, primitive.kind === "cylinder" ? tmpBounds.copy(primitive.bounds).expandByScalar(1) : primitive.bounds);
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
         const call = data as ScriptNativeCall_T;
         if (call.index !== 262 && call.name.toLowerCase() !== "setcollision") return COMPONENT_EVENT_NOT_HANDLED;

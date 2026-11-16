@@ -12,6 +12,7 @@ import type PawnFishingComponent from "./pawn-fishing-component";
 import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type NpcLifecycleComponent from "./npc-lifecycle-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { Vector3Arr } from "@l2js/engine";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
 export const MESH_SCALE_CHANGED_EVENT = "meshScaleChanged";
@@ -63,6 +64,7 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
     (once as any).animationNotifies = (clip as any).animationNotifies;
     (once as any).skinNotify = (clip as any).skinNotify;
     (once as any).attackEffectFrame = (clip as any).attackEffectFrame;
+    (once as any).framerate = (clip as any).framerate;
     (once as any).attackEndEffectFrame = (clip as any).attackEndEffectFrame;
     cacheOnceAnimations.set(clip, once);
 
@@ -92,10 +94,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
     protected prevAnimations = new WeakMap<Mesh, AnimationAction[]>();
     protected actorAnimations: Record<string, AnimationClip> = {};
+    protected readonly cacheAnimationNames = new Map<string, string>();
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
     protected simulationSuspendedAt: number = null;
+    protected isFrozen = false;
     protected readonly boneScalers = new Map<string | number, BoneScaler_T>();
     protected readonly tweenTimeScales = new Map<AnimationAction, number>();
     protected isAnimationsInit = false;
@@ -117,12 +121,31 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.mixer = renderManager.mixer;
     }
 
-    public onUpdate(_currentTime: number, _deltaTime: number): void {
-        if (this.tweenTimeScales.size > 0 && this.mixer.time >= this.animationTweenEndTime) {
-            for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
+    protected releaseTween(): void {
+        if (this.tweenTimeScales.size === 0 || this.isFrozen || this.simulationSuspendedAt !== null || this.mixer.time < this.animationTweenEndTime) return;
 
-            this.tweenTimeScales.clear();
+        for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
+
+        this.tweenTimeScales.clear();
+    }
+
+    public setFrozen(isFrozen: boolean): void { // APawn::CheckSameAnim 0x8c0d89..0x8c0f14 freezes channel 0 while a hold state is set
+        if (isFrozen === this.isFrozen) return;
+
+        this.isFrozen = isFrozen;
+        if (isFrozen) this.freezeActions();
+    }
+
+    protected freezeActions(): void {
+        for (const mesh of this.meshes) {
+            const action = this.currAnimations.get(mesh);
+
+            if (action && !action.paused) this.holdFirstFrame(action, this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale());
         }
+    }
+
+    public onUpdate(_currentTime: number, _deltaTime: number): void {
+        this.releaseTween();
 
         const action = this.animationNotifyAction;
 
@@ -165,7 +188,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         } else this.simulationSuspendedAt = this.mixer.time;
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) {
             this.placeMeshes();
             if (type === MESH_SCALE_CHANGED_EVENT) this.renderManager.invalidatePawnLighting(this.getParent());
@@ -177,6 +200,40 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const call = data as ScriptNativeCall_T;
         const context = call.context as any;
         const name = call.name.toLowerCase();
+
+        if (name === "animisingroup") {
+            if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' animation.`);
+            const channel = Number(call.args[0]);
+
+            if (channel !== 0) throw new Error(`UnrealScript AnimIsInGroup channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+            const action = this.animationNotifyAction;
+
+            if (!action || action.getClip().name.toLowerCase() === "none") return false;
+            const clip = this.getAnimationClip(action.getClip().name);
+
+            if (!clip) return false;
+            const groups = (clip as any).groupNames as string[], group = (call.args[1] as string).toLowerCase();
+
+            if (!groups) throw new Error(`Animation '${clip.name}' has no decoded group names.`);
+            return groups.some(name => name.toLowerCase() === group);
+        }
+
+        if (name === "playanimum") { // APawn::execPlayAnimUM 0x92f280..0x92f38c.
+            if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' animation.`);
+            const sequence = call.args[0] as string;
+            const updateMovement = call.args[1] === undefined ? 0 : Number(call.args[1]) | 0;
+            const rate = call.args[2] === undefined ? 1 : Number(call.args[2]);
+            const tweenTime = call.args[3] === undefined ? 0 : Number(call.args[3]);
+            const channel = call.args[4] === undefined ? 0 : Number(call.args[4]);
+
+            if (channel !== 0) throw new Error(`UnrealScript PlayAnimUM channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+            if (sequence.toLowerCase() === "none") return;
+
+            context.setUnrealScriptProperty("UpdateMovementAnimType", updateMovement & 255);
+            context.setUnrealScriptProperty("bUpdateMovementAnim", updateMovement !== 0);
+            this.play(sequence, tweenTime, rate, false, true);
+            return;
+        }
 
         if (call.index === 259 || call.index === 260 || name === "playanim" || name === "loopanim") {
             const sequence = call.args[0] as string;
@@ -220,8 +277,16 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public getMeshes(): readonly Mesh[] { return this.meshes; }
     public getAction(): AnimationAction { return this.animationNotifyAction; }
     public getAnimationNames(): string[] { return Object.keys(this.actorAnimations); }
-    public getAnimationClip(name: string): AnimationClip { return this.actorAnimations[Object.keys(this.actorAnimations).find(key => key.toLowerCase() === name.toLowerCase())]; }
+    public getAnimationClip(name: string): AnimationClip { return this.actorAnimations[this.findAnimationName(name)]; }
+    protected findAnimationName(name: string): string {
+        const lowerName = name.toLowerCase();
+        if (!this.cacheAnimationNames.has(lowerName))
+            this.cacheAnimationNames.set(lowerName, Object.keys(this.actorAnimations).find(key => key.toLowerCase() === lowerName));
+        return this.cacheAnimationNames.get(lowerName);
+    }
     public isAnimating(): boolean {
+        this.releaseTween(); // polled in the frame a tween ends, before onUpdate, the action is neither tweening nor running yet
+
         const action = this.animationNotifyAction;
 
         return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.mixer.time < this.animationTweenEndTime);
@@ -245,6 +310,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             if (!skeleton) continue;
             const index = typeof name === "number" ? name : skeleton.matchRefBone(name);
             if (index < 0 || index >= skeleton.bones.length) continue;
+            skeleton.requireBone(index);
             const bone = skeleton.bones[index];
             if (!scaler.bones.has(bone)) scaler.bones.set(bone, bone.scale.clone());
             bone.scale.copy(scaler.bones.get(bone)).multiplyScalar(scale);
@@ -354,6 +420,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public setMeshAnimations(mesh: LitSkinnedMesh): void {
         this.meshes = [mesh];
         this.actorAnimations = (mesh as any).meshAnimations;
+        this.cacheAnimationNames.clear();
         this.isAnimationsInit = true;
         (mesh as any).hasStartedAnimation = true;
     }
@@ -362,10 +429,11 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.stop();
         this.getComponent<any>("pawnMovement").resetAnimationState();
         this.actorAnimations = animations;
+        this.cacheAnimationNames.clear();
     }
 
     public setBasicAnimation(key: PawnMovementState_T, animationName: string): void {
-        const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+        const resolvedName = this.findAnimationName(animationName);
 
         if (!resolvedName) throw new Error(`'${animationName}' is not available.`);
         if (!(key in this.basicActorAnimations)) throw new Error(`'${key}' is not a valid basic actor animation`);
@@ -505,8 +573,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public play(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false, isDeathAnimation: boolean = false): void {
         if (!this.isAnimationsInit) return;
         if (!isDeathAnimation && this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()) return;
+        if (this.isFrozen && !isDeathAnimation && this.animationNotifyAction) return;
 
-        const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+        const resolvedName = this.findAnimationName(animationName);
 
         if (!resolvedName) return; // USkeletalMeshInstance::PlayAnim 0x10673a68 returns false for missing sequences.
 
@@ -593,6 +662,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
         if (didBegin && script?.hasFunction("AnimBegin")) script.call("AnimBegin", [resolvedName]);
+        if (this.isFrozen && !isDeathAnimation) this.freezeActions();
         if (suspended) this.setSimulationEnabled(false);
     }
 

@@ -266,7 +266,7 @@ export class UConfigEnv extends BaseConfigFile {
         this.waterVolume = water as EnvWaterVolume;
     }
 
-    private loadGlowEffect(fileContents: string): void {
+    protected loadGlowEffect(fileContents: string): void {
         let readOffset = findSection(fileContents, "GlowEffect");
         const glow: Partial<EnvGlowEffect> = {};
 

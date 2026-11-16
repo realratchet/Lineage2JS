@@ -1,6 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListColumn_T, type ListRow_T } from "./nc-list-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import type { ManorCropInfo_T, ManorDefaultInfo_T, ManorEntry_T, ManorRewards_T, ManorSeedInfo_T } from "../network/game-packets";
 import SystemMessage_T from "./system-message";
@@ -102,7 +102,14 @@ class NCManorSeedInfoWnd extends NCManorInfoDownWnd { // NCManorSeedInfoWnd: OnC
 
 class NCManorCropInfoWnd extends NCManorSeedInfoWnd { // NCManorCropInfoWnd: OnCreate 0x10132e00, OnShowCropInfo 0x10132630, paint 0x10132c30
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, SysString_T.CurrentCrops, [{ width: 269, label: SysString_T.CropName, numeric: false }, { width: 80, label: SysString_T.Remaining, numeric: true }, { width: 80, label: SysString_T.Buy, numeric: true }, { width: 80, label: SysString_T.BuyPrice, numeric: true }, { width: 77, label: SysString_T.Reward, numeric: false }], SysString_T.CropSales, 4);
+        super(
+            layer,
+            parent,
+            SysString_T.CurrentCrops,
+            [{ width: 269, label: SysString_T.CropName, numeric: false }, { width: 80, label: SysString_T.Remaining, numeric: true }, { width: 80, label: SysString_T.Buy, numeric: true }, { width: 80, label: SysString_T.BuyPrice, numeric: true }, { width: 77, label: SysString_T.Reward, numeric: false }],
+            SysString_T.CropSales,
+            4
+        );
     }
 
     protected onButton() { this.bypass("manor_menu_select?ask=2&state=-1&time=0"); } // 0x10132470
@@ -112,7 +119,12 @@ class NCManorDefaultInfoWnd extends NCManorInfoDownWnd { // NCManorDefaultInfoWn
     protected readonly arrButtons: NDomButton_T[];
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, SysString_T.CommonCropInfo, [{ width: 169, label: SysString_T.CropName, numeric: false }, { width: 50, label: SysString_T.ItemLevel, numeric: true }, { width: 80, label: SysString_T.SeedPrice, numeric: true }, { width: 80, label: SysString_T.CropPrice, numeric: true }, { width: 95, label: SysString_T.RewardType1, numeric: false }, { width: 112, label: SysString_T.RewardType2, numeric: false }]);
+        super(
+            layer,
+            parent,
+            SysString_T.CommonCropInfo,
+            [{ width: 169, label: SysString_T.CropName, numeric: false }, { width: 50, label: SysString_T.ItemLevel, numeric: true }, { width: 80, label: SysString_T.SeedPrice, numeric: true }, { width: 80, label: SysString_T.CropPrice, numeric: true }, { width: 95, label: SysString_T.RewardType1, numeric: false }, { width: 112, label: SysString_T.RewardType2, numeric: false }]
+        );
         this.arrButtons = [createTextButton(layer, this.element, 438, 249, SysString_T.SeedPurchase, () => this.bypass("manor_menu_select?ask=1&state=-1&time=0")), createTextButton(layer, this.element, 518, 249, SysString_T.CropSales, () => this.bypass("manor_menu_select?ask=2&state=-1&time=0"))];
     }
 
@@ -127,7 +139,7 @@ class NCManorDefaultInfoWnd extends NCManorInfoDownWnd { // NCManorDefaultInfoWn
 }
 
 export class NCManorInfoWnd { // NCManorInfoWnd: NConsole 0x10063b7f (W*0.5-300, H*0.5-163, 600x326, sys738), OnCreate 0x10137a20
-    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), TEX_UP_BACK, TEX_DOWN_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down"]; }
+    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), TEX_UP_BACK, TEX_DOWN_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...NCComboBox.getTextures()]; }
 
     public readonly element: HTMLDivElement;
     public onBypass: (command: string) => void = null;

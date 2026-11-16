@@ -1,18 +1,24 @@
 import { AbnormalEffect_T } from "../../network/game-packets";
-import type { DecodeLibrary } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type { Material, Mesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import { MESHES_CHANGED_EVENT, type default as AnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type EmitterActor from "../emitter-actor";
 import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
+import type NpcLifecycleComponent from "./npc-lifecycle-component";
+
+const maxBodyScale = Math.fround(1.2);
+const basePawnSize = Math.sqrt(207);
 
 type AbnormalSize_T = { phase: number, radius: number, height: number, weaponScale: number };
 type AbnormalStat_T = { state: number, effect: GameObject, time: number, scale: number, size: AbnormalSize_T | null };
 
 const ABNORMAL_EFFECTS: Record<number, string> = { [AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_POISON]: "LineageEffect.a_u000_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6]: "LineageEffect.a_u008_a", [AbnormalEffect_T.ABNORMAL_EFFECT_STUN]: "LineageEffect.a_u002_a", [AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP]: "LineageEffect.a_u004_a", [AbnormalEffect_T.ABNORMAL_EFFECT_MUTED]: "LineageEffect.a_u005_a", [AbnormalEffect_T.ABNORMAL_EFFECT_ROOT]: "LineageEffect.a_u006_a", [AbnormalEffect_T.ABNORMAL_EFFECT_FLAME]: "LineageEffect.a_u007_a" }; // FNAbnormalStat::Init 0x763b40 / Update 0x764970
 const PULSE_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING | AbnormalEffect_T.ABNORMAL_EFFECT_POISON | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6 | AbnormalEffect_T.ABNORMAL_EFFECT_FLAME;
+const HOLD_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2;
 const E_BONE_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_POISON | AbnormalEffect_T.ABNORMAL_EFFECT_STUN | AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP | AbnormalEffect_T.ABNORMAL_EFFECT_MUTED | AbnormalEffect_T.ABNORMAL_EFFECT_FLAME;
 
 function setSizeScale(effect: GameObject, scale: number): void {
@@ -47,8 +53,15 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     public async setAbnormalState(abnormalState: number): Promise<void> {
         const asset = this.renderManager.getParent().getComponent("asset");
 
-        if (abnormalState & ~this.abnormalState & (AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2)) asset.stopPawnSkill(this.getParent());
-        if ((abnormalState ^ this.abnormalState) & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 72 : 255, abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 105 : 255, abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 140 : 255);
+        if (abnormalState & ~this.abnormalState & HOLD_STATES) {
+            this.setFrozen(true); // before the stop below replays the idle animation
+            asset.stopPawnSkill(this.getParent());
+        }
+        if ((abnormalState ^ this.abnormalState) & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(
+            abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 72 : 255,
+            abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 105 : 255,
+            abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 140 : 255
+        );
 
         this.abnormalState = abnormalState;
 
@@ -157,7 +170,17 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             stat.time += deltaTime;
         }
 
+        this.setFrozen(!!(this.abnormalState & HOLD_STATES) && !this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()); // APawn::CheckSameAnim 0x8c0ca7..0x8c0dab: the death states come before the hold states
+
         if (releasedSize && !this.abnormalState && !this.stats.length) this.getParent().removeComponent(this);
+    }
+
+    protected setFrozen(isFrozen: boolean): void {
+        const parent = this.getParent();
+
+        if (parent.getUnrealScriptProperty("bRide")) return; // APawn::CheckSameAnim 0x8c0bff: a rider is frozen by its mount
+        parent.getComponent<AnimationComponent>("animation").setFrozen(isFrozen);
+        if (parent.ridePawn) parent.ridePawn.getComponent<AnimationComponent>("animation").setFrozen(isFrozen);
     }
 
     public hasPendingSizeChange(): boolean { return this.stats.some(stat => stat.size && stat.size.phase !== 0); }
@@ -173,7 +196,8 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
         stat.size = { phase: 1, radius: Math.fround(pawn.getCollisionRadius()), height: Math.fround(pawn.getCollisionHeight()), weaponScale: Math.fround(pawn.getUnrealScriptProperty("WeaponScale") as number) };
         const locationZ = Math.fround(pawn.position.z + pawn.getCollisionHeight());
-        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number), height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
+        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number);
+        const height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
 
         pawn.position.z = locationZ - height;
         pawn.setCollisionSize(radius, height);
@@ -186,7 +210,8 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             stat.time = Math.fround(stat.time + delta);
             return;
         }
-        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number), height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
+        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number);
+        const height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
         const locationZ = Math.fround(pawn.position.z + pawn.getCollisionHeight());
 
         if (size.phase === 3) {
@@ -197,7 +222,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         }
 
         if (size.phase === 1 || size.phase === 2) {
-            const shrinking = size.phase === 2, max = Math.fround(1.2);
+            const shrinking = size.phase === 2, max = maxBodyScale;
             const scale = shrinking ? stat.scale - delta * stat.time * 3 : stat.scale + delta * stat.time;
 
             stat.scale = Math.fround(scale);
@@ -239,17 +264,17 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         if (stat.effect && stat.effect.parent) this.renderManager.removeTransientEffect(stat.effect);
 
         const asset = this.renderManager.getParent().getComponent("asset");
-        const effect = asset.createScriptObject(this.renderManager, this.library, ABNORMAL_EFFECTS[stat.state]) as GameObject;
+        const effect = asset.createScriptObject(this.renderManager, this.library, ABNORMAL_EFFECTS[stat.state]) as EmitterActor;
 
         stat.effect = effect;
         effect.position.copy(parent.position);
         if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_ROOT)
-            effect.scriptProperties.get("TrailerPrePivot")[2] = Math.fround(-(parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
+            (effect.scriptProperties.get("TrailerPrePivot") as Vector3Arr)[2] = Math.fround(-(parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
         this.renderManager.addTransientEffect(effect, parent);
 
         switch (stat.state) {
             case AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6: {
-                const scale = Math.sqrt(height * radius) / Math.sqrt(207);
+                const scale = Math.sqrt(height * radius) / basePawnSize;
 
                 parent.attachObjectToBone(effect, 0);
                 if (scale > 1) setSizeScale(effect, scale);
@@ -289,6 +314,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
     public onDetach(): void {
         this.restoreNpcSkins();
+        this.setFrozen(false);
         if (this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(255, 255, 255);
         if (this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD) this.setHeadScale(1);
         for (const stat of this.stats) {

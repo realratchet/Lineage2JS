@@ -43,7 +43,7 @@ export class StaticMeshActor extends Actor implements ICollidable {
             if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
 
             this.collisionOwner.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
-            return;
+            return undefined;
         }
 
         return super.callUnrealNative(call);

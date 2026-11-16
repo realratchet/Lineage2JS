@@ -117,7 +117,9 @@ export class L2TaskWnd {
     }
 
     protected getEntryIndexAt(event: MouseEvent) {
-        const rect = this.list.getBoundingClientRect(), x = this.layer.toUI(event.clientX - rect.left), y = this.layer.toUI(event.clientY - rect.top);
+        const rect = this.list.getBoundingClientRect();
+        const x = this.layer.toUI(event.clientX - rect.left);
+        const y = this.layer.toUI(event.clientY - rect.top);
 
         if (x < 0 || x > 155 || y < 0 || y > 126) return -1;
 

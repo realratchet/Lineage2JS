@@ -13,6 +13,8 @@ import type { ScriptNativeCall_T } from "../../ue-script/vm";
 import { EActorViewType_T } from "../../assets/unreal/un-aactor";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 
+const HALF_PI = Math.PI / 2;
+
 export const EQUIPMENT_MESHES_CHANGED_EVENT = "equipmentMeshesChanged";
 
 const tmpSphere = new Sphere();
@@ -23,6 +25,25 @@ const tmpOrigin = new Matrix4();
 const tmpVec = new Vector3();
 const tmpActorCenter = new Vector3();
 const tmpWhite = new Vector3(1, 1, 1);
+
+function transformBox(box: Box3, e: ArrayLike<number>, target: Box3): Box3 {
+    if (box.isEmpty()) return target.copy(box);
+
+    const min = box.min, max = box.max;
+
+    target.min.set(
+        Math.min(e[0] * min.x, e[0] * max.x) + Math.min(e[4] * min.y, e[4] * max.y) + Math.min(e[8] * min.z, e[8] * max.z) + e[12],
+        Math.min(e[1] * min.x, e[1] * max.x) + Math.min(e[5] * min.y, e[5] * max.y) + Math.min(e[9] * min.z, e[9] * max.z) + e[13],
+        Math.min(e[2] * min.x, e[2] * max.x) + Math.min(e[6] * min.y, e[6] * max.y) + Math.min(e[10] * min.z, e[10] * max.z) + e[14]
+    );
+    target.max.set(
+        Math.max(e[0] * min.x, e[0] * max.x) + Math.max(e[4] * min.y, e[4] * max.y) + Math.max(e[8] * min.z, e[8] * max.z) + e[12],
+        Math.max(e[1] * min.x, e[1] * max.x) + Math.max(e[5] * min.y, e[5] * max.y) + Math.max(e[9] * min.z, e[9] * max.z) + e[13],
+        Math.max(e[2] * min.x, e[2] * max.x) + Math.max(e[6] * min.y, e[6] * max.y) + Math.max(e[10] * min.z, e[10] * max.z) + e[14]
+    );
+
+    return target;
+}
 
 export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnRenderable";
@@ -61,7 +82,11 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
     public tickActorView(deltaTime: number): void {
         const pawn = this.getParent(), type = pawn.getUnrealScriptProperty("L2ActorViewtype");
-        if (type !== EActorViewType_T.EAVT_InSighting && type !== EActorViewType_T.EAVT_OutSighting && type !== EActorViewType_T.EAVT_Hiding && type !== EActorViewType_T.EAVT_Showing && type !== EActorViewType_T.EAVT_Spawning) return;
+        if (type !== EActorViewType_T.EAVT_InSighting &&
+            type !== EActorViewType_T.EAVT_OutSighting &&
+            type !== EActorViewType_T.EAVT_Hiding &&
+            type !== EActorViewType_T.EAVT_Showing &&
+            type !== EActorViewType_T.EAVT_Spawning) return;
 
         if (type === EActorViewType_T.EAVT_Hiding && pawn.getUnrealScriptProperty("bHidden")) return;
 
@@ -71,13 +96,24 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (elapsed >= duration) {
             this.clearAlphaTexModifier();
             if (type === EActorViewType_T.EAVT_Hiding) pawn.setUnrealScriptProperty("bHidden", true);
-            else pawn.setUnrealScriptProperty("L2ActorViewtype", type === EActorViewType_T.EAVT_Spawning ? EActorViewType_T.EAVT_None : type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight);
+            else pawn.setUnrealScriptProperty(
+                "L2ActorViewtype",
+                type === EActorViewType_T.EAVT_Spawning ?
+                    EActorViewType_T.EAVT_None :
+                    type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight
+            );
             pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", 0);
             return;
         }
 
         pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", Math.fround(elapsed));
-        this.texModifierAlpha = Math.trunc(Math.max(0, Math.min(255, Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing || type === EActorViewType_T.EAVT_Spawning ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)))) / 255;
+        this.texModifierAlpha = Math.trunc(Math.max(
+            0,
+            Math.min(
+                255,
+                Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing || type === EActorViewType_T.EAVT_Spawning ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)
+            )
+        )) / 255;
     }
 
     public updateActorView(distance: number, range: number): boolean {
@@ -96,7 +132,9 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (type === EActorViewType_T.EAVT_Hiding || type === EActorViewType_T.EAVT_Showing) {
             if (type === previous) return this.prepareActorView(previous);
 
-            const elapsed = previous === EActorViewType_T.EAVT_Hiding || previous === EActorViewType_T.EAVT_Showing ? Math.fround((pawn.getUnrealScriptProperty("L2ActorViewDuration") as number) - (pawn.getUnrealScriptProperty("L2ActorViewElapsedTime") as number)) : 0;
+            const elapsed = previous === EActorViewType_T.EAVT_Hiding || previous === EActorViewType_T.EAVT_Showing ?
+                Math.fround((pawn.getUnrealScriptProperty("L2ActorViewDuration") as number) - (pawn.getUnrealScriptProperty("L2ActorViewElapsedTime") as number)) :
+                0;
 
             pawn.setUnrealScriptProperty("L2ActorViewtype", type);
             pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", elapsed);
@@ -153,6 +191,12 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
             for (const mesh of this.equipmentMeshes) this.prepareAlphaMaterial(mesh);
         }
         return type !== EActorViewType_T.EAVT_OutSight;
+    }
+
+    public getSourceMaterial(mesh: Mesh): Material | Material[] {
+        const entry = this.fadeMeshes.get(mesh);
+
+        return entry && entry.material === mesh.material ? entry.source : mesh.material;
     }
 
     public isOpaque(): boolean {
@@ -220,6 +264,8 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     }
 
     protected releaseBatches(): void {
+        for (const mesh of this.meshes) this.renderManager.releasePawnParts(mesh as LitSkinnedMesh);
+        for (const mesh of this.equipmentMeshes) this.renderManager.releasePawnParts(mesh as LitSkinnedMesh);
         for (const batch of this.batches) {
             batch.release();
             this.renderManager.releaseGeometry(batch.geometry);
@@ -242,16 +288,17 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) this.invalidateBounds();
         else if (type === MESHES_CHANGED_EVENT) this.setMeshes(data as Mesh[]);
         else if (type === EQUIPMENT_MESHES_CHANGED_EVENT) {
+            for (const mesh of this.equipmentMeshes) this.renderManager.releasePawnParts(mesh as LitSkinnedMesh);
             this.equipmentMeshes = data as Mesh[];
             if (this.isAttached()) this.setMeshes(this.meshes); // equipment detaches during a pawn's component clear, possibly after this one
         }
         else return COMPONENT_EVENT_NOT_HANDLED;
 
-        return;
+        return undefined;
     }
 
     protected setMeshes(meshes: Mesh[]): void {
-        const alpha = this.texModifierAlpha;
+        const alpha = this.texModifierAlpha, wasRendered = Math.fround(GLOBAL_UNIFORMS.globalTimeSeconds.value) - this.lastRenderTime < 0.1;
         this.clearAlphaTexModifier();
         this.texModifierAlpha = alpha;
         const geometries = this.batches.map(batch => batch.geometry);
@@ -266,7 +313,11 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
             for (const batch of this.batches) {
                 this.getParent().add(batch);
                 this.renderManager.retainGeometry(batch.geometry);
+                if (wasRendered) this.renderManager.joinPawnBatch(batch); // a pawn on screen would miss a frame while its new meshes wait to join the crowd
             }
+            if (wasRendered)
+                for (const mesh of [...meshes, ...this.equipmentMeshes])
+                    if ((mesh as LitSkinnedMesh).isLitSkinnedMesh && mesh.layers.mask !== 0) this.renderManager.joinPawnParts(mesh as LitSkinnedMesh);
         } finally {
             for (const geometry of geometries) this.renderManager.releaseGeometry(geometry);
         }
@@ -353,16 +404,19 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         const mesh = this.meshes[0] as LitSkinnedMesh;
 
         mesh.updateMatrix();
-        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(Math.PI / 2)).multiply(mesh.matrix);
+        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(HALF_PI)).multiply(mesh.matrix);
         if (mesh.isLitSkinnedMesh) tmpMatrix.multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
 
         // FDynamicActor::Update 0x8e7c75..0x8e7fad uses the primary MeshToWorld for all pawn parts.
+        const scale = tmpMatrix.getMaxScaleOnAxis();
+
         for (const part of this.meshes) {
             if (!part.geometry.boundingBox) part.geometry.computeBoundingBox();
             if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
 
-            this.worldBox.union(tmpBox.copy(part.geometry.boundingBox).applyMatrix4(tmpMatrix));
-            tmpSphere.copy(part.geometry.boundingSphere).applyMatrix4(tmpMatrix);
+            this.worldBox.union(transformBox(part.geometry.boundingBox, tmpMatrix.elements, tmpBox));
+            tmpSphere.center.copy(part.geometry.boundingSphere.center).applyMatrix4(tmpMatrix);
+            tmpSphere.radius = part.geometry.boundingSphere.radius * scale;
             tmpSphereBox.expandByPoint(tmpVec.copy(tmpSphere.center).addScalar(-tmpSphere.radius));
             tmpSphereBox.expandByPoint(tmpVec.copy(tmpSphere.center).addScalar(tmpSphere.radius));
         }
@@ -386,7 +440,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
         parent.updateWorldMatrix(true, false);
         mesh.updateMatrix();
-        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(Math.PI / 2)).multiply(mesh.matrix).multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
+        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(HALF_PI)).multiply(mesh.matrix).multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
 
         const e = tmpMatrix.elements;
 

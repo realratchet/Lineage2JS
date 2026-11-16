@@ -3,10 +3,8 @@ import decompressDDS from "./dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import { type APackage, type UExport, FArray } from "@l2js/core";
-import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import UMaterial, { type IBaseMaterialDecodeInfo } from "./un-material";
 import type { UPlatte } from "./un-palette";
-import type { DecodeLibrary } from "./decode-library";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Texture, Vector2 } from "three";
 
@@ -24,7 +22,7 @@ export type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
     width: number, height: number,
     minLOD?: number, maxLOD?: number,
     detail?: string,
-    detailScale: number,
+    detailScale?: number,
     twoSided?: boolean,
     isMasked?: boolean,
     isAlphaTexture?: boolean
@@ -122,6 +120,38 @@ export abstract class UTexture extends UMaterial {
         return { width: this.width, height: this.height };
     }
 
+    public getSourceDecodeInfo(builder: DecodeLibraryBuilder = null) {
+        const mipCount = this.mipmaps.getElemCount();
+        const data = mipCount ? this.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array : null;
+        const palette = this.palette ? this.palette.loadSelf() : null;
+        const paletteRed = palette ? new Uint8Array(palette.colors.getElemCount()) : null;
+        if (palette) for (let i = 0; i < paletteRed.length; i++) paletteRed[i] = palette.colors.getElem(i).r;
+        const palettes: Record<string, string> = {};
+        let frame: UTexture = this;
+        for (let i = 0, length = this.totalFrameNum || 1; i < length && frame; i++) {
+            const cached = frame !== this && builder ? builder.getCachedTextureSource(frame) : null;
+            if (cached) {
+                palettes[frame.name] = cached.paletteId;
+                frame = cached.animNext ? frame.pkg.loader.getPackage(cached.animNext.path).fetchObject<UTexture>(cached.animNext.index + 1) : null;
+            } else {
+                palettes[frame.name] = frame.palette ? frame.palette.name : null;
+                frame = frame.animNext;
+            }
+        }
+        return {
+            name: this.name,
+            format: this.format.valueOf(),
+            width: this.width,
+            height: this.height,
+            mipCount,
+            data,
+            paletteRed,
+            paletteId: this.palette ? this.palette.name : null,
+            palettes,
+            animNext: this.animNext ? { path: this.animNext.pkg.path, index: this.animNext.exportIndex } : null
+        };
+    }
+
     public doLoad(pkg: APackage, exp: UExport) {    // 2785
         super.doLoad(pkg, exp);
 
@@ -175,10 +205,15 @@ export abstract class UTexture extends UMaterial {
     }
 
     protected decodeTexture(builder: DecodeLibraryBuilder) {
+        builder.beginTextureFrame(this);
         const library = builder.library;
         const totalMipCount = this.mipmaps.length;
 
-        if (totalMipCount === 0) return { materialType: "empty" };
+        if (totalMipCount === 0) {
+            const info = { materialType: "empty" } as any;
+            builder.setTextureFrame(this, info, this.animNext);
+            return info;
+        }
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
         let maxLOD = totalMipCount - 1;
@@ -336,7 +371,7 @@ export abstract class UTexture extends UMaterial {
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
-        return {
+        const info = {
             materialType: "texture",
             textureType,
             name: this.name,
@@ -354,7 +389,11 @@ export abstract class UTexture extends UMaterial {
             isMasked: this.isMasked,
             isAlphaTexture: this.isAlphaTexture
         } as ITextureDecodeInfo;
+        builder.setTextureFrame(this, info, this.animNext);
+        return info;
     }
+
+    public getTextureFrameDecodeInfo(builder: DecodeLibraryBuilder): any { return this.decodeTexture(builder); }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
@@ -363,8 +402,14 @@ export abstract class UTexture extends UMaterial {
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(tex.loadSelf().decodeTexture(builder));
-                tex = tex.animNext;
+                const cached = builder.getCachedTextureFrame(tex);
+                if (cached) {
+                    sprites.push(cached.info);
+                    tex = cached.next;
+                } else {
+                    sprites.push(tex.loadSelf().decodeTexture(builder));
+                    tex = tex.animNext;
+                }
             }
 
             return {
@@ -375,72 +420,73 @@ export abstract class UTexture extends UMaterial {
             } as IAnimatedSpriteDecodeInfo;
         }
 
-        return this.decodeTexture(builder);
+        const cached = builder.getCachedTextureFrame(this);
+        return cached ? cached.info : this.decodeTexture(builder);
     }
 }
 
 export default UTexture;
 
-function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
-    const width_half = width / 2;
-    const height_half = height / 2;
+// function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
+    // const width_half = width / 2;
+    // const height_half = height / 2;
 
-    const gridX = Math.floor(widthSegments);
-    const gridY = Math.floor(heightSegments);
+    // const gridX = Math.floor(widthSegments);
+    // const gridY = Math.floor(heightSegments);
 
-    const gridX1 = gridX + 1;
-    const gridY1 = gridY + 1;
+    // const gridX1 = gridX + 1;
+    // const gridY1 = gridY + 1;
 
-    const segment_width = width / gridX;
-    const segment_height = height / gridY;
+    // const segment_width = width / gridX;
+    // const segment_height = height / gridY;
 
-    //
+    // //
 
-    const indices = [];
-    const vertices = [];
-    const normals = [];
-    const uvs = [];
+    // const indices = [];
+    // const vertices = [];
+    // const normals = [];
+    // const uvs = [];
 
-    for (let iy = 0; iy < gridY1; iy++) {
+    // for (let iy = 0; iy < gridY1; iy++) {
 
-        const y = iy * segment_height - height_half;
+        // const y = iy * segment_height - height_half;
 
-        for (let ix = 0; ix < gridX1; ix++) {
+        // for (let ix = 0; ix < gridX1; ix++) {
 
-            const x = ix * segment_width - width_half;
+            // const x = ix * segment_width - width_half;
 
-            vertices.push(x, - y, 0);
+            // vertices.push(x, - y, 0);
 
-            normals.push(0, 0, 1);
+            // normals.push(0, 0, 1);
 
-            uvs.push(ix / gridX);
-            uvs.push(1 - (iy / gridY));
+            // uvs.push(ix / gridX);
+            // uvs.push(1 - (iy / gridY));
 
-        }
+        // }
 
-    }
+    // }
 
-    for (let iy = 0; iy < gridY; iy++) {
+    // for (let iy = 0; iy < gridY; iy++) {
 
-        for (let ix = 0; ix < gridX; ix++) {
+        // for (let ix = 0; ix < gridX; ix++) {
 
-            const a = ix + gridX1 * iy;
-            const b = ix + gridX1 * (iy + 1);
-            const c = (ix + 1) + gridX1 * (iy + 1);
-            const d = (ix + 1) + gridX1 * iy;
+            // const a = ix + gridX1 * iy;
+            // const b = ix + gridX1 * (iy + 1);
+            // const c = (ix + 1) + gridX1 * (iy + 1);
+            // const d = (ix + 1) + gridX1 * iy;
 
-            indices.push(a, b, d);
-            indices.push(b, c, d);
+            // indices.push(a, b, d);
+            // indices.push(b, c, d);
 
-        }
-    }
+        // }
+    // }
 
-    const TypedIndicesArray = getTypedArrayConstructor(indices.length / 3);
+    // const TypedIndicesArray = getTypedArrayConstructor(indices.length / 3);
 
-    return {
-        indices: new TypedIndicesArray(indices),
-        positions: new Float32Array(vertices),
-        uvs: new Float32Array(uvs),
-        normals: new Float32Array(normals)
-    };
-}
+    // return {
+        // indices: new TypedIndicesArray(indices),
+        // positions: new Float32Array(vertices),
+        // uvs: new Float32Array(uvs),
+        // normals: new Float32Array(normals)
+    // };
+// }

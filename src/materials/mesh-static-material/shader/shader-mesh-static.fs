@@ -8,7 +8,15 @@ const float texModifierAlpha = -1.0;
 #endif
 uniform float opacity;
 #ifdef USE_PAWN_MATERIALS
-    flat varying int vPawnPart;
+    #ifdef USE_PAWN_CROWD
+        flat varying vec4 vPawnColor;
+        flat varying vec4 vPawnMaps;
+        flat varying vec4 vPawnParameters;
+        flat varying vec4 vPawnFlags;
+        flat varying vec3 vPawnTexModifierColor;
+    #else
+        flat varying int vPawnPart;
+    #endif
     varying vec2 vPawnSpecularUv;
     varying vec2 vPawnWorldSpecularUv;
     struct PawnMaterialData {
@@ -19,7 +27,9 @@ uniform float opacity;
         int envMode;
         bool visible;
     };
-    uniform vec4 pawnMaterialData[NUM_PAWN_PARTS * 4];
+    #ifndef USE_PAWN_CROWD
+        uniform vec4 pawnMaterialData[NUM_PAWN_PARTS * 4];
+    #endif
     uniform bool pawnSilhouette;
 #endif
 #ifdef USE_TERRAIN_DECORATION_FADE
@@ -43,6 +53,9 @@ uniform float opacity;
 // #include <map_pars_fragment>
 // #include <alphamap_pars_fragment>
 #include <alphatest_pars_fragment>
+#ifdef USE_ALPHATEST
+    uniform float alphaCeil;
+#endif
 #include <aomap_pars_fragment>
 #include <lightmap_pars_fragment>
 #include <envmap_common_pars_fragment>
@@ -86,7 +99,6 @@ uniform float opacity;
     uniform sampler2D shDetailMap;
     uniform sampler2D shMaterial2Map;
 
-    #define MAX_TRANSFORM_STAGES 2
 
     struct TransformStage {
         int type; // PAN/ROTATE/OSCILLATE
@@ -101,6 +113,8 @@ uniform float opacity;
         float phaseU, phaseV; // oscillate
         float amplitudeU, amplitudeV; // oscillate
         int typeU, typeV; // oscillate
+        bool useLocalTime;
+        float timeSeconds;
         float offsetU, offsetV; // rotate + oscillate
     };
 #endif
@@ -131,6 +145,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -191,6 +207,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -255,6 +273,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -317,6 +337,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -383,6 +405,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -443,6 +467,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -528,12 +554,25 @@ uniform float opacity;
     varying vec3 vColorInstance;
 #endif
 
+#ifdef USE_RANGE_FADE
+    varying float vRangeAlpha;
+    #ifdef USE_RANGE_FADE_FRAGMENT
+        varying vec3 vRangeOffset;
+        uniform vec4 clippingSphere;
+        uniform float clippingFade;
+        uniform float indoorRangeIgnored;
+    #endif
+#endif
 #if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
     varying vec3 vLitColor;
 #endif
 
 #if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
     uniform sampler2D shadowMap;
+#ifdef NUM_PROJECTOR_INSTANCES
+uniform sampler2D shadowMaps[NUM_PROJECTOR_INSTANCES];
+flat varying int vShadowInstance;
+#endif
     uniform float shadowDarkness;
     uniform float shadowActive;
     varying vec4 vShadowCoord;
@@ -562,14 +601,40 @@ vec3 getFadeColor(FadeData fade) {
     #include <projector_receiver>
 #endif
 
+#ifdef USE_VERTEX_ALPHA_MASK
+    varying float vVertexAlpha;
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
+    #ifdef USE_RANGE_FADE
+        float rangeAlpha = vRangeAlpha;
+        #ifdef USE_RANGE_FADE_FRAGMENT
+            rangeAlpha = (clippingSphere.w - length(vRangeOffset)) / clippingFade;
+            #ifdef USE_INDOOR_RANGE_IGNORED
+                rangeAlpha = max(indoorRangeIgnored, rangeAlpha);
+            #endif
+            rangeAlpha = min(rangeAlpha, vRangeAlpha);
+        #endif
+        if (rangeAlpha < 1.0 && rangeAlpha <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
+    #endif
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
 
     #ifdef USE_PAWN_MATERIALS
+        #ifdef USE_PAWN_CROWD
+            PawnMaterialData part = PawnMaterialData(vPawnColor, vPawnMaps, vPawnParameters, int(vPawnFlags.x), int(vPawnFlags.y), vPawnFlags.z > 0.5);
+        #else
         int partRow = vPawnPart * 4;
-        PawnMaterialData part = PawnMaterialData(pawnMaterialData[partRow], pawnMaterialData[partRow + 1], pawnMaterialData[partRow + 2], int(pawnMaterialData[partRow + 3].x), int(pawnMaterialData[partRow + 3].y), pawnMaterialData[partRow + 3].z > 0.5);
+        PawnMaterialData part = PawnMaterialData(
+            pawnMaterialData[partRow],
+            pawnMaterialData[partRow + 1],
+            pawnMaterialData[partRow + 2],
+            int(pawnMaterialData[partRow + 3].x),
+            int(pawnMaterialData[partRow + 3].y),
+            pawnMaterialData[partRow + 3].z > 0.5
+        );
+        #endif
         if (pawnSilhouette) { // same coverage as the per-part black FrontSide silhouette the shadow pass draws for unbatched meshes
             if (!part.visible || !gl_FrontFacing) discard;
             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -651,6 +716,9 @@ void main() {
         #endif
         
         float maskVal = 1.0;
+        #ifdef USE_VERTEX_ALPHA_MASK
+            maskVal = vVertexAlpha;
+        #endif
         #ifdef USE_SPECULAR
             #ifdef USE_MAP_SPECULAR
                  maskVal = texture2D(shSpecularMap, UV_SPECULAR).g;
@@ -670,7 +738,7 @@ void main() {
         } else if (combiner.combineMode == 5) { // Subtract
             diffuseColor.rgb = color1 - color2.rgb;
         } else if (combiner.combineMode == 6) { // AlphaBlend
-            diffuseColor.rgb = mix(color2.rgb, color1, maskVal);
+            diffuseColor.rgb = mix(color1, color2.rgb, maskVal);
         } else if (combiner.combineMode == 7) { // Use Color From Material2
             diffuseColor.rgb = color2.rgb;
         }
@@ -706,6 +774,9 @@ void main() {
     #endif
     if (texModifierAlpha < 0.0) {
         #include <alphatest_fragment>
+        #ifdef USE_ALPHATEST
+            if (alphaCeil > 0.0 && diffuseColor.a >= alphaCeil) discard;
+        #endif
     }
     #ifdef USE_PROJECTOR_RECEIVER
         gl_FragColor = getProjectorShadow();
@@ -811,14 +882,18 @@ void main() {
     #endif
     
     #include <envmap_fragment>
-    outgoingLight *= texModifierColor;
+    #ifdef USE_PAWN_CROWD
+        outgoingLight *= vPawnTexModifierColor;
+    #else
+        outgoingLight *= texModifierColor;
+    #endif
 
     if (texModifierAlpha >= 0.0) {
         #ifdef USE_PAWN_MATERIALS
-            bool masked = part.parameters.x == 127.0 / 255.0;
+            bool masked = part.parameters.x > 0.0;
         #else
             #ifdef USE_ALPHATEST
-                bool masked = alphaTest == 127.0 / 255.0;
+                bool masked = alphaTest > 0.0;
             #else
                 bool masked = false;
             #endif

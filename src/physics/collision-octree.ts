@@ -127,7 +127,8 @@ export class CollisionOctree {
 
 function expandBounds(bounds: Box3, result: Box3): Box3 {
     const { min, max } = bounds;
-    if (!Number.isFinite(min.x) || !Number.isFinite(min.y) || !Number.isFinite(min.z) || !Number.isFinite(max.x) || !Number.isFinite(max.y) || !Number.isFinite(max.z)) throw new Error(`Collision octree bounds are not finite.`);
+    if (!Number.isFinite(min.x) || !Number.isFinite(min.y) || !Number.isFinite(min.z) || !Number.isFinite(max.x) || !Number.isFinite(max.y) || !Number.isFinite(max.z))
+        throw new Error(`Collision octree bounds are not finite.`);
     result.min.set(Math.fround(Math.fround(min.x) - ACTORBOX_EPSILON), Math.fround(Math.fround(min.y) - ACTORBOX_EPSILON), Math.fround(Math.fround(min.z) - ACTORBOX_EPSILON));
     result.max.set(Math.fround(Math.fround(max.x) + ACTORBOX_EPSILON), Math.fround(Math.fround(max.y) + ACTORBOX_EPSILON), Math.fround(Math.fround(max.z) + ACTORBOX_EPSILON));
     return result;

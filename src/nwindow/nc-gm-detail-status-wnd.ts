@@ -74,12 +74,12 @@ export class NCGMDetailStatusWnd {
         this.statusWnd = new NCGMDetailStatusPage(layer, this.element);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, 100); }
+    public placeOnScreen(_width: number, _height: number) { this.layer.place(this.element, 0, 100); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
     public setClan(info: GMClanInfo_T, crest: CanvasImageSource = null) { this.statusWnd.setGMClan(info, crest); }
     public setCharacterInfo(info: GMViewCharacterInfo_T) {
-        this.statusWnd.setStatus({ ...info, isHero: false, isNoble: false } as UserInfo_T);
+        this.statusWnd.setStatus({ ...info, isHero: false, isNoble: false });
     }
     public toggle(targetName: string) {
         if (this.isVisible()) { this.setVisible(false); return; }

@@ -1,7 +1,7 @@
 import { Matrix3, Vector2 } from "three";
+import type TexOscillatorTriggered from "./tex-oscillator-triggered";
 
-// must match MAX_TRANSFORM_STAGES in shader-mesh-static.vs/.fs
-const MAX_TRANSFORM_STAGES = 2;
+export const MAX_TRANSFORM_STAGES = 2;
 
 const TRANSFORM_TYPE_CODE: Record<"pan" | "rotate" | "oscillate", number> = { pan: 0, rotate: 1, oscillate: 2 };
 
@@ -20,7 +20,8 @@ function emptyTransformStage() {
         phaseU: 0, phaseV: 0,
         amplitudeU: 0, amplitudeV: 0,
         typeU: 0, typeV: 0,
-        offsetU: 0, offsetV: 0
+        offsetU: 0, offsetV: 0,
+        useLocalTime: false, timeSeconds: 0, triggered: null as TexOscillatorTriggered
     };
 }
 
@@ -53,6 +54,9 @@ export function buildTransformStage(kind: "pan" | "rotate" | "oscillate", transf
             stage.typeV = transform.typeV;
             stage.offsetU = transform.offsetU;
             stage.offsetV = transform.offsetV;
+            stage.useLocalTime = transform.useLocalTime;
+            stage.timeSeconds = transform.timeSeconds;
+            stage.triggered = transform.triggered;
             break;
         default: throw new Error(`Unknown transform stage kind: ${kind}`);
     }

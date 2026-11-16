@@ -4,6 +4,8 @@ import { DigitFont_T } from "./nwindow-canvas";
 import type NDomLayer from "./ndom";
 import type { AbnormalStatus_T } from "../network/game-packets";
 
+const timerSecondsPerMillisecond = Math.fround(0.001);
+
 type EffectItem_T = AbnormalStatus_T & { alpha: number, isFading: boolean, tooltipTime: number };
 type EffectSlot_T = { back: HTMLDivElement, icon: HTMLDivElement, debuff: HTMLDivElement, digits: HTMLDivElement };
 
@@ -70,7 +72,7 @@ export class NCAbnormalStatusWnd {
         const delta = Math.fround(deltaSeconds);
 
         for (let i = 0; i < 2; i++) {
-            const elapsed = this.arrTimerElapsed[i] + delta, period = (i ? 100 : 1000) * Math.fround(0.001);
+            const elapsed = this.arrTimerElapsed[i] + delta, period = (i ? 100 : 1000) * timerSecondsPerMillisecond;
 
             this.arrTimerElapsed[i] = Math.fround(elapsed);
 
@@ -115,7 +117,9 @@ export class NCAbnormalStatusWnd {
     }
 
     protected updateLayout() {
-        const count = this.effects.length, secondaryCount = this.secondaryEffects.length + (this.shortEffect ? 1 : 0), rows = Math.ceil(Math.min(count, 30) / 10);
+        const count = this.effects.length;
+        const secondaryCount = this.secondaryEffects.length + (this.shortEffect ? 1 : 0);
+        const rows = Math.ceil(Math.min(count, 30) / 10);
         const H = secondaryCount ? 26 + rows * 25 : count ? 1 + rows * 25 : 0, layer = this.layer;
 
         this.width = count > 10 ? 272 : count || secondaryCount ? 12 + Math.max(count, secondaryCount) * 26 : 0;
@@ -162,7 +166,9 @@ export class NCAbnormalStatusWnd {
         const layer = this.layer;
 
         while (this.arrSlots.length <= index) {
-            const back = layer.tile(this.slots, 0, 0, 26, 26, 0, 0, 26, 26, TEX_BACK), icon = layer.tile(this.slots, 0, 0, 24, 24, 0, 0, 32, 32, TEX_BACK), debuff = layer.tile(this.slots, 0, 0, 24, 24, 0, 0, 26, 26, TEX_DEBUFF);
+            const back = layer.tile(this.slots, 0, 0, 26, 26, 0, 0, 26, 26, TEX_BACK);
+            const icon = layer.tile(this.slots, 0, 0, 24, 24, 0, 0, 32, 32, TEX_BACK);
+            const debuff = layer.tile(this.slots, 0, 0, 24, 24, 0, 0, 26, 26, TEX_DEBUFF);
 
             this.arrSlots.push({ back, icon, debuff, digits: layer.digits(this.slots, "", 0xccdcdcdc, DigitFont_T.LARGE, 0, 0) });
         }
@@ -171,7 +177,10 @@ export class NCAbnormalStatusWnd {
     }
 
     protected paintSlot(index: number, x: number, y: number, effect: AbnormalStatus_T, alpha: number, isDebuff: boolean, remaining: number) {
-        const slot = this.getSlot(index), layer = this.layer, showDigits = !isDebuff && remaining >= 0 && remaining < 60, icon = this.getIcon(effect);
+        const slot = this.getSlot(index);
+        const layer = this.layer;
+        const showDigits = !isDebuff && remaining >= 0 && remaining < 60;
+        const icon = this.getIcon(effect);
 
         slot.back.hidden = false;
         slot.icon.hidden = !layer.hasTexture(icon);
@@ -235,7 +244,13 @@ export class NCAbnormalStatusWnd {
         const x = isShort ? 13 : isSecondary ? 13 + extraSlot * 26 : 13 + this.hoveredSlot % 10 * 26;
         const y = 1 + (isShort || isSecondary ? secondaryRow : Math.floor(this.hoveredSlot / 10)) * 25;
 
-        this.hoveredTooltip = this.tooltip.createDOM(this.layer, this.element, parseFloat(this.element.style.left) + x, parseFloat(this.element.style.top) + y, NCTooltip.abnormal(this.layer.getManager().strings, effect.id, effect.level, time, isSecondary));
+        this.hoveredTooltip = this.tooltip.createDOM(
+            this.layer,
+            this.element,
+            parseFloat(this.element.style.left) + x,
+            parseFloat(this.element.style.top) + y,
+            NCTooltip.abnormal(this.layer.getManager().strings, effect.id, effect.level, time, isSecondary)
+        );
     }
 }
 

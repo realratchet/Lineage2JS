@@ -1,52 +1,36 @@
 import { Object3D } from "three";
-import { ObjectComponent, type IObject } from "../../game/components";
-import { ScriptComponent } from "../../game/script-component";
-import { getProperty, updateLevelActor, type ScriptHost_T, type ScriptValue_T } from "../../ue-script/vm";
+import { ObjectComponent, type ScriptActor_T } from "../../game/components";
+import type { ScriptComponent } from "../../game/script-component";
+import { setScriptObjectProperty } from "../actor-properties";
+import { getProperty } from "../../ue-script/vm";
 
-export type OwnedActor_T = Object3D & IObject;
+export type OwnedActor_T = ScriptActor_T;
 
 export function setActorOwner(object: OwnedActor_T, owner: OwnedActor_T): void {
     if (owner !== null && (!owner || !owner.isObject3D || typeof owner.getComponent !== "function")) throw new Error(`Invalid actor owner for '${object.name}'.`);
-    const previous = getProperty(object as any, "Owner") as unknown as OwnedActor_T;
+    const previous = getProperty(object, "Owner") as OwnedActor_T;
 
     if (previous) {
         const script = previous.getComponent<ScriptComponent>("script");
 
-        if (script.getVM().isProbing(previous as any, "LostChild")) script.call("LostChild", [object as any]);
-        const current = getProperty(object as any, "Owner") as unknown as OwnedActor_T;
+        if (script.getVM().isProbing(previous, "LostChild")) script.call("LostChild", [object]);
+        const current = getProperty(object, "Owner") as OwnedActor_T;
 
         (current.findComponent<ActorOwnershipComponent>("actorOwnership") || current.addComponent(new ActorOwnershipComponent())).lostChild(object);
     }
 
-    (object as any).scriptOwner = owner;
-    setScriptObjectProperty(object, "Owner", owner as unknown as ScriptHost_T);
+    object.scriptOwner = owner;
+    setScriptObjectProperty(object, "Owner", owner);
     if (owner) {
         const script = owner.getComponent<ScriptComponent>("script");
 
-        if (script.getVM().isProbing(owner as any, "GainedChild")) script.call("GainedChild", [object as any]);
-        const current = getProperty(object as any, "Owner") as unknown as OwnedActor_T;
+        if (script.getVM().isProbing(owner, "GainedChild")) script.call("GainedChild", [object]);
+        const current = getProperty(object, "Owner") as OwnedActor_T;
 
         (current.findComponent<ActorOwnershipComponent>("actorOwnership") || current.addComponent(new ActorOwnershipComponent())).gainedChild(object);
     }
-    (object as any).scriptOwner = getProperty(object as any, "Owner");
+    object.scriptOwner = getProperty(object, "Owner") as OwnedActor_T;
     setScriptObjectProperty(object, "bNetDirty", true);
-}
-
-export function setScriptObjectProperty(object: Object3D, field: string, value: ScriptValue_T): void {
-    const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
-
-    if (!properties) return;
-    const name = field.slice(field.lastIndexOf(".") + 1).toLowerCase();
-
-    for (const key of properties.keys())
-        if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) {
-            properties.set(key, value);
-            if (name === "level") updateLevelActor(object as any);
-            return;
-        }
-
-    properties.set(field, value);
-    if (name === "level") updateLevelActor(object as any);
 }
 
 export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
@@ -57,9 +41,9 @@ export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
 
     public gainedChild(object: Object3D): void {
         if (!object) return;
-        const arrChildren = getProperty(this.getParent() as any, "Child") as unknown as Object3D[];
+        const arrChildren = getProperty(this.getParent(), "Child") as OwnedActor_T[];
 
-        if (!arrChildren.includes(object)) arrChildren.push(object);
+        if (!arrChildren.includes(object as OwnedActor_T)) arrChildren.push(object as OwnedActor_T);
         this.scriptChildren.add(object);
     }
 
@@ -67,8 +51,8 @@ export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
         if (!object) return;
         const parent = this.getParent(), vm = this.getComponent<ScriptComponent>("script").getVM();
 
-        if (vm.invokeNative(parent as any, parent as any, 303, "IsA", ["L2Pickup"]) && getProperty(parent as any, "DropEffectActor") === object) setScriptObjectProperty(parent as any, "DropEffectActor", null);
-        const arrChildren = getProperty(parent as any, "Child") as unknown as Object3D[];
+        if (vm.invokeNative(parent, parent, 303, "IsA", ["L2Pickup"]) && getProperty(parent, "DropEffectActor") === (object as OwnedActor_T)) setScriptObjectProperty(parent, "DropEffectActor", null);
+        const arrChildren = getProperty(parent, "Child") as OwnedActor_T[];
 
         for (let index = arrChildren.length - 1; index >= 0; index--)
             if (arrChildren[index] === object) arrChildren.splice(index, 1);
@@ -77,32 +61,18 @@ export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
 
     public gainScriptChild(object: Object3D): void {
         const parent = this.getParent();
-        const owner = (object as any).scriptOwner as OwnedActor_T;
 
-        if (owner === parent) return;
-        if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(object);
+        if (getProperty(object as OwnedActor_T, "Owner") === parent) return;
 
-        (object as any).scriptOwner = parent;
-        setScriptObjectProperty(object, "Owner", parent as unknown as ScriptHost_T);
-        this.scriptChildren.add(object);
-
-        const script = this.findComponent<ScriptComponent>("script");
-
-        if (script?.hasFunction("GainedChild")) script.call("GainedChild", [object as unknown as ScriptHost_T]);
+        setActorOwner(object as OwnedActor_T, parent);
     }
 
     public loseScriptChild(object: Object3D): void {
         const parent = this.getParent();
 
-        if ((object as any).scriptOwner !== parent) return;
+        if (getProperty(object as OwnedActor_T, "Owner") !== parent) return;
 
-        (object as any).scriptOwner = null;
-        setScriptObjectProperty(object, "Owner", null);
-        this.scriptChildren.delete(object);
-
-        const script = this.findComponent<ScriptComponent>("script");
-
-        if (script?.hasFunction("LostChild")) script.call("LostChild", [object as unknown as ScriptHost_T]);
+        setActorOwner(object as OwnedActor_T, null);
     }
 }
 

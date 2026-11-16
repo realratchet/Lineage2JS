@@ -1,6 +1,9 @@
 import DecodeEngine from "./decode-engine";
 import type { MainToWorkerMessage_T, WorkerToMainMessage_T } from "./decode-protocol";
 import { selectAssetFiles, setServedAssets } from "../asset-source";
+import { withAssetSources, releaseAssetSources } from "../unreal/asset-handle";
+import { setLoadingStepHandler } from "../../loading-profile";
+import { serializeLibraryBlob } from "./library-serializer";
 
 const ctx = self as any;
 
@@ -9,11 +12,69 @@ if (typeof ctx.location.reload !== "function") {
     ctx.location.reload = () => { };
 }
 
-const DECODE_PACKAGE_SWEEP_MS = 5000;
 const engine = new DecodeEngine();
+const loadingLabels: Record<string, string> = { read: "Reading", dependencies: "Loading package", convert: "Converting", cache: "Writing cache", load: "Loading built package" };
+let flushLoadingProgress: (requestId: number) => void = null;
 
 function post(message: WorkerToMainMessage_T, transfer?: Transferable[]) {
+    if (flushLoadingProgress && "requestId" in message && message.type !== "sectorCache") flushLoadingProgress(message.requestId);
     ctx.postMessage(message, transfer ?? []);
+}
+
+async function handleProfiledMessage(message: MainToWorkerMessage_T): Promise<void> {
+    if (!("requestId" in message) || message.type === "memoryStats") return handleMessage(message);
+
+    const requestId = message.requestId;
+    const started = performance.timeOrigin + performance.now();
+    const steps: Record<string, { ms: number, count: number }> = {};
+    const active = new Map<number, { kind: string, name: string }>();
+    let lastUpdate = 0, progressTimer = 0;
+
+    function updateProgress(id: number = requestId) {
+        if (id !== requestId) return;
+
+        clearTimeout(progressTimer);
+        progressTimer = 0;
+        lastUpdate = performance.now();
+        ctx.postMessage({
+            type: "loadingProgress",
+            profile: {
+                requestId,
+                started,
+                active: [...active.values()].map(step => step.kind === "lock" ? "Waiting for cache access" : `${loadingLabels[step.kind] || step.kind} ${step.name}`).slice(-1)[0] || message.type,
+                steps,
+                packages: [...active.values()].filter(step => step.kind !== "lock")
+            }
+        });
+    }
+
+    flushLoadingProgress = updateProgress;
+    setLoadingStepHandler((id, kind, name, _start, elapsed) => {
+        if (elapsed < 0) active.set(id, { kind, name: name.replace(/^assets\//, "") });
+        else {
+            active.delete(id);
+            const row = steps[kind] || (steps[kind] = { ms: 0, count: 0 });
+
+            row.ms += elapsed;
+            row.count++;
+            if (kind === "lock") {
+                const lock = steps[`lock:${name}`] || (steps[`lock:${name}`] = { ms: 0, count: 0 });
+                lock.ms += elapsed;
+                lock.count++;
+            }
+        }
+        if (performance.now() - lastUpdate >= 250) updateProgress();
+        else if (!progressTimer) progressTimer = setTimeout(updateProgress, 250 - (performance.now() - lastUpdate)) as any;
+    });
+    updateProgress();
+
+    try {
+        await handleMessage(message);
+    } finally {
+        clearTimeout(progressTimer);
+        setLoadingStepHandler(null);
+        flushLoadingProgress = null;
+    }
 }
 
 async function handleMessage(msg: MainToWorkerMessage_T) {
@@ -33,9 +94,12 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decode": {
             try {
-                const { library, buffers } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings, fromCache => post({ type: "sectorCache", requestId: msg.requestId, sectorName: msg.sectorName, fromCache }));
+                const { library } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings, fromCache => post({ type: "sectorCache", requestId: msg.requestId, sectorName: msg.sectorName, fromCache }));
 
-                post({ type: "decoded", requestId: msg.requestId, library }, buffers);
+                if (msg.flushAssets) await engine.flushStoredAssets();
+
+                const buffer = await serializeLibraryBlob(library).arrayBuffer();
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
             } catch (e) {
                 console.error(`[decode-worker] failed to decode sector '${msg.sectorName}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -51,13 +115,43 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "sectorPackages": {
+            try {
+                post({
+                    type: "sectorPackagesListed",
+                    requestId: msg.requestId,
+                    packages: await engine.getSectorPackages(msg.sectorName, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } }))
+                });
+            } catch (error) {
+                post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
+            }
+            break;
+        }
+        case "packageDependencies": {
+            try {
+                const packages = await engine.getPackageDependencies(msg.path, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } }));
+                post({ type: "sectorPackagesListed", requestId: msg.requestId, packages });
+            } catch (error) {
+                post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
+            }
+            break;
+        }
+        case "precachePackage": {
+            try {
+                await engine.precachePackage(msg.path, msg.settings, false, msg.lockHeld);
+                post({ type: "packagePrecached", requestId: msg.requestId });
+            } catch (error) {
+                post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
+            }
+            break;
+        }
         case "free": {
             engine.freeSector(msg.sectorName);
             break;
         }
         case "decodeEnv": {
             try {
-                const info = await engine.decodeEnvConfig();
+                const info = await engine.decodeEnvConfig(msg.settings);
                 const transfer = engine.collectTransferables(info);
 
                 post({ type: "envDecoded", requestId: msg.requestId, info }, transfer);
@@ -69,7 +163,8 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "precacheCharacters": {
             try {
-                await engine.precacheCharacters(msg.settings);
+                await engine.precacheCharacters(msg.settings, msg.charIndex);
+                await engine.flushStoredAssets();
                 post({ type: "charactersPrecached", requestId: msg.requestId });
             } catch (e) {
                 console.error("[decode-worker] failed to precache characters:", e);
@@ -80,6 +175,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         case "precacheNpcBundle": {
             try {
                 await engine.precacheNpcBundle(msg.settings, msg.packageName);
+                await engine.flushStoredAssets();
                 post({ type: "npcBundlePrecached", requestId: msg.requestId });
             } catch (e) {
                 console.error(`[decode-worker] failed to precache npc bundle '${msg.packageName}':`, e);
@@ -89,7 +185,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "charGroups": {
             try {
-                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups() });
+                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups(msg.settings) });
             } catch (e) {
                 console.error("[decode-worker] failed to decode character groups:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -158,7 +254,10 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "gameStrings": {
             try {
-                post({ type: "gameStringsDecoded", requestId: msg.requestId, strings: await engine.decodeGameStrings() });
+                const strings = await engine.decodeGameStrings(msg.settings);
+                const transfer = engine.collectTransferables(strings.zoneNameMasks);
+
+                post({ type: "gameStringsDecoded", requestId: msg.requestId, strings }, transfer);
             } catch (e) {
                 console.error("[decode-worker] failed to decode game strings:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -238,13 +337,9 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
-        case "memoryStats": {
-            post({ type: "memoryStatsDecoded", requestId: msg.requestId, stats: engine.getMemoryStats() });
-            break;
-        }
         case "clientConfig": {
             try {
-                post({ type: "clientConfigDecoded", requestId: msg.requestId, config: await engine.decodeClientConfig() });
+                post({ type: "clientConfigDecoded", requestId: msg.requestId, config: await engine.decodeClientConfig(msg.settings) });
             } catch (e) {
                 console.error("[decode-worker] failed to decode client config:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
@@ -274,8 +369,6 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
 
 const arrMessages: MainToWorkerMessage_T[] = [];
 let isProcessingMessages = false;
-let lastMessageDrain = -Infinity;
-let lastMaintenance = performance.now();
 
 function isUrgentMessage(message: MainToWorkerMessage_T): boolean {
     return message.type === "decodeCharacterEquipment" || message.type === "decodeCharacter" || message.type === "decodeSkill" && message.urgent;
@@ -291,6 +384,14 @@ function queueMessage(message: MainToWorkerMessage_T): void {
 function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
     const message = event.data;
 
+    if (message.type === "memoryStats") {
+        post({ type: "memoryStatsDecoded", requestId: message.requestId, stats: engine.getMemoryStats() });
+        return;
+    }
+    if (message.type === "maintenance") {
+        if (!isProcessingMessages && arrMessages.length === 0) void maintainPackages();
+        return;
+    }
     if (message.type === "promoteSkill") {
         const index = arrMessages.findIndex(entry => entry.type === "decodeSkill" && entry.requestId === message.requestId);
 
@@ -313,6 +414,10 @@ function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
         engine.confirmSharedTextures(message.keys);
         return;
     }
+    if (message.type === "confirmSharedScript") {
+        engine.confirmSharedScript(message.keys);
+        return;
+    }
     queueMessage(message);
     void processMessages();
 }
@@ -322,29 +427,24 @@ async function processMessages(): Promise<void> {
 
     isProcessingMessages = true;
 
-    while (arrMessages.length > 0)
-        await handleMessage(arrMessages.shift()!);
+    await withAssetSources(async () => {
+        while (arrMessages.length > 0)
+            await handleProfiledMessage(arrMessages.shift()!);
+    });
 
-    lastMessageDrain = performance.now();
     isProcessingMessages = false;
 }
 
 ctx.onmessage = onMessage;
 
-setInterval(async () => {
-    if (isProcessingMessages) return;
-
-    const now = performance.now();
-
-    if (now - lastMessageDrain < 500 && now - lastMaintenance < 3 * DECODE_PACKAGE_SWEEP_MS) return;
-
+async function maintainPackages(): Promise<void> {
     isProcessingMessages = true;
     try {
         await engine.flushStoredAssets();
         engine.releaseDecodePackages(0);
-        lastMaintenance = performance.now();
+        await releaseAssetSources();
     } finally {
         isProcessingMessages = false;
         void processMessages();
     }
-}, DECODE_PACKAGE_SWEEP_MS);
+}

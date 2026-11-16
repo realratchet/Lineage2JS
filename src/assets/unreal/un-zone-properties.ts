@@ -1,4 +1,4 @@
-import { BufferValue, type APackage, type Constructable_T } from "@l2js/core";
+import { type APackage, type Constructable_T } from "@l2js/core";
 import type { FZoneInfo, IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { ULevelInfo } from "./un-level-info";
 import type { DecodeLibrary } from "./decode-library";

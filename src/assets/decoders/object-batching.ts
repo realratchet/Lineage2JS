@@ -1,10 +1,11 @@
-import { batchStaticMeshTextures } from "./static-mesh-texture-batching";
-import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
+import { createStaticMeshTextureBatchJob } from "./static-mesh-texture-batching";
+import { BufferGeometry, BufferAttribute, DataArrayTexture, DynamicDrawUsage, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import SortedIndexBuffer from "../../rendering/sorted-index-buffer";
 import Terrain from "../../objects/terrain";
+import type MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
 import CollidingMesh from "../../objects/colliding-mesh";
-import ZoneObject, { SectorObject } from "../../objects/zone-object";
+import { SectorObject } from "../../objects/zone-object";
 import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
@@ -12,7 +13,6 @@ import type { StaticMeshBatchManifest_T, BatchElement_T, IStaticMeshSwayDecodeIn
 import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
-type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };
 
 export type StaticMeshBatchJob_T = {
     library: DecodeLibrary,
@@ -23,10 +23,10 @@ export type StaticMeshBatchJob_T = {
     manifest: StaticMeshBatchManifest_T,
     batchIndex: number,
     actorIndex: number,
-    indexCopy: StaticMeshIndexCopy_T
+    batchBuild: Generator<void, void, unknown>,
+    prepareBounds: (root: Object3D) => Generator<void, void, unknown>,
+    boundsBuild: Generator<void, void, unknown>
 };
-
-const INDEX_COPY_CHUNK_BYTES = 256 * 1024;
 
 export function makeSwayAttribute(vertexCount: number, info: IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
     const sway = new Float32Array(vertexCount * 4);
@@ -71,8 +71,12 @@ function createBatchObject(
     mergedObject.batchActorUuids = actors.map(a => a.uuid);
     mergedObject.setPerActorAmbient(perActorAmbient);
     mergedObject.batchElements = batchElements;
-    mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
+    const rangeIgnored = new Uint8Array(mergedGeometry.getAttribute("position").count);
+    batchElements.forEach((element, index) => { if (element.isRangeIgnored) rangeIgnored.fill(255, perActorAmbient[index].startVertex, perActorAmbient[index].startVertex + perActorAmbient[index].count); });
+    mergedGeometry.setAttribute("actorRangeIgnored", new BufferAttribute(rangeIgnored, 1, true));
+    mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g })) as typeof mergedObject.allGroups;
     mergedObject.batchIndices = null;
+    mergedGeometry.index.setUsage(DynamicDrawUsage);
 
     // Transparent actor indices are depth-sorted during visibility updates.
     const matList = materials instanceof Array ? materials : [materials];
@@ -180,67 +184,67 @@ export function createStaticMeshBatchJob(
 ): StaticMeshBatchJob_T {
     const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
 
-    return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, indexCopy: null };
+    return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, batchBuild: null, prepareBounds: null, boundsBuild: null };
+}
+
+function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatchManifest_T["batches"][number]): Generator<void, void, unknown> {
+    const { library, sector, staticMeshGroup, fetchGeometry } = job;
+
+    try {
+        const geometry = fetchGeometry(library.geometries[batch.geometry]);
+        yield;
+        const geometryInfo = library.geometries[batch.geometry];
+        const materialInfo = library.materials[batch.materials];
+        const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
+            || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
+        yield;
+        // The merged light matrix has always been identity (see mergeBatchGeometriesData)
+        const lightInfo: MeshLight_T | null = batch.lights
+            ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
+            : null;
+
+        const batchObject = createBatchObject(
+            batch.name,
+            geometry,
+            materials,
+            lightInfo,
+            batch.colliderIndices,
+            (geometryInfo as any).collisionIndex,
+            batch.actors,
+            batch.perActorAmbient,
+            batch.batchElements
+        );
+
+        yield;
+        const source = geometry.index?.array as StaticMeshIndexArray_T;
+        yield* batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
+        yield;
+        yield* createStaticMeshTextureBatchJob(batchObject, source);
+        if (source) {
+            batchObject.batchIndices = geometryInfo.indices as StaticMeshIndexArray_T;
+            makeSortedIndexBuffers(library, batchObject, batch);
+        }
+
+        yield;
+        staticMeshGroup.add(batchObject);
+        for (const actor of batch.actors) (sector as any).staticMeshMap.set(actor.uuid, batchObject);
+        (sector as any).staticMeshMap.set(batch.uuid, batchObject);
+
+    } catch (e) {
+        console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
+    }
 }
 
 export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
-    const { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest } = job;
+    const { library, sector, staticMeshGroup, decodeObject3D, manifest } = job;
 
-    if (job.indexCopy) {
-        const { source, target, offset } = job.indexCopy;
-        const count = Math.min(source.length - offset, Math.max(1, Math.floor(INDEX_COPY_CHUNK_BYTES / source.BYTES_PER_ELEMENT)));
-
-        target.set(source.subarray(offset, offset + count), offset);
-        job.indexCopy.offset += count;
-        if (job.indexCopy.offset >= source.length) job.indexCopy = null;
-
+    if (job.batchBuild) {
+        if (job.batchBuild.next().done) job.batchBuild = null;
         return false;
     }
 
     if (job.batchIndex < manifest.batches.length) {
-        const batch = manifest.batches[job.batchIndex++];
-
-        try {
-            const geometry = fetchGeometry(library.geometries[batch.geometry]);
-            const geometryInfo = library.geometries[batch.geometry];
-            const materialInfo = library.materials[batch.materials];
-            const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
-                || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
-            // The merged light matrix has always been identity (see mergeBatchGeometriesData)
-            const lightInfo: MeshLight_T | null = batch.lights
-                ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
-                : null;
-
-            const batchObject = createBatchObject(
-                batch.name,
-                geometry,
-                materials,
-                lightInfo,
-                batch.colliderIndices,
-                (geometryInfo as any).collisionIndex,
-                batch.actors,
-                batch.perActorAmbient,
-                batch.batchElements
-            );
-
-            const source = geometry.index?.array as StaticMeshIndexArray_T;
-            batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
-            batchStaticMeshTextures(batchObject, source);
-            if (source) {
-                const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
-                batchObject.batchIndices = target;
-                job.indexCopy = { source, target, offset: 0 };
-                makeSortedIndexBuffers(library, batchObject, batch);
-            }
-
-            staticMeshGroup.add(batchObject);
-            for (const actor of batch.actors) (sector as any).staticMeshMap.set(actor.uuid, batchObject);
-            (sector as any).staticMeshMap.set(batch.uuid, batchObject);
-
-        } catch (e) {
-            console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
-        }
-
+        job.batchBuild = buildStaticMeshBatch(job, manifest.batches[job.batchIndex++]);
         return false;
     }
 
@@ -268,6 +272,13 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
         }
 
         return false;
+    }
+
+    if (job.prepareBounds) {
+        if (!job.boundsBuild) job.boundsBuild = job.prepareBounds(staticMeshGroup);
+        if (!job.boundsBuild.next().done) return false;
+        job.prepareBounds = null;
+        job.boundsBuild = null;
     }
 
     sector.add(staticMeshGroup);
@@ -300,7 +311,34 @@ export function batchStaticMeshActors(
     while (!stepStaticMeshBatchJob(job)) { }
 }
 
-function mergeTerrainGeometries(sectors: Terrain[]) {
+function createTerrainBatchMaterial(sectors: Terrain[]): MeshTerrainMaterial {
+    const source = (Array.isArray(sectors[0].material) ? sectors[0].material[0] : sectors[0].material) as MeshTerrainMaterial;
+
+    if (!source.isTerrainMaterial) throw new Error(`Terrain sector '${sectors[0].name}' has no terrain material.`);
+
+    const size = source.uniforms.uvsSize.value as THREE.Vector2, texture = source.uniforms.uvsMap.value as THREE.DataTexture;
+    const layerSize = texture.image.data.length;
+    const data = new Float32Array(layerSize * sectors.length);
+
+    for (let i = 0; i < sectors.length; i++) {
+        const material = (Array.isArray(sectors[i].material) ? (sectors[i].material as Material[])[0] : sectors[i].material) as MeshTerrainMaterial;
+
+        if (!material.isTerrainMaterial || material.fragmentShader !== source.fragmentShader || !(material.uniforms.uvsSize.value as THREE.Vector2).equals(size))
+            throw new Error(`Terrain sector '${sectors[i].name}' does not share the layers of '${sectors[0].name}'.`);
+
+        data.set((material.uniforms.uvsMap.value as THREE.DataTexture).image.data, i * layerSize);
+    }
+
+    const uvs = new DataArrayTexture(data, size.x, size.y, sectors.length);
+
+    uvs.format = texture.format;
+    uvs.type = texture.type;
+    uvs.needsUpdate = true;
+
+    return source.createBatch({ texture: uvs, size });
+}
+
+function mergeTerrainGeometries(sectors: Terrain[], indexStride: number) {
     let totalVertices = 0;
     let totalIndices = 0;
 
@@ -351,7 +389,6 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
         const colorArray = color ? color.array as any : null;
         const terrainIndexArray = terrainIndex ? terrainIndex.array as any : null;
 
-        // Copy and shift data
         for (let i = 0; i < vCount; i++) {
             const vi = vertexOffset + i;
 
@@ -372,7 +409,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
             }
 
             if (terrainIndexArray) {
-                mergedTerrainIndices[vi] = terrainIndexArray[i];
+                mergedTerrainIndices[vi] = terrainIndexArray[i] + sectorIndex * indexStride;
             }
         }
 
@@ -398,7 +435,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
     const mergedGeometry = new BufferGeometry();
     mergedGeometry.setAttribute("position", new BufferAttribute(mergedPositions, 3));
     mergedGeometry.setAttribute("normal", new BufferAttribute(mergedNormals, 3));
-    mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true));
+    mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true).setUsage(DynamicDrawUsage));
     mergedGeometry.setAttribute("terrainIndex", new BufferAttribute(mergedTerrainIndices, 1));
     mergedGeometry.setIndex(new BufferAttribute(mergedIndices, 1));
 
@@ -416,27 +453,18 @@ export function batchTerrainSectors(
     if (!library.batching.terrain || sectors.length < 2) return;
 
     try {
-        const { mergedGeometry, batchSectorInfo, totalIndices } = mergeTerrainGeometries(sectors);
+        const base = createTerrainBatchMaterial(sectors);
+        const { mergedGeometry, batchSectorInfo } = mergeTerrainGeometries(sectors, (base.uniforms.uvsSize.value as THREE.Vector2).x);
 
-        const materials: Material[] = [];
+        const materials: Material[] = [base, ...base.passes];
         mergedGeometry.clearGroups();
         for (let i = 0; i < batchSectorInfo.length; i++) {
             const info = batchSectorInfo[i];
-            const sector = info.sector;
-            const matIndex = materials.length;
-            const sectorGroups = (sector as any).hasTerrainPasses ? sector.geometry.groups : [];
-
-            if (Array.isArray(sector.material)) {
-                sector.material.forEach((m: Material) => materials.push(m));
-            } else {
-                materials.push(sector.material);
-            }
 
             info.groupOffset = mergedGeometry.groups.length;
-            info.groupCount = Math.max(1, sectorGroups.length);
+            info.groupCount = materials.length;
 
-            if (sectorGroups.length === 0) mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
-            else for (const group of sectorGroups) mergedGeometry.addGroup(info.startIndex + group.start, group.count, matIndex + group.materialIndex);
+            for (let pass = 0; pass < materials.length; pass++) mergedGeometry.addGroup(info.startIndex, info.indexCount, pass);
         }
 
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
@@ -459,15 +487,12 @@ export function batchTerrainSectors(
             (sector as any).batchIndexOffset = info.startIndex;
             (sector as any).batchSectorIndex = i;
 
-            // Properties used by zone-object.ts for culling and updates:
             (sector as any).batchGroupOffset = info.groupOffset;
             (sector as any).batchGroupCount = info.groupCount;
 
-            // Shift bounds to world space for frustum culling in zone-object.ts
             (sector as any).bounds.min.add(sector.position);
             (sector as any).bounds.max.add(sector.position);
 
-            // Remove from scene graph to avoid interference
             group.remove(sector);
         }
 

@@ -1,6 +1,8 @@
 import NCHtmlViewer from "./nc-html-viewer";
 import SystemMessage_T from "./system-message";
 
+const boardTimerPeriod = 10000 * Math.fround(0.001);
+
 const arrBoardTokens = ["ROOT_BID", "THREAD_ORDER", "BID", "STEP", "PARENT_BID", "CHAR_ID", "CHAR_NAME", "ACCOUNT_ID", "ACCOUNT_NAME", "WORLD_ID", "WRITER", "TITLE", "CONTENT", "POST_DATE", "MODIFY_DATE", "READ_COUNT", "STATUS", "IP", "COMMENT", "THREAD"];
 
 function replaceBoardToken(html: string, index: number, value: string) {
@@ -21,7 +23,7 @@ export class CBBSHtmlViewer extends NCHtmlViewer { // CBBSHtmlViewer 0x10190ee0,
     public tick(deltaSeconds: number) { // Console Tick 0x1007fa5c: strict greater-than, subtract one interval.
         super.tick(deltaSeconds);
 
-        const elapsed = this.boardTimerElapsed + Math.fround(deltaSeconds), period = 10000 * Math.fround(0.001);
+        const elapsed = this.boardTimerElapsed + Math.fround(deltaSeconds), period = boardTimerPeriod;
 
         this.boardTimerElapsed = Math.fround(elapsed);
         if (elapsed > period) {

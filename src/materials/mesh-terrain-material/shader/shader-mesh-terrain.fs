@@ -17,12 +17,18 @@ uniform float opacity;
 #include <envmap_pars_fragment>
 #include <cube_uv_reflection_fragment>
 #include <fog_pars_fragment>
+varying float vRangeAlpha;
+varying float vSectorFade;
 // #include <specularmap_pars_fragment>
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
 #ifdef USE_PROJECTOR_RECEIVER
 uniform sampler2D shadowMap;
+#ifdef NUM_PROJECTOR_INSTANCES
+uniform sampler2D shadowMaps[NUM_PROJECTOR_INSTANCES];
+flat varying int vShadowInstance;
+#endif
 uniform float shadowDarkness;
 uniform float shadowActive;
 varying vec4 vShadowCoord;
@@ -44,6 +50,8 @@ varying vec4 vShadowCoord;
 
 void main() {
     #include <clipping_planes_fragment>
+    float ditherNoise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    if (vSectorFade <= ditherNoise) discard;
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
 
@@ -88,6 +96,7 @@ void main() {
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     #include <fog_fragment>
+    if (vRangeAlpha <= ditherNoise) gl_FragColor.rgb = fogColor; // stays opaque so it still occludes bIgnoredRange meshes
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
 }

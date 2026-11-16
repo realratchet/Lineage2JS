@@ -19,7 +19,7 @@ export type SkillVisualDefinition_T = {
 };
 
 const programs = Object.fromEntries((["casting", "preshot", "shot", "explosion"] as NpcSkillEffectPhase_T[]).map(phase => [phase, {
-    id: `SkillVisualEffect.${phase}`, owner: "SkillVisualEffect", name: phase, nativeIndex: 0, operatorPrecedence: 0, flags: 0, replicationOffset: 0, fields: [],
+    id: `SkillVisualEffect.${phase}`, owner: "SkillVisualEffect", name: phase, nativeIndex: 0, operatorPrecedence: 0, flags: 0, replicationOffset: 0, fields: [] as IScriptFunctionDecodeInfo["fields"],
     program: compile([
         if_(call("BeginPhase", phase), [
             while_(call("NextAction"), [
@@ -32,7 +32,18 @@ const programs = Object.fromEntries((["casting", "preshot", "shot", "explosion"]
 }])) as Record<NpcSkillEffectPhase_T, IScriptFunctionDecodeInfo>;
 
 export function createSkillVisualDefinition(actions: NpcSkillEffectAction_T[] | null, native: NativeEffectBinding_T = null): SkillVisualDefinition_T {
-    return { actions, effects: native ? native.effects.flatMap(name => getNativeEffect(name, native.effectGroup)) : [], soundPhases: native ? native.soundPhases : [], finalShotOnly: !!native?.finalShotOnly, transientRejected: !!native?.rejectTransient, transientSound: native?.transientSound, associatedActors: !!native?.associatedActors, firecracker: native?.firecracker, echoCrystal: native?.echoCrystal, programs };
+    return {
+        actions,
+        effects: native ? native.effects.flatMap(name => getNativeEffect(name, native.effectGroup)) : [],
+        soundPhases: native ? native.soundPhases : [],
+        finalShotOnly: !!native?.finalShotOnly,
+        transientRejected: !!native?.rejectTransient,
+        transientSound: native?.transientSound,
+        associatedActors: !!native?.associatedActors,
+        firecracker: native?.firecracker,
+        echoCrystal: native?.echoCrystal,
+        programs
+    };
 }
 
 export function getSkillHitTimeOffset(skill: NpcSkillAttack_T): number {

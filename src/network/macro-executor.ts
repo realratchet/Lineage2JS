@@ -3,6 +3,12 @@ import getCommandTokens, { CommandType_T, getSkillCommandId } from "./command-pa
 import type NetworkManager from "./network-manager";
 import type { NetObject_T } from "./network-actors";
 
+const CHAT_CHARACTER_DELAY = Math.fround(0.2);
+const TARGET_COMMAND_DELAY = Math.fround(0.001);
+
+const actionsById: Record<number, number> = { 12: 2, 13: 3, 14: 4, 24: 6, 25: 5, 26: 7, 29: 8, 30: 9, 31: 10, 33: 11, 34: 12, 35: 13 };
+const actionsByCommand: Record<number, number> = { [CommandType_T.sit]: 0, [CommandType_T.stand]: 1, [CommandType_T.socialhello]: 2, [CommandType_T.socialvictory]: 3, [CommandType_T.socialcharge]: 4, [CommandType_T.socialno]: 5, [CommandType_T.socialyes]: 6, [CommandType_T.socialbow]: 7, [CommandType_T.socialunaware]: 8, [CommandType_T.socialwaitinga]: 9, [CommandType_T.sociallaugh]: 10, [CommandType_T.socialapplause]: 11, [CommandType_T.socialdance]: 12, [CommandType_T.socialsad]: 13 };
+
 type MacroRow_T = { command: GamePackets.Macro_T["commands"][number], duration: number, start: number, elapsed: number };
 type MacroExecution_T = { macro: GamePackets.Macro_T, active: boolean, current: number, rows: MacroRow_T[] };
 
@@ -73,20 +79,17 @@ export class MacroExecutor {
         switch (command.type) {
             case GamePackets.MacroCommandType_T.SKILL: this.game.requestMagicSkillUse(command.data1, ctrl, shift); return;
             case GamePackets.MacroCommandType_T.ACTION: {
-                const actions: Record<number, number> = { 12: 2, 13: 3, 14: 4, 24: 6, 25: 5, 26: 7, 29: 8, 30: 9, 31: 10, 33: 11, 34: 12, 35: 13 };
-
-                animation = command.data1 === 0 ? this.objects.get(this.network.getUserId()).waitType === GamePackets.WaitType_T.WT_SITTING ? 0 : 1 : actions[command.data1] ?? -1;
+                animation = command.data1 === 0 ? this.objects.get(this.network.getUserId()).waitType === GamePackets.WaitType_T.WT_SITTING ? 0 : 1 : actionsById[command.data1] ?? -1;
                 break;
             }
             case GamePackets.MacroCommandType_T.CHAT: {
                 this.ui.sendMacroText(command.command);
 
                 const type = this.getMacroCommandType(command.command);
-                const actions: Record<number, number> = { [CommandType_T.sit]: 0, [CommandType_T.stand]: 1, [CommandType_T.socialhello]: 2, [CommandType_T.socialvictory]: 3, [CommandType_T.socialcharge]: 4, [CommandType_T.socialno]: 5, [CommandType_T.socialyes]: 6, [CommandType_T.socialbow]: 7, [CommandType_T.socialunaware]: 8, [CommandType_T.socialwaitinga]: 9, [CommandType_T.sociallaugh]: 10, [CommandType_T.socialapplause]: 11, [CommandType_T.socialdance]: 12, [CommandType_T.socialsad]: 13 };
                 const next = execution.rows[execution.current + 1];
 
                 if (type === PLAIN_CHAT_COMMAND && next && next.command.type === GamePackets.MacroCommandType_T.CHAT && this.getMacroCommandType(next.command.command) === PLAIN_CHAT_COMMAND)
-                    row.duration = Math.fround(command.command.length * Math.fround(0.2));
+                    row.duration = Math.fround(command.command.length * CHAT_CHARACTER_DELAY);
 
                 if (type === CommandType_T.useshortcutforce || type === CommandType_T.useshortcutstand) {
                     const tokens = this.network.expandCommandTokens(getCommandTokens(command.command)), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
@@ -94,7 +97,7 @@ export class MacroExecutor {
                     if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12 && this.shortcuts.get((page - 1) * 12 + slot - 1)?.type === GamePackets.ShortCutType_T.TYPE_MACRO) this.cancelRecursiveMacro();
                 }
 
-                animation = type === CommandType_T.sitstand ? this.objects.get(this.network.getUserId()).waitType === GamePackets.WaitType_T.WT_SITTING ? 0 : 1 : actions[type] ?? -1;
+                animation = type === CommandType_T.sitstand ? this.objects.get(this.network.getUserId()).waitType === GamePackets.WaitType_T.WT_SITTING ? 0 : 1 : actionsByCommand[type] ?? -1;
                 break;
             }
             case GamePackets.MacroCommandType_T.SHORTCUT: {
@@ -171,7 +174,11 @@ export class MacroExecutor {
             const execution = this.executions.get(id);
 
             if (!execution || !execution.active) continue;
-            if (execution.current >= execution.rows.length) { execution.active = false; execution.current = 0; continue; }
+            if (execution.current >= execution.rows.length) {
+                execution.active = false;
+                execution.current = 0;
+                continue;
+            }
 
             const row = execution.rows[execution.current], command = row.command;
 
@@ -187,13 +194,18 @@ export class MacroExecutor {
             if (command.type === GamePackets.MacroCommandType_T.SHORTCUT) {
                 const shortcut = this.shortcuts.get(command.data1 * 12 + command.data2);
 
-                if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
+                if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) {
+                    execution.active = false;
+                    execution.current = 0;
+                    this.cancelRecursiveMacro();
+                    continue;
+                }
                 if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_SKILL) canAdvance = false;
             }
             if (command.type === GamePackets.MacroCommandType_T.CHAT) {
                 const type = this.getMacroCommandType(command.command);
-
-                if ([CommandType_T.useskill, CommandType_T.useskillforce, CommandType_T.useskillstand, CommandType_T.pickup, CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist].includes(type)) canAdvance = false;
+                if ([CommandType_T.useskill, CommandType_T.useskillforce, CommandType_T.useskillstand, CommandType_T.pickup, CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist].includes(type))
+                    canAdvance = false;
                 if (type === CommandType_T.target || type === CommandType_T.targetnext || type === CommandType_T.assist) {
                     const selected = this.objects.get(this.network.getTargetId());
                     let target: NetObject_T = null;
@@ -209,13 +221,18 @@ export class MacroExecutor {
                     } else if (selected && selected.actor) target = type === CommandType_T.targetnext ? this.network.getNextEnemy(200, selected.objectId) : this.objects.get(selected.selectedId);
 
                     if (selected && selected.actor && target && target.actor && selected.objectId === target.objectId)
-                        this.notifyCommand([CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist], Math.fround(0.001));
+                        this.notifyCommand([CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist], TARGET_COMMAND_DELAY);
                 }
                 if (type === CommandType_T.useshortcutforce || type === CommandType_T.useshortcutstand) {
                     const tokens = this.network.expandCommandTokens(getCommandTokens(command.command)), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
                     const shortcut = page >= 1 && page <= 10 && slot >= 1 && slot <= 12 ? this.shortcuts.get((page - 1) * 12 + slot - 1) : null;
 
-                    if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
+                    if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) {
+                        execution.active = false;
+                        execution.current = 0;
+                        this.cancelRecursiveMacro();
+                        continue;
+                    }
                     if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_SKILL) canAdvance = false;
                 }
             }

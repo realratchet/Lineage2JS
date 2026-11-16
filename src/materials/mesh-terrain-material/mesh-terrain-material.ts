@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, OneMinusSrcAlphaFactor, CustomBlending, LinearFilter } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, OneFactor, OneMinusSrcAlphaFactor, CustomBlending } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -16,6 +16,7 @@ export function setTerrainTextureUnits(units: number) { maxTextureUnits = units;
 export class MeshTerrainMaterial extends ShaderMaterial {
     public readonly isTerrainMaterial = true;
     public readonly passes: MeshTerrainMaterial[] = [];
+    protected layers: MeshTerrainMaterialParameters["layers"];
 
     public static create(info: MeshTerrainMaterialParameters): MeshTerrainMaterial {
         const layers = info.layers.map((layer, index) => ({ layer, index })).filter(({ layer }) => layer.map && layer.alphaMap);
@@ -31,6 +32,14 @@ export class MeshTerrainMaterial extends ShaderMaterial {
         return base;
     }
 
+    public createBatch(uvs: MapData_T): MeshTerrainMaterial {
+        const batch = MeshTerrainMaterial.create({ uvs, layers: this.layers });
+
+        for (const pass of [batch, ...batch.passes]) pass.vertexColors = this.vertexColors;
+
+        return batch;
+    }
+
     // @ts-ignore
     protected constructor(info: MeshTerrainMaterialParameters, layerIndices: number[], isOverlay: boolean) {
         const defines: Record<string, any> = {
@@ -41,8 +50,9 @@ export class MeshTerrainMaterial extends ShaderMaterial {
         };
 
         if (isOverlay) defines.TERRAIN_OVERLAY = "";
+        if ((info.uvs.texture as THREE.DataArrayTexture).isDataArrayTexture) defines.USE_UV_TEXTURE_ARRAY = "";
 
-        const uniforms: Record<string, Uniform> = appendGlobalUniforms({
+        const uniforms: Record<string, THREE.IUniform> = appendGlobalUniforms({
             alphaTest: new Uniform(1e-3),
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),
@@ -86,7 +96,9 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}Map, vUv[${i + 1}]).rgb, layerMask.r);`)
+            layerCode.push(`${ws}layer = texture2D(layer${i}Map, vUv[${i + 1}]);`);
+            // D3DDrv.dll RVA 0xb10b..0xb120 selects MODULATE alpha for transparent bitmaps.
+            layerCode.push(`${ws}layer.a ${layer.transparent ? "*=" : "="} layerMask.r;`);
             if (isOverlay) {
                 layerCode.push(`${ws}overlayColor = layer.rgb * layer.a + overlayColor * (1.0 - layer.a);`);
                 layerCode.push(`${ws}overlayAlpha = layer.a + overlayAlpha * (1.0 - layer.a);`);
@@ -119,6 +131,9 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             side: FrontSide
         });
 
+        this.layers = info.layers;
+        (this.defaultAttributeValues as any).sectorFade = [1];
+
         if (isOverlay) {
             this.transparent = true;
             this.premultipliedAlpha = true; // Premultiply after fog to preserve the single-pass fog weight.
@@ -134,5 +149,5 @@ export default MeshTerrainMaterial;
 
 type MeshTerrainMaterialParameters = {
     uvs: MapData_T,
-    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter }[]
+    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter, transparent: boolean }[]
 };

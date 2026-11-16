@@ -75,7 +75,10 @@ export class NCSummonedWnd {
         this.folded.classList.add("ndom-opaque");
         this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.Servitors));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
-        const captionText = manager.getSysString(SysString_T.Servitors), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.Servitors);
+        const width = layer.measureText(captionText);
+        const height = manager.canvas.getLineHeight();
+        const texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;

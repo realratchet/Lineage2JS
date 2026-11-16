@@ -1,6 +1,6 @@
 import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
-import FBSPNode, { BspNodeFlags_T, type IBSPNodeCollisionInfo_T, type IBSPNodeDecodeInfo_T } from "../bsp/un-bsp-node";
+import FBSPNode, { BspNodeFlags_T, type IBSPNodeCollisionInfo_T, type IBSPNodeDecodeInfo_T, type IBSPNodeSurfaceDecodeInfo_T } from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import { PolyFlags_T, UPolys } from "../un-polys";
 import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
@@ -42,15 +42,15 @@ export type IBSPSectionDecodeInfo_T = {
     blendingMode?: SupportedBlendingTypes_T
 };
 
-export type IBSPCollisionNodeDecodeInfo_T = { plane: Vector4Arr, children: [number, number], isCsg: boolean, collision?: IBSPNodeCollisionInfo_T };
+export type IBSPCollisionNodeDecodeInfo_T = { plane: Vector4Arr, children: [number, number], isCsg: boolean, collision?: IBSPNodeCollisionInfo_T, surface?: IBSPNodeSurfaceDecodeInfo_T };
 export type IBSPCollisionModelDecodeInfo = {
     bounds: IBoxDecodeInfo;
     rootOutside: boolean;
     nodes: IBSPCollisionNodeDecodeInfo_T[];
 };
 
-const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
-const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
+// const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
+// const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 
@@ -154,7 +154,7 @@ export abstract class UModel extends UPrimitive {
     public getIsRootOutside() { return this.isRootOutside; }
     public getCollisionBoundingBox(owner?: UAActor): FBox { return owner ? this.boundingBox.transformBy(owner.localToWorld()) : this.boundingBox; }
     public getLeafHull(node: FBSPNode): IBSPNodeCollisionInfo_T {
-        const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).slice(node.iCollisionBound);
+        const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).subarray(node.iCollisionBound);
         let hullPlanesCount = 0;
 
         while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
@@ -361,10 +361,26 @@ export abstract class UModel extends UPrimitive {
         return result;
     }
 
-    public getCollisionModelDecodeInfo(): IBSPCollisionModelDecodeInfo {
+    public getNodeSurface(builder: DecodeLibraryBuilder, node: FBSPNode): IBSPNodeSurfaceDecodeInfo_T {
+        const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+        const vertices = new Float32Array(node.numVertices * 3), point = FVector.make();
+
+        for (let i = 0; i < node.numVertices; i++) {
+            this.points.getElem(this.vertices.getElem(node.iVertPool + i).pVertex, point);
+            vertices.set([point.x, point.y, point.z], i * 3);
+        }
+
+        return { vertices, normal: [surf.plane.x, surf.plane.y, surf.plane.z], material: builder.pullScriptObject(surf.material), nextCoplanar: node.iPlane };
+    }
+
+    public hasSurfaceMaterials() { return this.bspSurfs.some((surf: FBSPSurf) => !!surf.material); }
+
+    public getCollisionModelDecodeInfo(builder: DecodeLibraryBuilder): IBSPCollisionModelDecodeInfo {
+        const hasMaterials = this.hasSurfaceMaterials();
         const nodes = this.bspNodes.map((node: FBSPNode) => {
             const info: IBSPCollisionNodeDecodeInfo_T = { plane: node.plane.getElements(), children: [node.iFront, node.iBack], isCsg: this.isCsg(node) };
 
+            if (hasMaterials) info.surface = this.getNodeSurface(builder, node);
             if (node.iCollisionBound >= 0) info.collision = this.getLeafHull(node);
 
             return info;
@@ -405,6 +421,8 @@ export abstract class UModel extends UPrimitive {
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
             const nodeInfo = node.getBSPDecodeInfo(surf.flags) as IBSPNodeDecodeInfo_T;
 
+            nodeInfo.surface = this.getNodeSurface(builder, node);
+
             nodeInfo.zoneMask = result.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
             result.bspNodes.push(nodeInfo);
@@ -420,7 +438,7 @@ export abstract class UModel extends UPrimitive {
 
             if (node.iCollisionBound >= 0) {
                 const hulls = this.leafHulls.getTypedArray() as Int32Array;
-                const hullIndexList = hulls.slice(node.iCollisionBound);
+                const hullIndexList = hulls.subarray(node.iCollisionBound);
 
                 let hullPlanesCount = 0;
                 while (hullIndexList[hullPlanesCount] >= 0)
@@ -555,7 +573,7 @@ export abstract class UModel extends UPrimitive {
                 const textureY: FVector = this.vectors.getElem(surf.vTextureV, _textureY);
                 const tangentZ: FVector = this.vectors.getElem(surf.vNormal, _tangentZ);
 
-                const texSize = surf.material?.loadSelf?.().getTextureSize();
+                const texSize = builder.getMaterialTextureSize(surf.material);
                 const texWidth = texSize?.width ?? TEXEL_SCALE;
                 const texHeight = texSize?.height ?? TEXEL_SCALE;
 

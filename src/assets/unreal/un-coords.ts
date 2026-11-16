@@ -27,7 +27,10 @@ export abstract class FCoords extends UObject {
         getRotatorQuaternionElements(pitch, yaw, 0, tmpOrthoRotation);
         FVector.applyQuaternionElements(tmpOrthoAxisYInput, tmpOrthoRotation, tmpOrthoAxisY);
         // 0x1014f9f5..0x1014fa3f: atan2(ZAxis dot S.YAxis, YAxis dot S.YAxis).
-        const roll = Math.trunc(Math.atan2(m13 * tmpOrthoAxisY[0] + m23 * tmpOrthoAxisY[1] + m33 * tmpOrthoAxisY[2], m12 * tmpOrthoAxisY[0] + m22 * tmpOrthoAxisY[1] + m32 * tmpOrthoAxisY[2]) * 32768 / Math.PI);
+        const roll = Math.trunc(Math.atan2(
+            m13 * tmpOrthoAxisY[0] + m23 * tmpOrthoAxisY[1] + m33 * tmpOrthoAxisY[2],
+            m12 * tmpOrthoAxisY[0] + m22 * tmpOrthoAxisY[1] + m32 * tmpOrthoAxisY[2]
+        ) * 32768 / Math.PI);
 
         return getRotatorQuaternionElements(pitch, yaw, roll, out);
     }
@@ -300,34 +303,34 @@ function mulVector(coord: FCoords, other: FVector): FCoords {
     );
 }
 
-function mulScale(coord: FCoords, other: FScale): FCoords {
+function mulScale(_coord: FCoords, _other: FScale): FCoords {
     throw new Error("not implemented")
 }
 
 function divRotator(coord: FCoords, other: FRotator): FCoords {
-    const roll = FCoords.make
-        (
-            FVector.make(0, 0, 0),
-            FVector.make(+1, -0, +0),
-            FVector.make(-0, +GMath().cos(other.roll), +GMath().sin(other.roll)),
-            FVector.make(+0, -GMath().sin(other.roll), +GMath().cos(other.roll))
-        );
+    // const roll = FCoords.make
+        // (
+            // FVector.make(0, 0, 0),
+            // FVector.make(+1, -0, +0),
+            // FVector.make(-0, +GMath().cos(other.roll), +GMath().sin(other.roll)),
+            // FVector.make(+0, -GMath().sin(other.roll), +GMath().cos(other.roll))
+        // );
 
-    const pitch = FCoords.make
-        (
-            FVector.make(0, 0, 0),
-            FVector.make(+GMath().cos(other.pitch), +0, -GMath().sin(other.pitch)),
-            FVector.make(+0, +1, -0),
-            FVector.make(+GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
-        );
+    // const pitch = FCoords.make
+        // (
+            // FVector.make(0, 0, 0),
+            // FVector.make(+GMath().cos(other.pitch), +0, -GMath().sin(other.pitch)),
+            // FVector.make(+0, +1, -0),
+            // FVector.make(+GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
+        // );
 
-    const yaw = FCoords.make
-        (
-            FVector.make(0, 0, 0),
-            FVector.make(+GMath().cos(other.yaw), -GMath().sin(other.yaw), -0),
-            FVector.make(+GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
-            FVector.make(-0, +0, +1)
-        );
+    // const yaw = FCoords.make
+        // (
+            // FVector.make(0, 0, 0),
+            // FVector.make(+GMath().cos(other.yaw), -GMath().sin(other.yaw), -0),
+            // FVector.make(+GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
+            // FVector.make(-0, +0, +1)
+        // );
 
     coord = coord.mul(
         FCoords.make
@@ -373,6 +376,6 @@ function divVector(coord: FCoords, other: FVector): FCoords {
     );
 }
 
-function divScale(coord: FCoords, other: FScale): FCoords {
+function divScale(_coord: FCoords, _other: FScale): FCoords {
     throw new Error("not implemented");
 }

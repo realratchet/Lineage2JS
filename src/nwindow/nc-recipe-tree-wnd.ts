@@ -1,3 +1,4 @@
+import getCrystalGradeSymbol from "./item-symbol";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
@@ -15,7 +16,6 @@ const TEX_MINUS = "L2UI.RecipeWnd.TreeMinus";
 const TEX_SHORTAGE = "NWindow.ChatBack";
 const TEX_BUTTON = SKIN_SLOTS.button;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
-const arrGrades = ["", "graded", "gradec", "gradeb", "gradea", "grades"];
 
 type RecipeNode_T = { itemId: number, required: number, available: number, isExpanded: boolean, children: RecipeNode_T[] };
 
@@ -78,14 +78,14 @@ export class NCRecipeTreeWnd {
 
         this.setVisible(true);
         this.element.focus();
-        await this.layer.loadTextures([...ids.map(id => strings.itemIcons[id]), grade ? strings.symbols[arrGrades[grade]] : null].filter(path => !!path));
+        await this.layer.loadTextures([...ids.map(id => strings.itemIcons[id]), grade ? strings.symbols[getCrystalGradeSymbol(grade)] : null].filter(path => !!path));
         if (generation !== this.generation) return;
 
         const name = strings.itemNames[recipe.productId];
 
         this.layer.tile(this.header, 16, 29, 32, 32, 0, 0, 32, 32, strings.itemIcons[recipe.productId]);
         this.layer.text(this.header, name, 0xffdcdcdc, FontType_T.SMALL, 58, 28);
-        if (grade) this.layer.tile(this.header, 60 + this.layer.measureText(name), 28, 12, 12, 0, 0, 12, 12, strings.symbols[arrGrades[grade]]);
+        if (grade) this.layer.tile(this.header, 60 + this.layer.measureText(name), 28, 12, 12, 0, 0, 12, 12, strings.symbols[getCrystalGradeSymbol(grade)]);
         [[SysString_T.MPCost, String(recipe.mpCost)], [SysString_T.SuccessRate, `${recipe.successRate}%`]].forEach(([id, value], index) => {
             const label = this.layer.getManager().getSysString(id as number), x = 58 + this.layer.measureText(label);
 

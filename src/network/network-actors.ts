@@ -1,9 +1,10 @@
+import waitForAreaLoad from "./world-loading";
 import PawnHeroComponent from "../objects/components/pawn-hero-component";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
 import type NetworkManager from "./network-manager";
 import { Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
-import type { NAttackActionParam_T } from "../objects/components/pawn-attack-component";
+import type { NAttackActionParam_T, AttackTarget_T } from "../objects/components/pawn-attack-component";
 import type { Nameplate_T } from "../nwindow/nconsole-wnd";
 import { CommandType_T } from "./command-parser";
 import GroundPickup from "../objects/ground-pickup";
@@ -15,13 +16,19 @@ import PacketReader from "./packet-reader";
 import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
 import { setVector } from "./network-location";
-import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import { EActorViewType_T, EL2GameAction_T } from "../assets/unreal/un-aactor";
+import type { ScriptComponent } from "../game/script-component";
+import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import type { CollisionQuery_T } from "../physics/collision-world";
 
+const MIN_ACTOR_DELTA = Math.fround(0.0005);
+const MAX_ACTOR_DELTA = Math.fround(0.4);
+const arrGameActions = [EL2GameAction_T.LGA_SaintConsensusClosed, EL2GameAction_T.LGA_SaintConsensusOpened, EL2GameAction_T.LGA_SaintConsensusClosing, EL2GameAction_T.LGA_SaintConsensusOpening];
+
 type NetObjectKind_T = "user" | "player" | "npc";
 
-export type NetSkill_T = { id: number, level: number, hitTime: number, receivedTime: number, associatedActors: BaseActor[], associatedObjectIds: number[] };
+export type NetSkill_T = { id: number, level: number, hitTime: number, receivedTime: number, associatedActors: AttackTarget_T[], associatedObjectIds: number[] };
 
 type PendingAttack_T = { hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T };
 
@@ -87,10 +94,6 @@ export type NetObject_T = {
 
 type PetRemainTime_T = { maxTime: number, remainingTime: number };
 
-const MYSTIC_BODY_CLASS_IDS = new Set([10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 38, 39, 40, 41, 42, 43, 49, 50, 51, 52, 94, 95, 96, 97, 98, 103, 104, 105, 110, 111, 112, 115, 116]); // ClassId.isMage excludes orcMage (49), which uses the Shaman body.
-
-const NAMEPLATE_DISTANCE = 1000;
-
 const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon is cleared on the sixth tick.
 
 const NETWORK_BOW_RANGE = 2000;
@@ -104,6 +107,7 @@ export class NetworkActors {
     public readonly objects = new Map<number, NetObject_T>();
     public readonly doors = new Map<number, number>();
     public readonly doorPositions = new Map<number, number>();
+    public readonly doorStatuses = new Map<number, { curHp: number, maxHp: number, showHp: boolean }>();
     public readonly staticObjects = new Map<number, number>();
     public readonly appearances = new Map<number, GamePackets.Appearance_T>();
     public readonly pickups = new Map<number, GroundPickup>();
@@ -112,6 +116,7 @@ export class NetworkActors {
     protected readonly bodyKeys = new WeakMap<BaseActor, string>();
     protected readonly appearanceRequests = new WeakMap<BaseActor, number>();
     protected readonly disappearNpcActions = new Map<BaseActor, number>();
+    protected readonly arrDetachedPawns: BaseActor[] = [];
     public petStatusType = -1;
     public deletedPetId = 0;
     public petInfo: GamePackets.PetStatus_T = { objectId: -1, npcId: -GamePackets.NPC_ID_OFFSET, name: "", x: 0, y: 0, z: 0, statusType: 0, curFood: 0, maxFood: 0, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, field42: 0, level: 0, exp: 0, minExp: 0, nextExp: 0, weight: 0, maxWeight: 0, pAtk: 0, pDef: 0, mAtk: 0, mDef: 0, accuracy: 0, evasion: 0, critical: 0, speed: 0, attackSpeed: 0, castSpeed: 0, field60: 0, isMountable: false, soulshotsUsed: 0, spiritshotsUsed: 0 };
@@ -137,8 +142,32 @@ export class NetworkActors {
         return false;
     }
 
+    public getStaticObjectName(objectId: number): string | null {
+        let realId = this.doors.get(objectId);
+
+        if (!realId)
+            for (const [id, serverId] of this.staticObjects) if (serverId === objectId) {
+                realId = id;
+                break;
+            }
+
+        if (!realId) return null;
+
+        return this.network.ui.getStrings().staticObjectNames[realId] ?? "";
+    }
+
     public async loadNpcNames() {
         for (const npc of await this.network.getParent().getComponent("render").listNpcs()) this.npcNames.set(npc.id, npc.name);
+    }
+
+    public getActionTarget(objectId: number): AttackTarget_T {
+        const object = this.objects.get(objectId);
+
+        if (object) return object.actor;
+
+        const doorId = this.doors.get(objectId);
+
+        return doorId ? this.network.getParent().getComponent("render").findMovableByRealId(doorId) : null;
     }
 
     public findObjectByActor(actor: Object3D): NetObject_T {
@@ -148,39 +177,27 @@ export class NetworkActors {
         return null;
     }
 
-    protected getMeshType(appearance: GamePackets.Appearance_T): number { // User::GetMeshType 0x736020, stored as Pawn.CharClassID.
+    protected getMeshType(appearance: GamePackets.Appearance_T): PawnMeshType_T { // User::GetMeshType 0x736020, stored as Pawn.CharClassID.
         const { race, classId } = appearance, sex = appearance.sex !== 0 ? 1 : 0;
 
         switch (race) {
             case GamePackets.Race_T.HUMAN:
-                if (classId <= 9 || classId >= 88 && classId <= 93) return sex;
-                if (classId <= 17 || classId >= 94 && classId <= 98) return 8 + sex;
-                return 5;
-            case GamePackets.Race_T.ELF: return 6 + sex;
-            case GamePackets.Race_T.DARK_ELF: return 2 + sex;
+                if (classId <= 9 || classId >= 88 && classId <= 93) return sex ? PawnMeshType_T.FFighter : PawnMeshType_T.MFighter;
+                if (classId <= 17 || classId >= 94 && classId <= 98) return sex ? PawnMeshType_T.FMagic : PawnMeshType_T.MMagic;
+                return PawnMeshType_T.FDwarf;
+            case GamePackets.Race_T.ELF: return sex ? PawnMeshType_T.FElf : PawnMeshType_T.MElf;
+            case GamePackets.Race_T.DARK_ELF: return sex ? PawnMeshType_T.FDarkElf : PawnMeshType_T.MDarkElf;
             case GamePackets.Race_T.ORC:
-                if (classId >= 44 && classId <= 48 || classId >= 113 && classId <= 114) return 10 + sex;
-                if (classId >= 49 && classId <= 52 || classId >= 115 && classId <= 116) return 12 + sex;
-                return 5;
-            case GamePackets.Race_T.DWARF: return 4 + sex;
-            default: return 5;
+                if (classId >= 44 && classId <= 48 || classId >= 113 && classId <= 114) return sex ? PawnMeshType_T.FOrc : PawnMeshType_T.MOrc;
+                if (classId >= 49 && classId <= 52 || classId >= 115 && classId <= 116) return sex ? PawnMeshType_T.FShaman : PawnMeshType_T.MShaman;
+                return PawnMeshType_T.FDwarf;
+            case GamePackets.Race_T.DWARF: return sex ? PawnMeshType_T.FDwarf : PawnMeshType_T.MDwarf;
+            default: return PawnMeshType_T.FDwarf;
         }
     }
 
-    protected getCharacterIndex(appearance: GamePackets.Appearance_T): number {
-        const isMystic = MYSTIC_BODY_CLASS_IDS.has(appearance.classId);
-        let body: string;
-
-        switch (appearance.race) {
-            case GamePackets.Race_T.HUMAN: body = isMystic ? "Magic" : "Fighter"; break;
-            case GamePackets.Race_T.ELF: body = "Elf"; break;
-            case GamePackets.Race_T.DARK_ELF: body = "DarkElf"; break;
-            case GamePackets.Race_T.ORC: body = isMystic ? "Shaman" : "Orc"; break;
-            case GamePackets.Race_T.DWARF: body = "Dwarf"; break;
-            default: throw new Error(`Unknown race '${appearance.race}'.`);
-        }
-
-        const name = (appearance.sex === 0 ? "M" : "F") + body;
+    protected getCharacterIndex(meshType: PawnMeshType_T): number {
+        const name = PawnMeshType_T[meshType];
         const group = this.network.session.charGroups.find(group => group.name === name);
 
         if (!group) throw new Error(`No character group named '${name}'.`);
@@ -218,10 +235,11 @@ export class NetworkActors {
         if (!isEquipmentOnly) this.bodyKeys.delete(actor);
         if (!this.network.session.charGroups) this.network.session.charGroups = await asset.getCharGroups();
 
-        const index = this.getCharacterIndex(appearance);
+        const meshType = this.getMeshType(appearance);
+        const index = this.getCharacterIndex(meshType);
         const group = this.network.session.charGroups.find(group => group.index === index);
 
-        actor.charClassId = this.getMeshType(appearance);
+        actor.charClassId = meshType;
         const hairStyle = group.hairStyles.includes(appearance.hairStyle) ? appearance.hairStyle : group.hairStyles[0];
         const colours = group.hairColours[hairStyle];
 
@@ -229,7 +247,16 @@ export class NetworkActors {
 
         if (isEquipmentOnly) await asset.loadCharacterEquipment(this.network.getParent().getComponent("render"), actor, index, hairStyle, equipment);
         else {
-            await asset.loadCharacter(this.network.getParent().getComponent("render"), index, Math.min(appearance.face, group.faceVariants - 1), hairStyle, colours.includes(appearance.hairColor) ? appearance.hairColor : colours[0], this.getArmor(appearance.paperdoll), actor, equipment);
+            await asset.loadCharacter(
+                this.network.getParent().getComponent("render"),
+                index,
+                Math.min(appearance.face, group.faceVariants - 1),
+                hairStyle,
+                colours.includes(appearance.hairColor) ? appearance.hairColor : colours[0],
+                this.getArmor(appearance.paperdoll),
+                actor,
+                equipment
+            );
 
             if (this.appearanceRequests.get(actor) === request) this.bodyKeys.set(actor, bodyKey);
         }
@@ -277,6 +304,7 @@ export class NetworkActors {
 
         this.worldLevel = level;
         render.setLevel(level);
+        level.neverUnload = false;
 
         await this.loadAppearance(entry, render.player);
 
@@ -287,23 +315,11 @@ export class NetworkActors {
         physics.setPawnZone(render.player, false, true);
         physics.setPawnVolumes(render.player);
 
-        const startTime = performance.now();
-
-        while (generation === this.teleportGeneration) {
-            const progress = asset.getAreaLoadProgress(render, render.player.position);
-
-            if (progress.ready === progress.total) break;
-
-            const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
-            const action = progress.building > 0 ? "Building" : "Loading";
-            const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
-
-            setLoadingProgress(value || null, `${stage} · ${Math.round(value * 100)}% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        await waitForAreaLoad(asset, render, () => generation === this.teleportGeneration);
 
         if (generation !== this.teleportGeneration) return;
 
+        asset.playerController.call("Possess", [render.player]);
         this.userAppearanceLoad = null;
         if (this.network.session.game.isPlayingReplay()) this.network.items.skillListLoad = this.network.items.resolveSkillList = null;
         else this.network.items.skillListLoad = new Promise(resolve => this.network.items.resolveSkillList = resolve);
@@ -312,8 +328,86 @@ export class NetworkActors {
         this.network.session.game.requestSkillCoolTime();
     }
 
+    public updateWorldLevel(): void {
+        if (!this.worldLevel || !this.inWorld || this.userAppearanceLoad) return;
+
+        const render = this.network.getParent().getComponent("render"), level = render.getSector(render.player.position);
+
+        if (!level || level === this.worldLevel || level.isRetired || !level.staticMeshGroup || !render.isSectorWarm(level)) return;
+
+        const previous = this.worldLevel, physics = this.network.getParent().getComponent("physics");
+
+        render.setLevel(level, previous.levelInfoActor.getUnrealScriptProperty("NetMode") as any, false);
+        this.worldLevel = level;
+        this.network.getParent().getComponent("asset").playerController.scriptProperties.set("Level", level.levelInfoActor as any);
+
+        for (const host of previous.moveLevelActors(level)) {
+            const actor = host as BaseActor;
+
+            if (!actor.findComponent || !actor.findComponent("pawnMovement")) continue;
+
+            physics.setPawnZone(actor, false, true);
+            physics.setPawnVolumes(actor);
+        }
+    }
+
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, hasQuestMark: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, appendixState: 0, isHero: false, pendingTeam: null, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, environment: null, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, matchedStoreType: GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingFly: null, pendingVehicleMove: null, pendingRotation: null, pendingAttack: null, pendingSkill: null, pendingTransientSkills: [] };
+        const object: NetObject_T = {
+            objectId,
+            npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0,
+            selectedId: 0,
+            clanId: 0,
+            clanCrestId: 0,
+            allyId: 0,
+            allyCrestId: 0,
+            kind,
+            actor: null,
+            actorReady: null,
+            resolveActor: null,
+            isRemoved: false,
+            position: setVector(new Vector3(), info),
+            destination: null,
+            heading: info.heading,
+            name: info.name,
+            title: info.title,
+            curHp: 0,
+            maxHp: 0,
+            curMp: 0,
+            maxMp: 0,
+            levelDifference: 0,
+            karma: info.karma,
+            pvpFlag: info.pvpFlag,
+            recommendations: info.recommendations,
+            nameColor: info.nameColor,
+            titleColor: 0,
+            isSummon: false,
+            hasQuestMark: false,
+            isAttackable: false,
+            isDead: info.isAlikeDead,
+            chairStaticObjectId: 0,
+            cubics: (info as any).cubics || [],
+            abnormalState: info.abnormalState,
+            appendixState: 0,
+            isHero: false,
+            pendingTeam: null,
+            fishing: null,
+            appearanceKey: null,
+            speeds: info,
+            isRunning: info.isRunning,
+            environment: null,
+            isInCombat: info.isInCombat,
+            waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING,
+            privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE,
+            matchedStoreType: GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE,
+            chatMessage: null,
+            chatTime: 0,
+            pendingFly: null,
+            pendingVehicleMove: null,
+            pendingRotation: null,
+            pendingAttack: null,
+            pendingSkill: null,
+            pendingTransientSkills: []
+        };
 
         object.actorReady = new Promise(resolve => object.resolveActor = resolve);
         this.objects.set(objectId, object);
@@ -333,13 +427,16 @@ export class NetworkActors {
     public onDoorStatusUpdate(packet: PacketReader) {
         const objectId = packet.d(), isOpen = packet.d(), damage = packet.d(), showHp = packet.d(), doorId = packet.d(), maxHp = packet.d(), currentHp = packet.d();
 
-        if (objectId <= 0 || (isOpen !== 0 && isOpen !== 1) || damage < 0 || (showHp !== 0 && showHp !== 1) || doorId <= 0 || maxHp < 0 || currentHp < 0 || currentHp > maxHp || packet.getRemaining())
+        if (objectId <= 0 || (isOpen !== 0 && isOpen !== 1) || damage < 0 || (showHp !== 0 && showHp !== 1) || doorId <= 0 || maxHp < 0 || currentHp < 0 || currentHp > maxHp ||
+            packet.getRemaining())
             throw new Error("Invalid DoorStatusUpdate payload.");
 
         const mover = this.network.getParent().getComponent("render").findMovableByRealId(doorId);
 
+        this.doorStatuses.set(objectId, { curHp: currentHp, maxHp, showHp: showHp !== 0 });
         this.doorPositions.set(doorId, isOpen === 0 ? 1 : 0);
         if (mover) mover.setOpen(isOpen === 0);
+        if (objectId === this.network.getTargetId()) this.network.combat.updateTarget();
     }
 
     public getDoorPosition(mover: MovableObject): number { return this.doorPositions.get((mover as any).scriptProperties?.get("L2ServerObjectRealID")); }
@@ -375,6 +472,7 @@ export class NetworkActors {
         if (!object) {
             object = this.createObject(info.objectId, "user", info);
             object.actor = player;
+            player.setUnrealScriptProperty("CreatureID", info.objectId);
             object.resolveActor(player);
             object.appearanceKey = this.getAppearanceKey(this.network.session.game.isPlayingReplay() ? info : this.network.session.characters[this.network.session.selectedSlot]);
         }
@@ -449,19 +547,19 @@ export class NetworkActors {
         const asset = this.network.getParent().getComponent("asset");
         const generation = this.teleportGeneration;
 
-        setLoadingProgress(0.1, "Loading player appearance…");
+        setLoadingProgress(0.1, loadingTexts.playerAppearance());
         await this.userAppearanceLoad;
         if (!this.inWorld || generation !== this.teleportGeneration) return;
 
-        setLoadingProgress(0.3, "Loading skills…");
+        setLoadingProgress(0.3, loadingTexts.skills());
         await this.network.items.skillListLoad;
 
         while (this.inWorld && generation === this.teleportGeneration) {
             const isAreaLoaded = asset.isAreaLoaded(render, render.player.position);
 
-            if (isAreaLoaded && this.npcSpawnCount === 0 && this.npcSpawnWaiters.length === 0) break;
+            if (isAreaLoaded && render.areProgramsReady() && this.npcSpawnCount === 0 && this.npcSpawnWaiters.length === 0) break;
 
-            setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? `Loading nearby characters (${this.npcSpawnCount} remaining)…` : "Loading terrain, textures and lighting…");
+            setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? loadingTexts.nearbyCharacters(this.npcSpawnCount + this.npcSpawnWaiters.length) : loadingTexts.area());
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
@@ -546,6 +644,13 @@ export class NetworkActors {
         void this.spawnPlayer(object, info);
     }
 
+    public spawnSimulatedPlayer(info: GamePackets.CharInfo_T): NetObject_T {
+        const object = this.createObject(info.objectId, "player", info);
+        this.appearances.set(info.objectId, info);
+        void this.spawnPlayer(object, info);
+        return object;
+    }
+
     protected async spawnPlayer(object: NetObject_T, info: GamePackets.CreatureInfo_T & GamePackets.Appearance_T) {
         const render = this.network.getParent().getComponent("render");
         const actor = new BaseActor(render);
@@ -601,6 +706,11 @@ export class NetworkActors {
 
         object.curHp = info.curHp;
         object.maxHp = info.maxHp;
+        // ServerObjectInfo 0x6ee613..0x6ee676 only notifies an existing pawn.
+        if (object.actor && info.objectType === 3 && info.state >= 0 && info.state < arrGameActions.length) {
+            object.actor.getComponent<ScriptComponent>("script").call("L2GameActionNotify", [arrGameActions[info.state]]);
+            this.network.combat.setIdleAnimation(object);
+        }
         if (object.objectId === this.network.getTargetId()) this.network.combat.updateTarget();
     }
 
@@ -752,7 +862,15 @@ export class NetworkActors {
 
         try {
             npc = await this.network.getParent().getComponent("asset").resolveNpc(npcId);
-            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, false, false, [info.collisionRadius, info.collisionHeight]);
+            actor = await render.spawnNpc(
+                npcId,
+                object.position.clone(),
+                info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null,
+                false,
+                false,
+                [info.collisionRadius, info.collisionHeight],
+                false
+            );
         } catch (e) {
             object.resolveActor(null);
             this.npcSpawnCount--;
@@ -811,7 +929,7 @@ export class NetworkActors {
 
             const hit = render.getPhysicsManager().singleLineCheck(query);
 
-            if (!hit || hit.location.z === 0) continue;
+            if (!hit || hit.time === 0 || hit.location.z === 0) continue;
 
             tmpNpcSpawnPosition.copy(hit.location);
             tmpNpcSpawnPosition.z -= height;
@@ -837,6 +955,7 @@ export class NetworkActors {
     protected attachActor(object: NetObject_T, actor: BaseActor, position: Vector3 = null) {
         object.actor = actor;
 
+        actor.setUnrealScriptProperty("CreatureID", object.objectId);
         actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
         if (object.environment !== null) actor.setUnrealScriptProperty("Environment", object.environment);
         if (!(object.speeds as GamePackets.CharInfo_T).mountType) this.network.community.applySpeeds(actor, object.speeds, object.isRunning);
@@ -845,6 +964,7 @@ export class NetworkActors {
         actor.setRotationYaw(object.heading);
 
         actor.teleportTo(object.pendingFly ? object.pendingFly.origin : position || object.position, !position);
+        actor.beginPlay();
         const vehicle = this.network.movement.vehicles.get(this.network.movement.getVehicleIdOf(object.objectId));
 
         if (vehicle) {
@@ -987,6 +1107,7 @@ export class NetworkActors {
 
         this.network.movement.removeVehicle(objectId);
         this.doors.delete(objectId);
+        this.doorStatuses.delete(objectId);
         for (const [realId, id] of this.staticObjects) if (id === objectId) this.staticObjects.delete(realId);
         for (const vehicle of this.network.movement.vehicles.values()) vehicle.riders.delete(objectId);
         this.network.movement.endRide(objectId);
@@ -1019,12 +1140,14 @@ export class NetworkActors {
     }
 
     public updateDisappearNpcActions(deltaTime: number): void {
+        const render = this.network.getParent().getComponent("render");
+
+        if (this.arrDetachedPawns.length > 0) render.releasePawn(this.arrDetachedPawns.pop()); // a group that left together expires on one tick, freeing meshes costs half a millisecond per pawn
         if (!this.disappearNpcActions.size) return;
 
-        const render = this.network.getParent().getComponent("render");
         const level = render.getLevel();
         const dilation = level ? level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
-        const delta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * dilation))));
+        const delta = Math.fround(Math.max(MIN_ACTOR_DELTA, Math.min(MAX_ACTOR_DELTA, Math.fround(Math.fround(deltaTime / 1000) * dilation))));
 
         // DisappearNpcAction::Tick 0x10499f90..0x1049a08d.
         for (const [actor, previous] of this.disappearNpcActions) {
@@ -1032,7 +1155,7 @@ export class NetworkActors {
 
             if (elapsed > 2) {
                 this.disappearNpcActions.delete(actor);
-                render.removePawn(actor);
+                if (render.detachPawn(actor)) this.arrDetachedPawns.push(actor);
             } else {
                 this.disappearNpcActions.set(actor, elapsed);
                 actor.getComponent<PawnRenderableComponent>("pawnRenderable").setAlphaTexModifier(Math.trunc(Math.max(0, Math.min(255, 255 - elapsed * 127.5))));
@@ -1045,6 +1168,8 @@ export class NetworkActors {
 
         for (const actor of this.disappearNpcActions.keys()) render.removePawn(actor);
         this.disappearNpcActions.clear();
+        for (const actor of this.arrDetachedPawns) render.releasePawn(actor);
+        this.arrDetachedPawns.length = 0;
     }
 
     public withActor(objectId: number, callback: (actor: BaseActor, object: NetObject_T) => void) {
@@ -1054,6 +1179,7 @@ export class NetworkActors {
     }
 
     public clearKnownObjects() {
+        this.network.pawnSimulation.clear();
         this.clearDisappearNpcActions();
         for (const objectId of this.objects.keys()) if (objectId !== this.userId) this.removeObject(objectId);
         for (const objectId of this.pickups.keys()) this.removeObject(objectId);
@@ -1064,7 +1190,10 @@ export class NetworkActors {
 
     public getUserId() { return this.userId; }
 
-    public getActor(objectId: number) { const object = this.objects.get(objectId); return object && !object.isRemoved ? object.actor : null; }
+    public getActor(objectId: number) {
+        const object = this.objects.get(objectId);
+        return object && !object.isRemoved ? object.actor : null;
+    }
 
     public getDice() { return this.dice; }
 
@@ -1073,6 +1202,7 @@ export class NetworkActors {
         const mouseTarget = this.network.getParent().getComponent("input").getMouseTarget();
         const plates: Nameplate_T[] = [];
         const now = this.network.getParent().getCurrentTime();
+        const display = this.network.getParent().getComponent("asset").userConfig.characterDisplay;
         const clanId = this.objects.get(this.userId)?.clanId || 0;
 
         for (const object of this.objects.values()) {
@@ -1088,11 +1218,42 @@ export class NetworkActors {
             const isTarget = object.objectId === this.network.getTargetId(), isMouseTarget = actor === mouseTarget;
             const distance = Math.trunc(actor.position.distanceTo(player.position));
 
-            if (!isTarget && !isMouseTarget && distance >= NAMEPLATE_DISTANCE) continue; // FDynamicActor::Render branch C: retail l2.ini [CharacterDisplay] Name=true, Dist=1000.
+            if (!isTarget && !isMouseTarget && (!display.name || distance >= display.dist)) continue; // FDynamicActor::Render branch C
 
-            const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.network.items.privateStoreBuyMsgs : object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.network.items.recipeShopMessages : this.network.items.privateStoreSellMsgs;
+            const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ?
+                this.network.items.privateStoreBuyMsgs :
+                object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.network.items.recipeShopMessages : this.network.items.privateStoreSellMsgs;
 
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", hasQuestMark: object.hasQuestMark, isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.network.community.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, clanCrestId: object.clanCrestId, allyCrestId: object.allyCrestId, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, matchedStoreType: object.matchedStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
+            plates.push({
+                actor,
+                name: object.name,
+                title: object.title,
+                isNpc: object.kind === "npc",
+                hasQuestMark: object.hasQuestMark,
+                isSummon: object.isSummon,
+                isAttackable: object.isAttackable,
+                isSelf: object.objectId === this.userId,
+                isPartyMember: this.network.community.partyMembers.has(object.objectId),
+                isPledgeMember: clanId !== 0 && object.clanId === clanId,
+                isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH,
+                isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING,
+                isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0,
+                abnormalState: object.abnormalState,
+                karma: object.karma,
+                pvpFlag: object.pvpFlag,
+                recommendations: object.recommendations,
+                nameColor: object.nameColor,
+                titleColor: object.titleColor,
+                clanCrestId: object.clanCrestId,
+                allyCrestId: object.allyCrestId,
+                isTarget,
+                isMouseTarget,
+                isChatRange: distance <= display.dist,
+                privateStoreType: object.privateStoreType,
+                matchedStoreType: object.matchedStoreType,
+                storeMessage: storeMessages.get(object.objectId) || "",
+                chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null
+            });
         }
 
         return plates;

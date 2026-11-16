@@ -15,6 +15,8 @@ import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { EDetailMode_T } from "../../assets/unreal/un-aactor";
 import { ENetMode_T } from "../../assets/unreal/un-level-info";
 
+const NEGATIVE_HALF_PI = -Math.PI / 2;
+
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();
 const tmpOffset = new Vector3();
@@ -68,9 +70,9 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
         if (!info) return COMPONENT_EVENT_NOT_HANDLED;
 
         switch (info.type) {
-            case "effect": this.onAnimationEffect(info); return;
-            case "screenFade": this.renderManager.screenFadeBlink(info); return;
-            case "viewShake": this.renderManager.addViewShake(this.getParent(), info); return;
+            case "effect": this.onAnimationEffect(info); return undefined;
+            case "screenFade": this.renderManager.screenFadeBlink(info); return undefined;
+            case "viewShake": this.renderManager.addViewShake(this.getParent(), info); return undefined;
             default: return COMPONENT_EVENT_NOT_HANDLED;
         }
     }
@@ -79,16 +81,20 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
         const parent = this.getParent();
 
         // Engine.dll UAnimNotify_Effect::Notify 0x94cb30 / 0x94ccc8: null class and unrendered pawns do not spawn.
-        if (!info.effectClass || !parent.visible) return;
-        if (info.trailCamera) {
-            debugger;
-            throw new Error(`Animation effect '${info.objectName}' requires TrailCamera.`);
-        }
+        if (!info.effectClass || !info.trailCamera && !parent.visible) return;
         if (!this.vm) this.vm = new UnScriptVM(this.library);
 
         const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, info.effectClass, this.vm);
 
         this.vm.initializeHost(effect);
+        if (info.trailCamera) { // 0x94cb6a..0x94cc62: spawned at the origin, owned by and based on the player controller
+            const controller = this.renderManager.getParent().getComponent("asset").playerController;
+
+            effect.scriptProperties.set("Owner", controller);
+            effect.scriptProperties.set("Base", controller);
+            this.renderManager.addTransientEffect(effect);
+            return;
+        }
         const drawScale = parent.scriptClassId ? parent.getUnrealScriptProperty("DrawScale") as number : 1;
 
         parent.getWorldPosition(effect.position);
@@ -161,6 +167,8 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             if (typeof emitter.setSizeScale === "function") emitter.setSizeScale(collisionRadius * ENTER_EFFECT_RADIUS_SCALE);
         });
         this.renderManager.addTransientEffect(actor);
+
+        return undefined;
     }
 
     protected onScriptNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T> {
@@ -175,7 +183,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
                 if (child.particlePool) child.kill();
             });
 
-            return;
+            return undefined;
         }
 
         if (call.index === 278 || name === "spawn") {
@@ -184,7 +192,8 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             const vm = script.getVM(), defaults = vm.getDefaultObject(call.args[0] as string);
 
             // ULevel::SpawnActor 0x105889ac..0x10588acc; gameplay admission precedes allocation.
-            if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract || !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
+            if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract ||
+                !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
             if (getProperty(defaults, "bStatic") || getProperty(defaults, "bNoDelete")) return null;
             if (getProperty(defaults, "bHighDetail")) {
                 const level = getProperty(call.context, "Level") as ScriptHost_T;
@@ -215,7 +224,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
                     setProperty(object, "Rotation", (rotation as Vector3Arr).slice());
                     if ((actor as any).isActor) {
                         (actor as BaseActor).getComponent<PawnMovementComponent>("pawnMovement").syncRotationYaw(yaw);
-                        actor.rotateZ(-Math.PI / 2);
+                        actor.rotateZ(NEGATIVE_HALF_PI);
                     }
                 }
 

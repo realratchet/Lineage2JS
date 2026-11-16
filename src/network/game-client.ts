@@ -56,20 +56,27 @@ export class GameClient {
 
     protected write(opcode: GamePackets.GameClientPacket_T): PacketWriter { return new PacketWriter().c(opcode); }
 
-    public async connect(url: string) {
+    public async connect(url: string, openSocket: WebSocket = null) {
         if (this.replayPlayback) throw new Error(`Cannot connect during replay playback.`);
         if (this.isConnecting) throw new Error(`Game connection is already pending.`);
 
         this.isConnecting = true;
         try {
             this.crypt = new GameCrypt();
-            await this.socket.connect(url);
+            if (openSocket?.readyState === WebSocket.OPEN) this.socket.adopt(openSocket);
+            else {
+                if (openSocket) openSocket.close(1000);
+                await this.socket.connect(url);
+            }
             this.send(this.write(GamePackets.GameClientPacket_T.ProtocolVersion).d(GamePackets.PROTOCOL_REVISION));
         } finally { this.isConnecting = false; }
     }
 
     public isConnected() { return this.socket.isOpen(); }
-    public close() { this.stopReplayPlayback(); this.socket.close(); }
+    public close() {
+        this.stopReplayPlayback();
+        this.socket.close();
+    }
 
     public startReplayPlayback(file: L2ReplayFile, lockCamera = true, useChatData = false): void {
         if (this.isConnecting || this.isConnected() || this.replayRecorder || this.replayPlayback) throw new Error(`Replay playback requires an idle game client.`);
@@ -82,6 +89,7 @@ export class GameClient {
     }
 
     public isReplayPaused() { return !!this.replayPlayback?.paused; }
+    public useCameraInst() { return !!this.replayPlayback?.lockCamera; }
     public getReplayPlaySpeed() { return this.replayPlayback?.speed ?? 1; }
     public inputReplay(key: number, action: number): boolean {
         const playback = this.replayPlayback;
@@ -115,7 +123,8 @@ export class GameClient {
             const packet = arrPackets[i];
             let index = -1;
 
-            if (packet.opcode === GamePackets.GameServerPacket_T.CharInfo || packet.opcode === GamePackets.GameServerPacket_T.UserInfo || packet.opcode === GamePackets.GameServerPacket_T.NpcInfo || packet.opcode === GamePackets.GameServerPacket_T.ServerObjectInfo) {
+            if (packet.opcode === GamePackets.GameServerPacket_T.CharInfo || packet.opcode === GamePackets.GameServerPacket_T.UserInfo || packet.opcode === GamePackets.GameServerPacket_T.NpcInfo ||
+                packet.opcode === GamePackets.GameServerPacket_T.ServerObjectInfo) {
                 const reader = new PacketReader(packet.payload);
 
                 if (packet.opcode === GamePackets.GameServerPacket_T.CharInfo || packet.opcode === GamePackets.GameServerPacket_T.UserInfo) reader.skip(16);
@@ -141,7 +150,10 @@ export class GameClient {
 
         // FL2ReplayManager::Tick 0x75fc33: packets, then camera; finish strictly after duration.
         playback.time += Math.fround(deltaTime);
-        if (playback.time > playback.duration) { playback.ended = true; return false; }
+        if (playback.time > playback.duration) {
+            playback.ended = true;
+            return false;
+        }
 
         const file = playback.file;
 
@@ -170,7 +182,10 @@ export class GameClient {
 
         this.replayRecorder = new L2ReplayRecorder(file);
         try { this.requestRecordInfo(); }
-        catch (error) { this.replayRecorder = null; throw error; }
+        catch (error) {
+            this.replayRecorder = null;
+            throw error;
+        }
     }
 
     public stopRecording(): L2ReplayFile {
@@ -185,22 +200,30 @@ export class GameClient {
         if (this.replayRecorder) this.replayRecorder.addCameraInput(action, yaw, pitch, performance.now() / 1000);
     }
 
-    public recordCameraKey(key: number, action: number): void {
-        if (this.replayRecorder) this.replayRecorder.addCameraKey(key, action, performance.now() / 1000);
+    public recordCameraKey(key: number, action: number, amount = 0): void {
+        if (this.replayRecorder) this.replayRecorder.addCameraKey(key, action, performance.now() / 1000, amount);
     }
 
     public isRecording() { return this.replayRecorder !== null; }
     public getRecordingTime() { return this.replayRecorder ? this.replayRecorder.getElapsed(performance.now() / 1000) : null; }
 
     public authLogin(account: string, key: SessionKey_T) { this.send(this.write(GamePackets.GameClientPacket_T.AuthLogin).S(account).d(key.playOk2).d(key.playOk1).d(key.loginOk1).d(key.loginOk2)); }
-    public characterSelected(slot: number, position: GamePackets.Location_T = null) { this.send(this.write(GamePackets.GameClientPacket_T.CharacterSelected).d(slot).h(position ? 1 : 0).d(position ? Math.trunc(position.x) : 0).d(position ? Math.trunc(position.y) : 0).d(position ? Math.trunc(position.z) : 0)); }
+    public characterSelected(slot: number, position: GamePackets.Location_T = null) {
+        this.send(this.write(GamePackets.GameClientPacket_T.CharacterSelected)
+            .d(slot).h(position ? 1 : 0)
+            .d(position ? Math.trunc(position.x) : 0)
+            .d(position ? Math.trunc(position.y) : 0)
+            .d(position ? Math.trunc(position.z) : 0));
+    }
     public newCharacter() { this.send(this.write(GamePackets.GameClientPacket_T.NewCharacter)); }
     public characterDelete(slot: number) { this.send(this.write(GamePackets.GameClientPacket_T.CharacterDelete).d(slot)); }
     public characterRestore(slot: number) { this.send(this.write(GamePackets.GameClientPacket_T.CharacterRestore).d(slot)); }
     public enterWorld() { this.send(this.write(GamePackets.GameClientPacket_T.EnterWorld)); }
     public requestSkillList() { this.send(this.write(GamePackets.GameClientPacket_T.RequestSkillList)); }
     public requestShortCutReg(type: number, slot: number, id: number, level: number = 1) { this.send(this.write(GamePackets.GameClientPacket_T.RequestShortCutReg).d(type).d(slot).d(id).d(level)); }
-    public requestAutoSoulShot(itemId: number, isEnabled: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.Extended).h(GamePackets.GameClientExPacket_T.RequestAutoSoulShot).d(itemId).d(isEnabled ? 1 : 0)); }
+    public requestAutoSoulShot(itemId: number, isEnabled: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.Extended).h(GamePackets.GameClientExPacket_T.RequestAutoSoulShot)
+        .d(itemId)
+        .d(isEnabled ? 1 : 0)); }
     public requestSkillCoolTime() { this.send(this.write(GamePackets.GameClientPacket_T.RequestSkillCoolTime)); }
     public dlgAnswer(messageId: number, isOk: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.DlgAnswer).d(messageId).d(isOk ? 1 : 0)); }
     public appearing() { this.send(this.write(GamePackets.GameClientPacket_T.Appearing)); }
@@ -227,11 +250,31 @@ export class GameClient {
     public requestItemList() { this.send(this.write(GamePackets.GameClientPacket_T.RequestItemList)); }
 
     public characterCreate(info: CharacterCreate_T) {
-        this.send(this.write(GamePackets.GameClientPacket_T.CharacterCreate).S(info.name).d(info.race).d(info.sex).d(info.classId).d(info.INT).d(info.STR).d(info.CON).d(info.MEN).d(info.DEX).d(info.WIT).d(info.hairStyle).d(info.hairColor).d(info.face));
+        this.send(this.write(GamePackets.GameClientPacket_T.CharacterCreate)
+            .S(info.name)
+            .d(info.race)
+            .d(info.sex)
+            .d(info.classId)
+            .d(info.INT)
+            .d(info.STR)
+            .d(info.CON)
+            .d(info.MEN)
+            .d(info.DEX)
+            .d(info.WIT)
+            .d(info.hairStyle)
+            .d(info.hairColor)
+            .d(info.face));
     }
 
-    public moveBackwardToLocation(target: GamePackets.Location_T, origin: GamePackets.Location_T) { // Omitting moveType flags the client as L2Walker.
-        this.send(this.write(GamePackets.GameClientPacket_T.MoveBackwardToLocation).d(Math.round(target.x)).d(Math.round(target.y)).d(Math.round(target.z)).d(Math.round(origin.x)).d(Math.round(origin.y)).d(Math.round(origin.z)).d(1));
+    public moveBackwardToLocation(target: GamePackets.Location_T, origin: GamePackets.Location_T, isKeyboard = false) { // Omitting moveType flags the client as L2Walker.
+        this.send(this.write(GamePackets.GameClientPacket_T.MoveBackwardToLocation)
+            .d(Math.round(target.x))
+            .d(Math.round(target.y))
+            .d(Math.round(target.z))
+            .d(Math.round(origin.x))
+            .d(Math.round(origin.y))
+            .d(Math.round(origin.z))
+            .d(isKeyboard ? 0 : 1));
     }
 
     public validatePosition(position: GamePackets.Location_T, heading: number, vehicleId: number = 0) {
@@ -245,13 +288,23 @@ export class GameClient {
     public action(objectId: number, origin: GamePackets.Location_T, isShift: boolean) {
         if (objectId <= 0) return;
 
-        this.send(this.write(GamePackets.GameClientPacket_T.Action).d(objectId).d(Math.trunc(Math.fround(origin.x))).d(Math.trunc(Math.fround(origin.y))).d(Math.trunc(Math.fround(origin.z))).c(isShift ? 1 : 0));
+        this.send(this.write(GamePackets.GameClientPacket_T.Action)
+            .d(objectId)
+            .d(Math.trunc(Math.fround(origin.x)))
+            .d(Math.trunc(Math.fround(origin.y)))
+            .d(Math.trunc(Math.fround(origin.z)))
+            .c(isShift ? 1 : 0));
     }
 
     public attackRequest(objectId: number, origin: GamePackets.Location_T, isShift: boolean) {
         if (objectId <= 0) return;
 
-        this.send(this.write(GamePackets.GameClientPacket_T.AttackRequest).d(objectId).d(Math.trunc(Math.fround(origin.x))).d(Math.trunc(Math.fround(origin.y))).d(Math.trunc(Math.fround(origin.z))).c(isShift ? 1 : 0));
+        this.send(this.write(GamePackets.GameClientPacket_T.AttackRequest)
+            .d(objectId)
+            .d(Math.trunc(Math.fround(origin.x)))
+            .d(Math.trunc(Math.fround(origin.y)))
+            .d(Math.trunc(Math.fround(origin.z)))
+            .c(isShift ? 1 : 0));
     }
 
     public say2(text: string, type: GamePackets.Say2_T, target: string = null) {
@@ -284,7 +337,8 @@ export class GameClient {
     public requestSetPledgeCrest(data: Uint8Array) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSetPledgeCrest).d(data.length).b(data)); }
     public requestPledgeCrest(crestId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPledgeCrest).d(crestId)); }
     public requestExPledgeCrestLarge(crestId: number) { this.send(this.write(GamePackets.GameClientPacket_T.Extended).h(GamePackets.GameClientExPacket_T.RequestExPledgeCrestLarge).d(crestId)); }
-    public requestExSetPledgeCrestLarge(data: Uint8Array) { this.send(this.write(GamePackets.GameClientPacket_T.Extended).h(GamePackets.GameClientExPacket_T.RequestExSetPledgeCrestLarge).d(data.length).b(data)); }
+    public requestExSetPledgeCrestLarge(data: Uint8Array) { this.send(this.write(GamePackets.GameClientPacket_T.Extended).h(GamePackets.GameClientExPacket_T.RequestExSetPledgeCrestLarge)
+        .d(data.length).b(data)); }
     public requestJoinAlly(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestJoinAlly).d(objectId)); }
     public answerJoinAlly(isAccepted: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestAnswerJoinAlly).d(isAccepted ? 1 : 0)); }
     public allyLeave() { this.send(this.write(GamePackets.GameClientPacket_T.AllyLeave)); }
@@ -308,7 +362,10 @@ export class GameClient {
     public requestPrivateStoreQuitBuy() { this.send(this.write(GamePackets.GameClientPacket_T.RequestPrivateStoreQuitBuy)); }
     public setPrivateStoreMsgBuy(message: string) { this.send(this.write(GamePackets.GameClientPacket_T.SetPrivateStoreMsgBuy).S(message)); }
     public requestPackageSendableItemList(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPackageSendableItemList).d(objectId)); }
-    public multiSellChoose(listId: number, entryId: number, amount: number) { this.send(this.write(GamePackets.GameClientPacket_T.MultiSellChoose).d(listId).d(entryId).d(amount)); } // entryId already carries enchant as id*100000+enchant.
+    public multiSellChoose(listId: number, entryId: number, amount: number) { this.send(this.write(GamePackets.GameClientPacket_T.MultiSellChoose)
+        .d(listId)
+        .d(entryId)
+        .d(amount)); } // entryId already carries enchant as id*100000+enchant.
     public requestDestroyItem(objectId: number, count: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestDestroyItem).d(objectId).d(count)); }
     public requestUnEquipItem(bodyPart: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestUnEquipItem).d(bodyPart)); }
     public requestCrystallizeItem(objectId: number, count: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestCrystallizeItem).d(objectId).d(count)); }
@@ -422,8 +479,14 @@ export class GameClient {
     public requestSSQStatus(page: GamePackets.SSQPage_T) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSSQStatus).c(page)); }
     public requestSiegeAttackerList(castleId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSiegeAttackerList).d(castleId)); }
     public requestSiegeDefenderList(castleId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSiegeDefenderList).d(castleId)); }
-    public requestJoinSiege(castleId: number, isAttacker: boolean, isJoining: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestJoinSiege).d(castleId).d(isAttacker ? 1 : 0).d(isJoining ? 1 : 0)); }
-    public requestConfirmSiegeWaitingList(castleId: number, clanId: number, isApproved: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestConfirmSiegeWaitingList).d(castleId).d(clanId).d(isApproved ? 1 : 0)); }
+    public requestJoinSiege(castleId: number, isAttacker: boolean, isJoining: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestJoinSiege)
+        .d(castleId)
+        .d(isAttacker ? 1 : 0)
+        .d(isJoining ? 1 : 0)); }
+    public requestConfirmSiegeWaitingList(castleId: number, clanId: number, isApproved: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestConfirmSiegeWaitingList)
+        .d(castleId)
+        .d(clanId)
+        .d(isApproved ? 1 : 0)); }
     public gameGuardReply() { this.send(this.write(GamePackets.GameClientPacket_T.GameGuardReply)); } // GameGuardReply.readImpl reads nothing; runImpl just flags the client gg-ok.
     public startRotating(heading: number, side: number) { this.send(this.write(GamePackets.GameClientPacket_T.StartRotating).d(heading).d(side)); }
     public finishRotating(heading: number, unknown: number) { this.send(this.write(GamePackets.GameClientPacket_T.FinishRotating).d(heading).d(unknown)); }
@@ -439,7 +502,14 @@ export class GameClient {
     }
 
     public requestMoveToLocationInVehicle(vehicleId: number, target: GamePackets.Location_T, origin: GamePackets.Location_T) {
-        this.send(this.write(GamePackets.GameClientPacket_T.RequestMoveToLocationInVehicle).d(vehicleId).d(Math.trunc(target.x)).d(Math.trunc(target.y)).d(Math.trunc(target.z)).d(Math.trunc(origin.x)).d(Math.trunc(origin.y)).d(Math.trunc(origin.z)));
+        this.send(this.write(GamePackets.GameClientPacket_T.RequestMoveToLocationInVehicle)
+            .d(vehicleId)
+            .d(Math.trunc(target.x))
+            .d(Math.trunc(target.y))
+            .d(Math.trunc(target.z))
+            .d(Math.trunc(origin.x))
+            .d(Math.trunc(origin.y))
+            .d(Math.trunc(origin.z)));
     }
 
     public cannotMoveAnymoreInVehicle(vehicleId: number, position: GamePackets.Location_T, heading: number) {
@@ -464,7 +534,13 @@ export class GameClient {
     public requestHennaUnequipInfo(symbolId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestHennaUnequipInfo).d(symbolId)); }
     public requestHennaUnequip(symbolId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestHennaUnequip).d(symbolId)); }
     public requestPartyMatchConfig(page: number, location: number, limit: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPartyMatchConfig).d(page).d(location).d(limit)); }
-    public requestPartyMatchList(roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPartyMatchList).d(roomId).d(maxMembers).d(minLevel).d(maxLevel).d(lootType).S(title)); }
+    public requestPartyMatchList(roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPartyMatchList)
+        .d(roomId)
+        .d(maxMembers)
+        .d(minLevel)
+        .d(maxLevel)
+        .d(lootType)
+        .S(title)); }
     public requestPartyMatchDetail(roomId: number, location: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPartyMatchDetail).d(roomId).d(location)); }
     public requestWithDrawalParty() { this.send(this.write(GamePackets.GameClientPacket_T.RequestWithDrawalParty)); }
     public requestOustPartyMember(name: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestOustPartyMember).S(name)); }
@@ -489,7 +565,13 @@ export class GameClient {
     public requestRemainTime() { this.send(this.write(GamePackets.GameClientPacket_T.RequestRemainTime)); }
     public requestEvaluate(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestEvaluate).d(objectId)); }
     public requestShowBoard(unknown: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestShowBoard).d(unknown)); }
-    public requestBBSwrite(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestBBSwrite).S(url).S(arg1).S(arg2).S(arg3).S(arg4).S(arg5)); }
+    public requestBBSwrite(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestBBSwrite)
+        .S(url)
+        .S(arg1)
+        .S(arg2)
+        .S(arg3)
+        .S(arg4)
+        .S(arg5)); }
     public requestAquireSkillInfo(id: number, level: number, mode: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestAquireSkillInfo).d(id).d(level).d(mode)); }
     public requestAquireSkill(id: number, level: number, mode: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestAquireSkill).d(id).d(level).d(mode)); }
 

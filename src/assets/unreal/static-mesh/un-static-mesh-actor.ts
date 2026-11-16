@@ -85,7 +85,7 @@ function isAnimatedHardwareLight(light: ULight): boolean {
 
 export abstract class UStaticMeshActor extends UAActor {
 
-    declare protected mesh: UStaticMesh | UTexture;
+    declare public mesh: UStaticMesh | UTexture;
     declare protected instance: UStaticMeshInstance;
 
     declare protected colLocation: FVector;
@@ -197,14 +197,14 @@ export abstract class UStaticMeshActor extends UAActor {
             return null;
         }
 
-        const mesh = this.mesh.loadSelf() as UStaticMesh;
+        const mesh = this.mesh as UStaticMesh;
         const meshInfo = builder.pullStaticMesh(mesh, null);
 
         const level = this.getLevel();
         const baseModel = level.getModel();
         const localToWorld = this.localToWorld();
 
-        const predictedBox = mesh.getRenderBoundingBox(this).transformBy(localToWorld);
+        const predictedBox = builder.getStaticMeshBounds(mesh).transformBy(localToWorld);
 
         this.instance?.loadSelf().setActor(this);
 
@@ -217,7 +217,7 @@ export abstract class UStaticMeshActor extends UAActor {
         if ((!isStatic && !isMoverWithoutDynamicLight) || !this.instance) {
             const ambActor = this.getAmbientLightingActor();
             // UnRenderStaticMesh hardware lights: 0x90d4d3-0x90d50f, no baked instance stream.
-            const ambient = { glow: ambActor.ambientGlow, vector: FColor.fromFloating(...ambActor.getZone().ambientVector.getElements()).toArray(), isUnlit: ambActor.isUnlit, hardwareLighting: true };
+            const ambient = { glow: ambActor.ambientGlow, vector: FColor.fromFloating(...ambActor.getZone().ambientVector.getElements()).toArray() as Vector3Arr, isUnlit: (ambActor as UStaticMeshActor).isUnlit, hardwareLighting: true };
 
             return this.getActorDecodeResult(builder, meshInfo, null, predictedBox, ambient);
         }
@@ -233,7 +233,7 @@ export abstract class UStaticMeshActor extends UAActor {
         // if (attributes.positions.length / 3 === 1587)
         //     debugger;
 
-        const instanceColors = (mesh.useVertexColor && instance?.color) || null;
+        const instanceColors = (builder.getStaticMeshMetadata(mesh).useVertexColor && instance?.color) || null;
         const ambActor = this.getAmbientLightingActor();
         const xmodel = this.levelInfo.getLevel().getModel();
 
@@ -256,7 +256,7 @@ export abstract class UStaticMeshActor extends UAActor {
             [ambX, ambY, ambZ] = this.getZone().ambientVector.getElements();
         }
 
-        const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as number[];
+        const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as Vector3Arr;
         const ambientProps = {
             glow: ambActor.ambientGlow,
             vector: ambVector,
@@ -295,6 +295,10 @@ export abstract class UStaticMeshActor extends UAActor {
                 return null;
             }
         }
+
+        if (builder.getSettings().loadAudio !== false)
+            for (const sound of [this.stepSound1, this.stepSound2, this.stepSound3])
+                if (sound && !builder.pullSound(sound)) throw new Error(`StaticMeshActor '${this.name}' has no audio data for '${sound.name}'.`);
 
         // physicsRotation only runs when bRotateToDesired or bFixedRotationDir is set (UnPhysic.cpp:401);
         // fixed-dir spin is `result += deltaRate` per axis, 65536 units per revolution (fixedTurn, UnPhysic.cpp:460)
@@ -336,7 +340,7 @@ export abstract class UStaticMeshActor extends UAActor {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
             },
-            collisionBounds: (this.mesh as UStaticMesh).getCollisionBoundingBox(this).getDecodeInfo(),
+            collisionBounds: builder.getStaticMeshBounds(this.mesh as UStaticMesh, this, true).getDecodeInfo(),
             collision: this.getCollisionDecodeInfo(),
             ...this.getActorDecodeInfo()
         } as IStaticMeshActorDecodeInfo;

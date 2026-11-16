@@ -5,7 +5,12 @@ import type LitSkinnedMesh from "./lit-skinned-mesh";
 import type RenderManager from "../rendering/render-manager";
 import L2NMover from "../physics/l2-nmover";
 import Rotator from "../utils/rotator";
-import type { ActorCollisionProfile_T } from "./objects";
+import type { ActorCollisionProfile_T, ICollidable } from "./objects";
+
+const revealDelay = Math.fround(0.85) * 1000;
+
+const minFloorDistance = Math.fround(1.9);
+const floorDistance = (Math.fround(2.4) + minFloorDistance) * 0.5;
 
 const tmpIdentity = new Matrix4();
 const tmpStart = new Vector3();
@@ -161,7 +166,7 @@ export class GroundPickup extends Object3D {
         const physics = this.renderManager.getParent().getComponent("physics");
 
         tmpExtent.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
-        let hit = previous && { location: previous.tracePosition, normal: previous.traceNormal, time: 1, actor: null };
+        let hit = previous && { location: previous.tracePosition, normal: previous.traceNormal, time: 1, actor: null as ICollidable };
 
         // OnSpawnItem 0x74c5e0..0x74c7dc, OnDropItem 0x74ceb0..0x74d9e8.
         for (let i = 0; i < 500; i++) {
@@ -189,7 +194,7 @@ export class GroundPickup extends Object3D {
             const isLevel = actor && (!actor.scriptClassId && actor.getCollisionPrimitive().kind === "bsp" || script && script.getVM().invokeNative(actor, actor, 303, "IsA", arrLevelInfoClass));
             const height = hit.location.z + (actor && !isLevel ? 2 : 0);
             const time = hit.time * 12;
-            const offset = time < Math.fround(1.9) ? (Math.fround(2.4) + Math.fround(1.9)) * 0.5 - time : 0;
+            const offset = time < minFloorDistance ? floorDistance - time : 0;
             const ownerYaw = this.origin && this.dropAnimType >= 1 && this.dropAnimType <= 3 ? Math.trunc(Math.atan2(hit.location.y - this.origin.y, hit.location.x - this.origin.x) * vectorRotationScale) + (this.dropType === 2 ? 16384 : 32768) : 0;
 
             // UGameEngine::OnDropItem 0x74d462..0x74d49d aligns with FVector(Normal.Z, Normal.Y, -Normal.X).
@@ -227,7 +232,7 @@ export class GroundPickup extends Object3D {
             this.grounded = this.visible = true;
             if (this.dropped && this.dropEffectName === "LineageEffect.e_u056_a") {
                 // UGameEngine::OnDropItem 0x74d18b..0x74d1b2, Engine.L2Pickup.Timer.
-                this.revealTime = currentTime + Math.fround(0.85) * 1000;
+                this.revealTime = currentTime + revealDelay;
                 this.visible = false;
             }
             if (this.dropped) this.addDropEffect();

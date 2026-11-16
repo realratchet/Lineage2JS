@@ -2,6 +2,8 @@ import RotatingObject from "./rotating-object";
 import { MeshLight_T } from "./lit-actor";
 import type { ISwayingDecodeInfo } from "@l2js/engine/contracts/mesh";
 
+const fullTurn = Math.PI * 2;
+
 type AttachedActor_T = { object: THREE.Object3D, relativeLocation: THREE.Vector3, relativeRotation: THREE.Quaternion };
 
 // PHYS_L2Movement sway per cpp/l2_editor_leak/Engine/Classes/MovableStaticMeshActor.uc; the native
@@ -56,8 +58,8 @@ export class SwayingObject extends RotatingObject {
 
             this.phase[i] += this.omega[i] * dt;
 
-            if (this.phase[i] > Math.PI * 2) {
-                this.phase[i] -= Math.PI * 2;
+            if (this.phase[i] > fullTurn) {
+                this.phase[i] -= fullTurn;
                 if (maxRandom) this.currentMax[i] = max[i] * Math.random();
             }
         }

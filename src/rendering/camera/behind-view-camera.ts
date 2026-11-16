@@ -3,7 +3,10 @@ import { sinRotator } from "../../assets/unreal/utils/rotator";
 import type PhysicsManager from "../../physics/physics-manager";
 import type { CollisionQuery_T } from "../../physics/collision-world";
 import type { ICollidable } from "../../objects/objects";
-import type { ScriptHost_T } from "../../ue-script/vm";
+import type PlayerController from "../../objects/player-controller";
+import type { Vector3Arr } from "@l2js/engine";
+
+const CAMERA_TRACE_EXTENT = Math.fround(0.1);
 
 const tmpDirection = new Vector3();
 const tmpStart = new Vector3();
@@ -39,7 +42,7 @@ export class BehindViewCamera {
         return hit.actor;
     }
 
-    public update(controller: ScriptHost_T, rotation: Vector3Arr, target: Vector3, output: Vector3): void { // ALineagePlayerController::CalcBehindView 0x105382a0..0x10538a84.
+    public update(controller: PlayerController, rotation: Vector3Arr, target: Vector3, output: Vector3): void { // ALineagePlayerController::CalcBehindView 0x105382a0..0x10538a84.
         const properties = controller.scriptProperties, pitch = rotation[0], yaw = rotation[1], cosPitch = sinRotator(pitch + 16384);
         let distance = Math.fround((properties.get("CurZoomingDist") as number) + 250);
 
@@ -48,7 +51,7 @@ export class BehindViewCamera {
         if (properties.get("bUseHitCheckCamera")) {
             location(target, Math.fround(distance + 30), tmpEnd, true);
             tmpEnd.z = Math.fround(target.z - Math.fround(Math.fround(tmpDirection.z * Math.fround(distance + 30)) + 10));
-            if (this.trace(target, tmpEnd, Math.fround(0.1))) distance = Math.fround(Math.min(distance, projection(target)));
+            if (this.trace(target, tmpEnd, CAMERA_TRACE_EXTENT)) distance = Math.fround(Math.min(distance, projection(target)));
             location(target, distance - 30, output);
             return;
         }

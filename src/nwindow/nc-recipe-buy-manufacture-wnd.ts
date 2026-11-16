@@ -24,7 +24,8 @@ export class NCRecipeBuyManufactureWnd extends NCRecipeManufactureWnd {
     }
     public setInventory(items: InventoryItem_T[]) {
         if (!this.recipe) return;
-        const normal = items.filter(item => !item.isEquipped && item.type2 !== ItemType2_T.TYPE2_QUEST), quest = items.filter(item => !item.isEquipped && item.type2 === ItemType2_T.TYPE2_QUEST);
+        const normal = items.filter(item => !item.isEquipped && item.type2 !== ItemType2_T.TYPE2_QUEST);
+        const quest = items.filter(item => !item.isEquipped && item.type2 === ItemType2_T.TYPE2_QUEST);
         let count = 0;
 
         for (const item of normal)

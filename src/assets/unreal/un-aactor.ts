@@ -2,7 +2,7 @@
 // import FRotator from "./un-rotator";
 import GMath from "./un-gmath";
 import FMatrix from "./un-matrix";
-import { APackage, UExport, type FObjectArray } from "@l2js/core";
+import type { FObjectArray } from "@l2js/core";
 import UObject from "./un-object";
 import { generateUUID } from "three/src/math/MathUtils";
 import type { UTextureModifyInfo } from "./un-texture-modify-info";
@@ -17,6 +17,19 @@ import type { UTexture } from "./un-texture";
 import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
+
+export enum EL2GameAction_T {
+    LGA_SaintConsensusOpening,
+    LGA_SaintConsensusOpened,
+    LGA_SaintConsensusClosing,
+    LGA_SaintConsensusClosed
+}
+
+export enum EL2ObjectType_T {
+    EL2_NORMAL,
+    EL2_DOOR,
+    EL2_CHAIR
+}
 
 export enum EActorViewType_T {
     EAVT_None,

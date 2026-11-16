@@ -1,4 +1,5 @@
-import { DepthFormat, DepthStencilFormat, DepthTexture, FloatType, Scene, UnsignedInt248Type, UnsignedIntType, UnsignedShortType, WebGLRenderer, Material, Object3D, Camera } from "three";
+import { DepthFormat, DepthStencilFormat, DepthTexture, FloatType, NormalBlending, Scene, UnsignedInt248Type, UnsignedIntType, UnsignedShortType, WebGLRenderer, Material, Object3D, Camera } from "three";
+import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import Nameplate from "./nameplate";
 
 export class NameplateDepth {
@@ -20,7 +21,7 @@ export class NameplateDepth {
 
     public constructor(renderer: WebGLRenderer) {
         this.renderer = renderer;
-        this.gl = renderer.getContext();
+        this.gl = renderer.getContext() as WebGL2RenderingContext;
         renderer.domElement.addEventListener("webglcontextrestored", this.contextRestored);
     }
 
@@ -38,6 +39,9 @@ export class NameplateDepth {
 
         if ((object as any).isNameplate) (object as Nameplate).setOpaqueDepth(this.copied ? this.texture : null, this.width, this.height);
         else if (material.transparent && material.depthWrite && !this.copied) {
+            const actor = (object as LitSkinnedMesh).actorRenderable;
+            if (actor && actor.isOpaque() && material.blending === NormalBlending) return;
+
             this.capture();
             this.copied = true;
         }
@@ -53,15 +57,20 @@ export class NameplateDepth {
                 let format: number = gl.DEPTH_COMPONENT24;
                 try {
                     const type = gl.getFramebufferAttachmentParameter(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
-                    if (type !== gl.RENDERBUFFER) throw new Error(`Nameplate depth source must have a depth renderbuffer`);
-
-                    gl.bindRenderbuffer(gl.RENDERBUFFER, gl.getFramebufferAttachmentParameter(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME));
-                    format = gl.getRenderbufferParameter(gl.RENDERBUFFER, gl.RENDERBUFFER_INTERNAL_FORMAT);
+                    if (type === gl.TEXTURE && target && target.depthTexture) {
+                        const texture = target.depthTexture;
+                        if (texture.format === DepthStencilFormat) format = texture.type === FloatType ? gl.DEPTH32F_STENCIL8 : gl.DEPTH24_STENCIL8;
+                        else format = texture.type === FloatType ? gl.DEPTH_COMPONENT32F : texture.type === UnsignedShortType ? gl.DEPTH_COMPONENT16 : gl.DEPTH_COMPONENT24;
+                    } else {
+                        if (type !== gl.RENDERBUFFER) throw new Error(`Nameplate depth source must have a depth renderbuffer or texture`);
+                        gl.bindRenderbuffer(gl.RENDERBUFFER, gl.getFramebufferAttachmentParameter(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME));
+                        format = gl.getRenderbufferParameter(gl.RENDERBUFFER, gl.RENDERBUFFER_INTERNAL_FORMAT);
+                    }
                 } finally {
                     gl.bindRenderbuffer(gl.RENDERBUFFER, previous);
                 }
                 if (this.texture) this.texture.dispose();
-                let type: number;
+                let type: THREE.TextureDataType;
                 switch (format) {
                     case gl.DEPTH_COMPONENT16: type = UnsignedShortType; break;
                     case gl.DEPTH_COMPONENT24: type = UnsignedIntType; break;
@@ -76,7 +85,7 @@ export class NameplateDepth {
                 this.renderer.initTexture(this.texture);
                 if (!this.framebuffer) this.framebuffer = gl.createFramebuffer();
                 gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
-                gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this.renderer.properties.get(this.texture).__webglTexture, 0);
+                gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, (this.renderer.properties.get(this.texture) as { __webglTexture: WebGLTexture }).__webglTexture, 0);
                 gl.drawBuffers([gl.NONE]);
                 if (gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`Nameplate depth framebuffer is incomplete`);
                 this.source = source;
@@ -98,6 +107,8 @@ export class NameplateDepth {
         this.capture();
         this.copied = true;
     }
+
+    public getTexture() { return this.copied ? this.texture : null; }
 
     public render(scene: Scene, camera: Camera) {
         if (!this.active) return;

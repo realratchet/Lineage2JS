@@ -69,7 +69,7 @@ export abstract class UStaticMeshInstance extends UObject {
 
     public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
 
-    public getDecodeInfo(library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } {
+    public getDecodeInfo(_library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
 

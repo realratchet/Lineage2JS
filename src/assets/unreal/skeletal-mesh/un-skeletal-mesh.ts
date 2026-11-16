@@ -3,7 +3,7 @@ import { BufferValue, type APackage, type UExport, FArray, FArrayLazy, FIndexArr
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
 import ULodMesh from "../un-lod-mesh";
-import FQuaternion, { FAxis } from "../un-quaternion";
+import FQuaternion from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
 import type { UMeshAnimation, IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "./un-mesh-animation";
@@ -13,7 +13,7 @@ import type { IGeometryDecodeInfo, IBaseObjectDecodeInfo } from "../decode-libra
 import type { ArrGeometryGroup, Vector3Arr, QuaternionArr } from "../library-types";
 import type { IDynamicHairConfigDecodeInfo } from "../conf-files/un-conf-hair";
 
-export type IAnimationSequenceDecodeInfo = { attackEffectFrame: number; attackEndEffectFrame: number; framerate: number; };
+export type IAnimationSequenceDecodeInfo = { attackEffectFrame: number; attackEndEffectFrame: number; framerate: number; groupNames: string[]; };
 export type IDynamicHairDecodeInfo = { type: number; config: IDynamicHairConfigDecodeInfo; };
 export type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     type: "SkinnedMesh";
@@ -275,8 +275,8 @@ class FStaticModelLOD implements Constructable_T {
     public wedges = new FArrayLazy(FMeshWedge);
     public faces = new FArrayLazy(FTriangleLOD);
     public points = new FArrayLazy(FVector.class());
+    public displayFactor: number;
     public lodHysteresis: number;
-    public numSharedVertices: number;
     public lodMaxInfluences: number;
     public maxInfluences: number;
     public isUniqueSubset: boolean;
@@ -297,8 +297,9 @@ class FStaticModelLOD implements Constructable_T {
         this.faces.load(pkg);
         this.points.load(pkg);
 
+        // Engine.dll 0x9716e8..0x971704 serializes DisplayFactor and LODHysteresis before the integer fields.
+        this.displayFactor = pkg.read("float");
         this.lodHysteresis = pkg.read("float");
-        this.numSharedVertices = pkg.read("uint32");
         this.lodMaxInfluences = pkg.read("uint32");
         this.maxInfluences = pkg.read("uint32");
         this.isUniqueSubset = pkg.read("uint32") !== 0;
@@ -509,6 +510,7 @@ export abstract class USkeletalMesh extends ULodMesh {
                 const animName = sequence.name;
 
                 animationSequences[animName] = {
+                    groupNames: sequence.groupNames,
                     attackEffectFrame: sequence.frameCount > 0 ? sequence.unkVar0 / sequence.frameCount : 0,
                     attackEndEffectFrame: sequence.frameCount > 0 ? sequence.unkVar1 / sequence.frameCount : 0,
                     framerate: sequence.framerate
@@ -535,8 +537,8 @@ export abstract class USkeletalMesh extends ULodMesh {
                     const track = move.animTracks.getElem(boneIndexAnim);
                     const trackFrameCount = track.keyTime.getElemCount();
 
-                    const lenPos = track.keyPos.getElemCount();
-                    const lenRot = track.keyQuat.getElemCount();
+                    const lenPos = track.keyPos.byteLength / 12;
+                    const lenRot = track.keyQuat.byteLength / 16;
 
                     const timesPos = new Float32Array(lenPos + 1);
                     const timesRot = new Float32Array(lenRot + 1);
@@ -549,34 +551,27 @@ export abstract class USkeletalMesh extends ULodMesh {
 
                         if (j < lenPos) {
                             const idxPos = j * 3;
-                            let pos = track.keyPos.getElem(j < lenPos ? j : lenPos - 1);
-
-                            pos = makeVector(pos);
 
                             timesPos[j] = time / framerate;
 
-                            positions[idxPos + 0] = pos.x;
-                            positions[idxPos + 1] = pos.y;
-                            positions[idxPos + 2] = pos.z;
+                            positions[idxPos + 0] = track.keyPos.getFloat32(j * 12 + 0, true);
+                            positions[idxPos + 1] = track.keyPos.getFloat32(j * 12 + 4, true);
+                            positions[idxPos + 2] = track.keyPos.getFloat32(j * 12 + 8, true);
 
                         }
 
                         if (j < lenRot) {
-                            let rot = track.keyQuat.getElem(j < lenRot ? j : lenRot - 1);
                             const idxRot = j * 4;
-
-
-                            rot = makeQuaternion(rot);
-
-                            if (boneIndexAnim > 0)
-                                rot = rot.conjugate();
+                            const x = track.keyQuat.getFloat32(j * 16 + 0, true);
+                            const y = track.keyQuat.getFloat32(j * 16 + 4, true);
+                            const z = track.keyQuat.getFloat32(j * 16 + 8, true);
 
                             timesRot[j] = time / framerate;
 
-                            rotations[idxRot + 0] = rot.x;
-                            rotations[idxRot + 1] = rot.y;
-                            rotations[idxRot + 2] = rot.z;
-                            rotations[idxRot + 3] = rot.w;
+                            rotations[idxRot + 0] = boneIndexAnim > 0 ? -x : x;
+                            rotations[idxRot + 1] = boneIndexAnim > 0 ? -y : y;
+                            rotations[idxRot + 2] = boneIndexAnim > 0 ? -z : z;
+                            rotations[idxRot + 3] = track.keyQuat.getFloat32(j * 16 + 12, true);
                         }
                     }
 
@@ -1037,59 +1032,59 @@ type VertexInfo_T = {
     weights: number[]
 }
 
-class FBoneCoord {
-    public origin: FVector = FVector.make();
-    public axis: FAxis = new FAxis();
+// class FBoneCoord {
+    // public origin: FVector = FVector.make();
+    // public axis: FAxis = new FAxis();
 
-    public invert() {
-        const out = new FBoneCoord();
+    // public invert() {
+        // const out = new FBoneCoord();
 
-        // negate inverse rotated origin
-        out.origin = this.axis.transformVector(this.origin).negate();
+        // // negate inverse rotated origin
+        // out.origin = this.axis.transformVector(this.origin).negate();
 
-        // transpose axis
-        out.axis.x.x = this.axis.x.x;
-        out.axis.x.y = this.axis.y.x;
-        out.axis.x.z = this.axis.z.x;
-        out.axis.y.x = this.axis.x.y;
-        out.axis.y.y = this.axis.y.y;
-        out.axis.y.z = this.axis.z.y;
-        out.axis.z.x = this.axis.x.z;
-        out.axis.z.y = this.axis.y.z;
-        out.axis.z.z = this.axis.z.z;
+        // // transpose axis
+        // out.axis.x.x = this.axis.x.x;
+        // out.axis.x.y = this.axis.y.x;
+        // out.axis.x.z = this.axis.z.x;
+        // out.axis.y.x = this.axis.x.y;
+        // out.axis.y.y = this.axis.y.y;
+        // out.axis.y.z = this.axis.z.y;
+        // out.axis.z.x = this.axis.x.z;
+        // out.axis.z.y = this.axis.y.z;
+        // out.axis.z.z = this.axis.z.z;
 
-        return out;
-    }
+        // return out;
+    // }
 
 
-    public untransformPoint(src: FVector) {
-        let tmp = this.origin;
+    // public untransformPoint(src: FVector) {
+        // let tmp = this.origin;
 
-        tmp = this.axis.x.multiplyScalar(src.x).add(tmp);
-        tmp = this.axis.y.multiplyScalar(src.y).add(tmp);
-        tmp = this.axis.z.multiplyScalar(src.z).add(tmp);
+        // tmp = this.axis.x.multiplyScalar(src.x).add(tmp);
+        // tmp = this.axis.y.multiplyScalar(src.y).add(tmp);
+        // tmp = this.axis.z.multiplyScalar(src.z).add(tmp);
 
-        return tmp;
-    }
+        // return tmp;
+    // }
 
-    public untransformCoords(src: FBoneCoord) {
-        const out = new FBoneCoord();
+    // public untransformCoords(src: FBoneCoord) {
+        // const out = new FBoneCoord();
 
-        out.origin = this.untransformPoint(src.origin);
-        out.axis = this.axis.untransformAxis(src.axis);
+        // out.origin = this.untransformPoint(src.origin);
+        // out.axis = this.axis.untransformAxis(src.axis);
 
-        return out;
-    }
+        // return out;
+    // }
 
-    toElements() {
-        return [
-            this.axis.x.x, this.axis.x.y, this.axis.x.z, 0,
-            this.axis.y.x, this.axis.y.y, this.axis.y.z, 0,
-            this.axis.z.x, this.axis.z.y, this.axis.z.z, 0,
-            this.origin.x, this.origin.y, this.origin.z, 1
-        ];
-    }
-}
+    // toElements() {
+        // return [
+            // this.axis.x.x, this.axis.x.y, this.axis.x.z, 0,
+            // this.axis.y.x, this.axis.y.y, this.axis.y.z, 0,
+            // this.axis.z.x, this.axis.z.y, this.axis.z.z, 0,
+            // this.origin.x, this.origin.y, this.origin.z, 1
+        // ];
+    // }
+// }
 
 function makeVector(v: { x: number, y: number, z: number }) { return FVector.make(v.x, v.y, v.z); }
 function makeQuaternion(v: { x: number, y: number, z: number, w: number }) { return FQuaternion.make(v.x, v.y, v.z, v.w); }

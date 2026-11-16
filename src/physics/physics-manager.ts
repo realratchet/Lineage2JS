@@ -3,7 +3,6 @@ import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
 import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
-import Player from "../player";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
@@ -19,15 +18,18 @@ import type MusicVolume from "../objects/music-volume";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
-import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import type { default as UnScriptVM, ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
 import type RenderManager from "../rendering/render-manager";
 import type TransformComponent from "../objects/components/transform-component";
 import Rotator from "../utils/rotator";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
+import BaseEmitter from "../objects/emitters/base-emitter";
 import type { Vector3Arr } from "@l2js/engine";
 
+const NEGATIVE_HALF_PI = -Math.PI / 2;
+
 const arrMoverPawns: BaseActor[] = [];
+const arrPhysicsVolumeClass: ScriptValue_T[] = ["PhysicsVolume"];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
 const tmpZoneLocation = new Vector3();
 const tmpVolumeLocation = new Vector3();
@@ -52,11 +54,9 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     protected static readonly PHYSICS_HZ = 30;
     protected static readonly PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PHYSICS_HZ;
     protected static readonly MAX_PHYSICS_TICKS = 8;
-    protected static readonly PAWN_DECODE_CONCURRENCY = 3;
     protected manGame: GameManager;
 
     protected readonly simEmitters = new EmitterSimulation();
-    protected simCharGroups: ICharacterGroup[] = null;
 
     protected readonly physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
     protected readonly collisionWorld = new CollisionWorld();
@@ -65,6 +65,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     protected readonly triggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected nextPhysicsTick: number;
+    protected emitterSlot = 0;
 
     public setParent(parent: GameManager): this {
         this.manGame = parent;
@@ -87,22 +88,27 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         let physicsTicks = 0;
 
-        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
-            this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
-            this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
+        BaseEmitter.beginWarmupFrame();
+        try {
+            while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS * EmitterSimulation.PHASES) {
+                this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), this.emitterSlot++, manRender);
+                this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS / EmitterSimulation.PHASES;
+            }
+        } finally {
+            BaseEmitter.endWarmupFrame();
         }
 
         if (physicsTicks > 0) this.simEmitters.syncParticles();
 
         if (this.nextPhysicsTick <= currentTime)
-            this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
+            this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS / EmitterSimulation.PHASES;
 
         if (updatedPhysicsComponent || physicsTicks > 0 && this.simEmitters.getSize() > 0)
             manRender.needsUpdate = true;
     }
 
     public getPhysicsComponents<T extends IPhysicsComponent<any>>(componentName: string): ReadonlySet<T> {
-        return (this.physicsComponentsByName.get(componentName) || emptyPhysicsComponents) as ReadonlySet<T>;
+        return (this.physicsComponentsByName.get(componentName) || emptyPhysicsComponents) as unknown as ReadonlySet<T>;
     }
 
     public getParticleEmitters(): ReadonlySet<any> { return this.simEmitters.getEmitters(); }
@@ -136,44 +142,11 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return true;
     }
 
-    public async simulatePawns(count: number = NpcSimulationComponent.DEFAULT_COUNT): Promise<void> {
-        const this_ = this, manAsset = this.manGame.getComponent("asset"), manRender = this.manGame.getComponent("render");
-        const groups = this.simCharGroups || (this.simCharGroups = await manAsset.getCharGroups());
-        const arrWorkers: Promise<void>[] = [];
-        let next = 0;
-
-        // Ten character decodes at once starve the fucking worker pool.
-        async function worker(): Promise<void> {
-            while (next < count) {
-                const index = next++;
-                const group = groups[Math.floor(Math.random() * groups.length)];
-                const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
-                const colours = group.hairColours[hair];
-                const armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
-                const pawn = new Player(manRender);
-
-                for (const slot of Object.keys(armor) as (keyof ICharacterArmorSelection)[]) {
-                    const items = group.armor[slot];
-
-                    armor[slot] = items.length > 0 && Math.random() < 0.75 ? items[Math.floor(Math.random() * items.length)].id : 0;
-                }
-
-                pawn.name = `SimPawn${index}`;
-
-                await manAsset.loadCharacter(manRender, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
-
-                manRender.scene.add(pawn);
-                pawn.position.copy(this_.manGame.getComponent("input").getOrbitTarget());
-                pawn.updateMatrixWorld(true);
-                this_.addPawn(pawn, this_.manGame.getCurrentTime() + NpcSimulationComponent.LIFETIME, 0, true);
-                manRender.needsUpdate = true;
-            }
-        }
-
-        for (let i = 0; i < PhysicsManager.PAWN_DECODE_CONCURRENCY; i++) arrWorkers.push(worker());
-
-        await Promise.all(arrWorkers);
+    public async simulatePawns(count: number = 100): Promise<void> {
+        await this.manGame.getComponent("network").pawnSimulation.spawn(count, this.manGame.getComponent("input").getOrbitTarget());
     }
+
+    public clearSimulatedPawns(): void { this.manGame.getComponent("network").pawnSimulation.clear(); }
 
     public getColliders(): RAPIER.Collider[] {
         const colliders: RAPIER.Collider[] = [];
@@ -210,12 +183,19 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             let hasUnbonedActors = false;
             for (const actor of transform.getBasedActors()) {
                 const bone = (actor as BaseActor).getUnrealScriptProperty("AttachmentBone");
-                if (!bone || bone === "None") { hasUnbonedActors = true; break; }
+                if (!bone || bone === "None") {
+                    hasUnbonedActors = true;
+                    break;
+                }
             }
             if (!hasUnbonedActors) {
                 // ULevel::MoveActor 0x1058b598..0x1058b617 skips collision, zones and relative location.
                 const location = pawn.getUnrealScriptProperty("Location") as Vector3Arr;
-                query.location.set(Math.fround(Math.fround(location[0]) + Math.fround(query.delta.x)), Math.fround(Math.fround(location[1]) + Math.fround(query.delta.y)), Math.fround(Math.fround(location[2]) + Math.fround(query.delta.z)));
+                query.location.set(
+                    Math.fround(Math.fround(location[0]) + Math.fround(query.delta.x)),
+                    Math.fround(Math.fround(location[1]) + Math.fround(query.delta.y)),
+                    Math.fround(Math.fround(location[2]) + Math.fround(query.delta.z))
+                );
                 pawn.setUnrealScriptProperty("Location", query.location.toArray());
                 if (!test) this.manGame.getComponent("render").needsUpdate = true;
                 const changed = rotation && rotation.some((value, index) => value !== oldRotation[index]);
@@ -240,7 +220,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const location = query.location, ignoreBases = query.ignoreBases;
         let hit = this.collisionWorld.moveActor(query, notify ? contacts : null);
         if (hit) hit = { ...hit, location: hit.location.clone(), normal: hit.normal.clone() };
-        pawn.setUnrealScriptProperty("Location", location.toArray());
+        pawn.setUnrealScriptProperty("Location", [location.x, location.y, location.z]);
         if (rotation) this.setActorRotation(pawn, rotation);
         if (hasBasedActors && !transform.moveBasedActors(oldLocation, previousRotation)) {
             const delta = (pawn.getUnrealScriptProperty("Location") as Vector3Arr).map((value, index) => Math.fround(value - oldLocation[index])) as Vector3Arr;
@@ -272,7 +252,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const movement = pawn.findComponent<PawnMovementComponent>("pawnMovement");
         if (movement) {
             movement.syncRotationYaw(rotation[1]);
-            pawn.rotateZ(-Math.PI / 2);
+            pawn.rotateZ(NEGATIVE_HALF_PI);
             pawn.updateMatrixWorld(true);
             movement.syncCollisionLocation();
         } else (pawn as CollidingMesh).syncCollisionTransform();
@@ -379,7 +359,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         for (const volume of candidates) {
             if (!volume) continue;
             const script = volume.getComponent("script") as any;
-            if (!script.getVM().invokeNative(volume, volume, 303, "IsA", ["PhysicsVolume"])) continue;
+            if (!script.getVM().invokeNative(volume, volume, 303, "IsA", arrPhysicsVolumeClass)) continue;
             if ((volume.getUnrealScriptProperty("Priority") as number) <= (selected.getUnrealScriptProperty("Priority") as number)) continue;
             if (useTouching && !volume.encompasses(location)) continue;
             selected = volume;
@@ -387,6 +367,13 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         return selected;
     }
+    protected isTouchingPhysicsVolume(actor: BaseActor | CollidingMesh): boolean {
+        for (const volume of actor.getUnrealScriptProperty("Touching") as unknown as PhysicsVolume[])
+            if (volume && volume.getComponent<ScriptComponent>("script").getVM().invokeNative(volume, volume, 303, "IsA", arrPhysicsVolumeClass)) return true;
+
+        return false;
+    }
+
     public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume): void {
         if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
 
@@ -433,10 +420,10 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const vm = actor.getComponent<ScriptComponent>("script").getVM();
 
         if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"])) {
-            actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+            actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
             return;
         }
-        if (forceRefresh) actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+        if (forceRefresh) actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
 
         const oldRegion = actor.getUnrealScriptProperty("Region") as any;
         const region = level.pointRegion(tmpZoneLocation.fromArray(actor.getUnrealScriptProperty("Location") as number[]));
@@ -525,7 +512,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const level = render.getLoadedSectors().find(sector => sector.levelInfoActor === owner);
 
         if (!level) throw new Error(`Pawn '${pawn.name}' has no registered level for SetZone.`);
-        if (forceRefresh) pawn.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+        if (forceRefresh) pawn.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
 
         const oldRegion = pawn.getUnrealScriptProperty("Region") as any;
         const region = level.pointRegion(tmpZoneLocation.fromArray(pawn.getUnrealScriptProperty("Location") as number[]));
@@ -542,9 +529,14 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         tmpZoneLocation.fromArray(pawn.getUnrealScriptProperty("Location") as number[]);
         tmpZoneLocation.set(Math.fround(tmpZoneLocation.x), Math.fround(tmpZoneLocation.y), Math.fround(tmpZoneLocation.z));
         const touching = !!pawn.getUnrealScriptProperty("bCollideActors") && !test && !forceRefresh;
-        const body = this.getPhysicsVolume(level, tmpZoneLocation, pawn, touching);
-        const head = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z + 13)), pawn, touching);
-        const foot = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z - pawn.getCollisionHeight())), pawn, touching);
+        let body: PhysicsVolume, head: PhysicsVolume, foot: PhysicsVolume;
+
+        if (touching && !(pawn as BaseActor).scriptBase && !this.isTouchingPhysicsVolume(pawn)) body = head = foot = (render.getLevel() || level).getDefaultPhysicsVolume();
+        else {
+            body = this.getPhysicsVolume(level, tmpZoneLocation, pawn, touching);
+            head = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z + 13)), pawn, touching);
+            foot = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z - pawn.getCollisionHeight())), pawn, touching);
+        }
         const oldBody = pawn.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
 
         if (body !== oldBody) {
@@ -735,16 +727,25 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 }
 
 class EmitterSimulation {
+    public static readonly PHASES = 4; // each emitter still ticks at PHYSICS_HZ, a quarter of them per slot instead of all in one frame
+    public static readonly INACTIVE_PHASES = 16; // an emitter nothing has drawn for a second ticks at a quarter of the rate with four times the step
+
     protected readonly emitters = new Set<any>();
     protected readonly actors = new Set<any>();
+    protected nextPhase = 0;
 
     public getSize(): number { return this.emitters.size + this.actors.size; }
     public getEmitters(): ReadonlySet<any> { return this.emitters; }
     public syncParticles(): void { for (const emitter of this.emitters) emitter.syncParticles(); }
 
     public add(emitter: Object3D): void {
-        if ((emitter as any).isEmitterActor) this.actors.add(emitter);
-        else this.emitters.add(emitter);
+        const emitters = (emitter as any).isEmitterActor ? this.actors : this.emitters;
+
+        if (!emitters.has(emitter)) {
+            (emitter as any).simulationSlot = undefined; // a revived sector's emitters must not step over the time they were away
+            if (!(emitter.parent as any)?.isEmitterActor) (emitter as any).simulationPhase = this.nextPhase++ % EmitterSimulation.INACTIVE_PHASES;
+        }
+        emitters.add(emitter);
     }
     public remove(emitter: Object3D): void {
         this.emitters.delete(emitter);
@@ -753,7 +754,10 @@ class EmitterSimulation {
 
     public static setWarmupGate(root: Object3D, allowed: boolean): void {
         root.traverse(child => {
-            if ((child as any).particlePool) (child as any).warmupGate = allowed;
+            if ((child as any).particlePool) {
+                (child as any).warmupGate = allowed;
+                (child as any).budgetWarmup = true;
+            }
         });
     }
 
@@ -773,15 +777,34 @@ class EmitterSimulation {
         return hasEmitter && isFinished;
     }
 
-    public tick(currentTime: number, deltaTime: number, renderManager?: RenderManager): void {
-        for (const actor of this.actors)
-            if (actor.updateEmitters(currentTime, deltaTime)) {
+    public tick(currentTime: number, deltaTime: number, slot: number, renderManager?: RenderManager): void {
+        for (const actor of this.actors) {
+            const steps = this.getSteps(actor, slot);
+
+            if (steps > 0 && actor.updateEmitters(currentTime, Math.fround(deltaTime * steps))) {
                 if (!renderManager) throw new Error(`Emitter '${actor.name}' destruction requires its render manager.`);
                 renderManager.removeTransientEffect(actor);
             }
+        }
 
-        for (const emitter of this.emitters)
-            if (!this.actors.has(emitter.parent)) emitter.update(currentTime, deltaTime);
+        for (const emitter of this.emitters) {
+            if (this.actors.has(emitter.parent)) continue;
+
+            const steps = this.getSteps(emitter, slot);
+
+            if (steps > 0) emitter.update(currentTime, Math.fround(deltaTime * steps));
+        }
+    }
+
+    protected getSteps(emitter: any, slot: number): number {
+        const offset = slot - emitter.simulationPhase;
+
+        if (offset % EmitterSimulation.PHASES !== 0 || offset % EmitterSimulation.INACTIVE_PHASES !== 0 && emitter.isInactive()) return 0;
+
+        const steps = emitter.simulationSlot === undefined ? 1 : (slot - emitter.simulationSlot) / EmitterSimulation.PHASES;
+
+        emitter.simulationSlot = slot;
+        return steps;
     }
 }
 export default PhysicsManager;

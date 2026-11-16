@@ -1,5 +1,5 @@
 import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
-import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Mesh, Quaternion, StreamDrawUsage, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
 import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
@@ -104,8 +104,8 @@ export class BeamEmitter extends BaseEmitter {
         const vertexCount = 2 * hf * sheets;
         const geometry = new BufferGeometry();
 
-        geometry.setAttribute("position", new BufferAttribute(new Float32Array(vertexCount * 3), 3));
-        geometry.setAttribute("uv", new BufferAttribute(new Float32Array(vertexCount * 2), 2));
+        geometry.setAttribute("position", new BufferAttribute(new Float32Array(vertexCount * 3), 3).setUsage(StreamDrawUsage));
+        geometry.setAttribute("uv", new BufferAttribute(new Float32Array(vertexCount * 2), 2).setUsage(StreamDrawUsage));
 
         // uvs never change: u = t * UScale (filled at spawn), v alternates 0 / VScale
         const uvs = geometry.getAttribute("uv").array as Float32Array;
@@ -128,7 +128,8 @@ export class BeamEmitter extends BaseEmitter {
         geometry.setIndex(new BufferAttribute(indices, 1));
         geometry.boundingSphere = null;
 
-        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(this.material) : new ParticleMaterial(this.material);
+        const settings = { ...this.material, rangeFade: this.rangeFade };
+        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings);
         const mesh = new BeamMesh(geometry, material);
 
         mesh.emitter = this;
@@ -254,7 +255,7 @@ export class BeamEmitter extends BaseEmitter {
         (particle as any).beamDirty = true;
     }
 
-    protected updateParticle(deltaTime: number, index: number): void {
+    protected updateParticle(_deltaTime: number, index: number): void {
         const points = (this.particlePool[index] as any)?.beamPoints as Float32Array | undefined;
         if (!points) return;
 
@@ -313,7 +314,12 @@ export class BeamEmitter extends BaseEmitter {
     }
 }
 
-const tmpRight = new Vector3(), tmpUp = new Vector3(), tmpPrev = new Vector3(), tmpPoint = new Vector3(), tmpNoise = new Vector3(), tmpView = new Vector3();
+const tmpRight = new Vector3();
+const tmpUp = new Vector3();
+const tmpPrev = new Vector3();
+const tmpPoint = new Vector3();
+const tmpNoise = new Vector3();
+const tmpView = new Vector3();
 
 class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
     public emitter: BeamEmitter = null;

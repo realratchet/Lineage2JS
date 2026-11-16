@@ -15,7 +15,7 @@ export class AmbientSoundComponent extends ObjectComponent<SectorObject> {
         this.info = info;
     }
 
-    public get dataUri(): string { return this.getParent().getSoundUri(this.info.soundName); }
+    public get soundData(): Uint8Array | Blob { return this.getParent().getSoundData(this.info.soundName); }
 
     public onAttach(): void { this.audioManager.registerAmbientSound(this); }
     public onDetach(): void { this.audioManager.unregisterAmbientSound(this); }

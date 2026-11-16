@@ -4,16 +4,16 @@ import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, BufferGeometry, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from "three";
 import MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
-import buildTriangleIndex from "../physics/triangle-index";
+import buildTriangleIndex, { prepareTriangleIndex } from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
 import StaticMeshActor from "./static-mesh-actor";
-import Actor from "./actor";
+import Actor, { type StepSoundData_T } from "./actor";
 import type BaseActor from "../base-actor";
 import type { default as UnScriptVM, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import { ScriptComponent, type ScriptObjectFactory_T } from "../game/script-component";
-import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import { setScriptObjectProperty } from "./actor-properties";
 import { releaseTouching, type TouchActor_T, type TransformComponent } from "./components/transform-component";
 
 const tmpPosition = new Vector3();
@@ -69,7 +69,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
         this.collisionProfile = props.collision && { ...props.collision };
         this.staticMeshCollision = props.staticMeshCollision;
-        this.collisionIndex = props.collisionIndex;
+        this.collisionIndex = prepareTriangleIndex(props.collisionIndex);
 
         if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)
             this.makeCollider(props.colliderIndices, props.geometry.getAttribute("position").array as Float32Array);
@@ -78,22 +78,37 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.addComponent(new ColliderComponent());
     }
 
-    public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"], source: Uint32Array): void {
+    public *setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"], source: Uint32Array): Generator<void, void> {
         const vertices = this.geometry.getAttribute("position").array as Float32Array;
-        let indexOffset = 0;
+        const triangleBounds = this.colliderIndices === source ? this.collisionIndex?.triangleBounds : null;
+        let indexOffset = 0, yieldOffset = 0;
 
         for (const record of this.collisionActors) if (record.object) record.object.release();
         this.collisionActors.length = 0;
         this.hasChangedCollisionActors = false;
-        for (const { actor, indexCount } of actors) {
+        for (const { actor, indexCount, collisionIndex, staticMeshCollision } of actors) {
             if (!Number.isSafeInteger(indexCount) || indexCount <= 0 || indexCount % 3 || !source || indexOffset + indexCount > source.length) throw new Error(`Actor '${actor.name}' has invalid collision triangles.`);
+            if (indexCount >= 384 && !collisionIndex) throw new Error(`Actor '${actor.name}' has no collision triangle index.`);
+            prepareTriangleIndex(collisionIndex);
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
+            if (collisionIndex && triangleBounds) collisionIndex.triangleBounds = triangleBounds.subarray(indexOffset * 2, (indexOffset + indexCount) * 2);
 
             const bounds = new Box3();
-            for (const index of indices) bounds.expandByPoint(tmpPosition.fromArray(vertices, index * 3));
+            let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            for (let i = 0; i < indices.length; i++) {
+                const offset = indices[i] * 3, x = vertices[offset], y = vertices[offset + 1], z = vertices[offset + 2];
+                minX = Math.min(minX, x); minY = Math.min(minY, y); minZ = Math.min(minZ, z);
+                maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
+            }
+            bounds.min.set(minX, minY, minZ);
+            bounds.max.set(maxX, maxY, maxZ);
 
-            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: indices.length < 384 ? null : buildTriangleIndex(vertices, indices), matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
+            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, materialIndices: staticMeshCollision?.materialIndices, materials: staticMeshCollision?.materials, defaultMaterial: staticMeshCollision?.defaultMaterial, collisionNodes: null, collisionBounds: null, index: collisionIndex, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
             indexOffset += indices.length;
+            if (indexOffset - yieldOffset < 32768) continue;
+
+            yieldOffset = indexOffset;
+            yield;
         }
 
         this.collisionActorCells = null;
@@ -208,12 +223,13 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
 
             this.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
-            return;
+            return undefined;
         }
 
         return Actor.prototype.callUnrealNative.call(this, call);
     }
     public getBaseActor(): ICollidable | null { return Actor.prototype.getBaseActor.call(this); }
+    public getStepSoundData(): StepSoundData_T | null { return Actor.prototype.getStepSoundData.call(this); }
     public setBase(actor: ICollidable | null): void {
         if (this.getComponent<TransformComponent>("transform").setBase(actor)) setScriptObjectProperty(this, "Base", actor as any);
     }
@@ -323,11 +339,14 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         } else {
             this.analyticalPrimitive = {
                 kind: "staticMesh",
+                materialIndices: this.staticMeshCollision?.materialIndices,
+                materials: this.staticMeshCollision?.materials,
+                defaultMaterial: this.staticMeshCollision?.defaultMaterial,
                 vertices: this.colliderVertices,
                 indices: this.colliderIndices,
                 collisionNodes: this.collisionNodes,
                 collisionBounds: this.collisionBounds,
-                index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices)),
+                index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices, true)),
                 collisionModel,
                 useSimpleLineCollision: !!collisionModel && this.staticMeshCollision.useSimpleLineCollision,
                 useSimpleBoxCollision: !!collisionModel && this.staticMeshCollision.useSimpleBoxCollision,

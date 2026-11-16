@@ -3,27 +3,27 @@ import { LightEffect_T } from "./un-light";
 import type { FVector } from "./un-vector";
 import type { FColor } from "./un-color";
 
-export function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): FColor {
+export function sampleLightColor(_light: any, _sampPosition /* param_1 */: FVector, _sampNormal /* param_2 */: FVector): FColor {
     return null;
 }
 
 export function sampleLightIntensity(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
     let lightEffect: LightEffect_T; // char
-    let fVar2: number; // float
-    let fVar3: number; // float10
-    let fVar4: number; // float
-    let fVar5: number; // float
-    let dVar6: number; // double
-    let in_stack_00000005: any = null; // undefined3
-    let in_stack_00000009: any = null; // undefined3
-    let in_stack_0000000c: number; // float
-    let in_stack_00000010: number; // float
-    let in_stack_00000014: number; // float
-    let in_stack_00000018: number; // float
-    let fVar7: number; // float
-    let fStack20: number; // float
-    let fStack16: number; // float
-    let fStack12: number; // float
+    // let fVar2: number; // float
+    // let fVar3: number; // float10
+    // let fVar4: number; // float
+    // let fVar5: number; // float
+    // let dVar6: number; // double
+    // let in_stack_00000005: any = null; // undefined3
+    // let in_stack_00000009: any = null; // undefined3
+    // let in_stack_0000000c: number; // float
+    // let in_stack_00000010: number; // float
+    // let in_stack_00000014: number; // float
+    // let in_stack_00000018: number; // float
+    // let fVar7: number; // float
+    // let fStack20: number; // float
+    // let fStack16: number; // float
+    // let fStack12: number; // float
 
     lightEffect = light.lightEffect;
 

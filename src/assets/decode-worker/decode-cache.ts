@@ -1,45 +1,18 @@
-import { FORMAT_VERSION, serializeLibrary, serializeLibraryBlob, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
+import { serializeLibraryBlob, serializeLibraryParts, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type LibraryBytes_T, type SeekableLibrary_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
-import { getAssetSourceId } from "../asset-source";
 import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
+import { restorePackageAssets } from "./package-cache";
 import requestWebLock from "../web-lock";
-
-const CACHE_TTL_DAYS = 7;
-const CACHE_DIR = "decode-cache";
-const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
-
-export function isCacheEnabled(settings: LoadSettings_T): boolean {
-    return !!globalThis.isSecureContext && !!navigator.storage?.getDirectory && (settings.cache === false ? false : settings.cache?.enabled ?? true);
-}
-
-function getCacheVersion(settings: LoadSettings_T): number {
-    return settings.cache === false ? 0 : settings.cache?.version ?? 0;
-}
-
-function hashSettings(settings: LoadSettings_T): string {
-    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
-    let hash = 5381;
-
-    for (let i = 0; i < json.length; i++)
-        hash = ((hash * 33) ^ json.charCodeAt(i)) >>> 0;
-
-    return hash.toString(16).padStart(8, "0");
-}
+import { startLoadingStep } from "../../loading-profile";
+import { isFirefox } from "../../browser";
+import { CACHE_TTL_MS, isCacheEnabled, getCacheVersion, hashSettings, getCacheDir, writeCacheBytes } from "./cache-storage";
 
 function isAssetCatalog(sectorName: string): boolean {
-    return ["npc_runtime", "skill_visuals", "effect_templates", "character_effects", "character_sounds", "character_equipment"].includes(sectorName);
+    return ["npc_runtime", "skill_visuals", "effect_templates", "character_effects", "character_sounds", "character_equipment", "character_parts"].includes(sectorName);
 }
 
 function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
-    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${isAssetCatalog(sectorName) ? ".a1" : ""}.bin`;
-}
-
-async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
-    const root = await navigator.storage.getDirectory();
-
-    const dir = await root.getDirectoryHandle(CACHE_DIR, { create });
-
-    return dir.getDirectoryHandle(getAssetSourceId(), { create });
+    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${isAssetCatalog(sectorName) ? ".a1" : /^\d+_\d+$/.test(sectorName) ? ".p1" : ""}.bin`;
 }
 
 async function getCachedFile(sectorName: string, settings: LoadSettings_T): Promise<File | null> {
@@ -86,7 +59,7 @@ export async function loadCachedLibrary(sectorName: string, settings: LoadSettin
     }
 }
 
-export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
+export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T, preparePackageAsset: (value: any, name: string, uuid: string) => any = null): Promise<SeekableLibrary_T | null> {
     if (!isCacheEnabled(settings)) return null;
 
     return requestWebLock(cacheFileName(sectorName, settings), async () => {
@@ -95,7 +68,10 @@ export async function openCachedLibrary(sectorName: string, settings: LoadSettin
         if (!file) return null;
 
         try {
-            return isAssetCatalog(sectorName) ? await openAssetCatalog(file) : await openLibraryFile(file);
+            const seekable = isAssetCatalog(sectorName) ? await openAssetCatalog(file) : await openLibraryFile(file);
+            seekable.packageBuffers = new Set();
+            if (!await restorePackageAssets(seekable.library, settings, preparePackageAsset, seekable.packageBuffers)) return null;
+            return seekable;
         } catch (e) {
             if (isAssetCatalog(sectorName)) {
                 const dir = await getCacheDir(false);
@@ -124,40 +100,30 @@ export async function readCachedLibrary<T>(sectorName: string, settings: LoadSet
     }, { mode: "shared" });
 }
 
-export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
-    if (!isCacheEnabled(settings)) return;
-
-    let bytes: Uint8Array;
-
-    try {
-        bytes = serializeLibrary(library);
-    } catch (e) {
-        console.warn(`[decode-cache] sector '${sectorName}' is not cacheable:`, e);
-        return;
-    }
-
-    void writeCacheFileSafe(cacheFileName(sectorName, settings), sectorName, bytes);
-}
-
 export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any, seekable: SeekableLibrary_T = null): Promise<number> {
     if (!isCacheEnabled(settings)) return 0;
+    const finish = startLoadingStep("cache", sectorName);
+    try {
 
-    if (isAssetCatalog(sectorName)) {
-        const dir = await getCacheDir(true);
-        const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
+        if (isAssetCatalog(sectorName)) {
+            const dir = await getCacheDir(true);
+            const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
 
-        return requestWebLock(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
+            return await requestWebLock(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
+        }
+
+        return await requestWebLock(cacheFileName(sectorName, settings), async () => {
+            if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
+
+            const bytes = isFirefox ? serializeLibraryParts(library, seekable) : serializeLibraryBlob(library, seekable);
+
+            await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
+
+            return bytes instanceof Blob ? bytes.size : bytes.byteLength;
+        });
+    } finally {
+        finish();
     }
-
-    return requestWebLock(cacheFileName(sectorName, settings), async () => {
-        if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
-
-        const bytes = serializeLibraryBlob(library, seekable);
-
-        await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
-
-        return bytes.size;
-    });
 }
 
 export async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
@@ -166,7 +132,7 @@ export async function storeCachedLibraryBufferDurable(sectorName: string, settin
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
 }
 
-async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array | Blob, seekable: SeekableLibrary_T = null): Promise<void> {
+async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array | Blob | LibraryBytes_T, seekable: SeekableLibrary_T = null): Promise<void> {
     const dir = await getCacheDir(true);
     const temporaryName = `${fileName}.tmp`;
 
@@ -174,7 +140,7 @@ async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8
         const temporary = await dir.getFileHandle(temporaryName, { create: true });
         const writable = await temporary.createWritable();
 
-        await writable.write(bytes);
+        await writeCacheBytes(writable, bytes);
         await writable.close();
         if (typeof (temporary as any).move === "function") {
             await (temporary as any).move(fileName);
@@ -186,19 +152,11 @@ async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8
     const handle = await dir.getFileHandle(fileName, { create: true });
     const writable = await handle.createWritable();
 
-    await writable.write(bytes);
+    await writeCacheBytes(writable, bytes);
     await writable.close();
     if (seekable) await dir.removeEntry(temporaryName);
 
-    console.log(`[decode-cache] cached sector '${sectorName}' (${((bytes instanceof Blob ? bytes.size : bytes.length) / 1024 / 1024).toFixed(1)} MB)`);
-}
-
-async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
-    try {
-        await writeCacheFile(fileName, sectorName, bytes);
-    } catch (e) {
-        console.warn(`[decode-cache] failed to write cached sector '${sectorName}':`, e);
-    }
+    console.log(`[decode-cache] cached sector '${sectorName}' (${((bytes instanceof Blob ? bytes.size : bytes.byteLength) / 1024 / 1024).toFixed(1)} MB)`);
 }
 
 export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
@@ -230,30 +188,4 @@ export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> 
 
     if (doomed.length > 0)
         console.log(`[decode-cache] swept ${doomed.length} cache entries`);
-}
-
-// Blob URLs are scoped to the thread owning the library, minted on first read so loading never pays for unplayed sounds.
-export function refreshSoundBlobUris(library: any): void {
-    const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string }>;
-
-    if (!soundCache) return;
-
-    for (const entry of soundCache.values()) {
-        if (!entry?.data) continue;
-
-        if (entry.uri) URL.revokeObjectURL(entry.uri);
-
-        let uri: string = null;
-
-        Object.defineProperty(entry, "uri", { configurable: true, enumerable: true, get: () => uri ?? (uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }))), set: (value: string) => { uri = value; } });
-        Object.defineProperty(entry, "mintedUri", { configurable: true, get: () => uri });
-    }
-}
-
-export function getMintedSoundUri(entry: any): string | null { return "mintedUri" in entry ? entry.mintedUri : entry.uri || null; }
-
-export function revokeSoundUri(entry: any): void {
-    const uri = getMintedSoundUri(entry);
-
-    if (uri) URL.revokeObjectURL(uri);
 }

@@ -1,10 +1,9 @@
 import { generateUUID } from "three/src/math/MathUtils";
 import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
-import UObject from "../un-object";
 import decompressDDS from "../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
-import type { ITextureDecodeInfo, DecodableTexture_T } from "../un-texture";
+import type { ITextureDecodeInfo, DecodableTexture_T, TextureClampMode_T } from "../un-texture";
 
 export class FStaticLightmapTexture implements Constructable_T {
     public data = new FPrimitiveArrayLazy(BufferValue.uint8);
@@ -55,7 +54,7 @@ export class FStaticLightmapTexture implements Constructable_T {
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
-        const wrapS = 1024, wrapT = wrapS;
+        const wrapS: TextureClampMode_T = "wrap", wrapT = wrapS;
 
         return {
             materialType: "texture",

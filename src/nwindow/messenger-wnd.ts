@@ -83,7 +83,14 @@ export class MessengerWnd {
         this.info.hidden = true;
         layer.tile(this.info, 0, 0, 256, 353, 0, 0, 256, 353, TEX_LOGIN);
         // NWindow 0x10156720: English strings at global string-table +0x8186c/+0x8189c/+0x818cc.
-        layer.wrappedText(this.info, 18, 44, 0xffdcdcdc, "For full functionality, the latest version of MSN Messenger client must be installed on the user's computer.\n\n\nPrevious versions of MSN Messenger only provide the basic features to chat in the game. Add/Delete Contacts and other options aren't available.\n\n\nThe latest version of MSN Messenger may be obtained from the MSN web site (http://messenger.msn.com).", 220);
+        layer.wrappedText(
+            this.info,
+            18,
+            44,
+            0xffdcdcdc,
+            "For full functionality, the latest version of MSN Messenger client must be installed on the user's computer.\n\n\nPrevious versions of MSN Messenger only provide the basic features to chat in the game. Add/Delete Contacts and other options aren't available.\n\n\nThe latest version of MSN Messenger may be obtained from the MSN web site (http://messenger.msn.com).",
+            220
+        );
         layer.button(this.info, 79, 274, 96, 23, TEX_BACK_BUTTON, `${TEX_BACK_BUTTON}_down`, null, manager.getSysString(SysString_T.BackToFriends), () => {
             this.info.hidden = true;
             this.login.hidden = false;
@@ -115,7 +122,7 @@ export class MessengerWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 384, 180); }
+    public placeOnScreen(_width: number, _height: number) { this.layer.place(this.element, 384, 180); }
     public isVisible() { return !this.element.hidden; }
     public setFriends(friends: FriendEntry_T[]) { this.arrFriends = friends; this.tree.setFriends(friends); }
     public setPlayerName(name: string) { this.playerName = name; }
@@ -186,7 +193,7 @@ export class MessengerWnd {
         } finally { this.clearLogin(); }
     }
 
-    protected loginMsn(email: string, password: string) {
+    protected loginMsn(_email: string, _password: string) {
         debugger;
         throw new Error(`MSN Messenger login is not implemented.`);
     }

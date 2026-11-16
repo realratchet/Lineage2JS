@@ -1,5 +1,5 @@
 import DecodeWorkerClient from "../assets/decode-worker/decode-worker-client";
-import { revokeSoundUri } from "../assets/decode-worker/decode-cache";
+import { revokeSoundUri } from "../assets/sound-uris";
 import type DecodeLibrary from "../assets/unreal/decode-library";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";
@@ -59,7 +59,16 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 
         if (preload) this.cacheNpcPreloads.delete(npcId);
 
-        return this.consumeSkeletalMesh(preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment), settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
+        return this.consumeSkeletalMesh(
+            preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment),
+            settings,
+            packageName,
+            meshName,
+            scriptClassPath,
+            texturePaths,
+            npcId,
+            equipment
+        );
     }
 
     // animations travel only with the first decode of a set, and only a consumed library reaches decodeObject3D's cache

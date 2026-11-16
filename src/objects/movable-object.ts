@@ -1,6 +1,7 @@
 import { RigidBodyDesc } from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import type BaseActor from "../base-actor";
+import type { ScriptComponent } from "../game/script-component";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
@@ -10,6 +11,7 @@ import { pointPrimitive } from "../physics/collision-primitive";
 import { MoverComponent } from "../physics/components/physics-component";
 import type { SectorObject } from "./zone-object";
 import type { IMoverDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { Vector3Arr } from "@l2js/engine";
 
 const frozenUpdateMatrixWorld = function () { };
 const tmpOldPosition = new Vector3();
@@ -56,7 +58,7 @@ export class MovableObject extends CollidingMesh {
             case 3970:
                 if (call.args[0] !== EPhysics_T.PHYS_MovingBrush) throw new Error(`Mover physics '${call.args[0]}' is not implemented.`);
                 this.setUnrealScriptProperty("Physics", call.args[0]);
-                return;
+                return undefined;
             case 266: {
                 const delta = call.args[0] as number[];
 
@@ -172,6 +174,11 @@ export class MovableObject extends CollidingMesh {
         this.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
     }
 
+    public getEffectTargetLocation(target: Vector3): Vector3 {
+        this.getComponent<ScriptComponent>("script").call("GetEffTargetLocation", [{ get: () => target.toArray(), set: (value: ScriptValue_T) => target.fromArray(value as Vector3Arr) } as any]);
+        return target;
+    }
+
     public isServerControlled(): boolean { return (this.getUnrealScriptProperty("L2ServerObjectRealID") as number) > 0; }
 
     public initializeMover(): void {
@@ -211,7 +218,9 @@ export class MovableObject extends CollidingMesh {
             } else remaining = 0;
 
             const blend = this.mover.isGliding ? Math.fround(3 * nextAlpha * nextAlpha - 2 * nextAlpha * nextAlpha * nextAlpha) : nextAlpha;
-            const key = this.getUnrealScriptProperty("KeyNum") as number, oldPos = this.getUnrealScriptProperty("OldPos") as number[], oldRot = this.getUnrealScriptProperty("OldRot") as number[];
+            const key = this.getUnrealScriptProperty("KeyNum") as number;
+            const oldPos = this.getUnrealScriptProperty("OldPos") as number[];
+            const oldRot = this.getUnrealScriptProperty("OldRot") as number[];
             const baseRot = this.getUnrealScriptProperty("BaseRot") as number[], keyRot = (this.getUnrealScriptProperty("KeyRot") as number[][])[key];
             const basePos = this.getUnrealScriptProperty("BasePos") as number[], target = (this.getUnrealScriptProperty("KeyPos") as number[][])[key];
 
@@ -222,7 +231,11 @@ export class MovableObject extends CollidingMesh {
 
             for (let i = 0; i < 3; i++) tmpPreviousRotation[i] = rotation[i];
             this.unfreezeMover();
-            this.position.set(Math.fround(oldPos[0] + Math.fround((Math.fround(basePos[0] + target[0]) - oldPos[0]) * blend)), Math.fround(oldPos[1] + Math.fround((Math.fround(basePos[1] + target[1]) - oldPos[1]) * blend)), Math.fround(oldPos[2] + Math.fround((Math.fround(basePos[2] + target[2]) - oldPos[2]) * blend)));
+            this.position.set(
+                Math.fround(oldPos[0] + Math.fround((Math.fround(basePos[0] + target[0]) - oldPos[0]) * blend)),
+                Math.fround(oldPos[1] + Math.fround((Math.fround(basePos[1] + target[1]) - oldPos[1]) * blend)),
+                Math.fround(oldPos[2] + Math.fround((Math.fround(basePos[2] + target[2]) - oldPos[2]) * blend))
+            );
             for (let i = 0; i < 3; i++) tmpRotation[i] = oldRot[i] + (Math.fround(((baseRot[i] + keyRot[i] - oldRot[i]) | 0) * blend) | 0) | 0;
             this.setRotation(tmpRotation);
             this.syncCollisionTransform();

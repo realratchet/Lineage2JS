@@ -1,5 +1,7 @@
+import TexOscillatorTriggered from "../../materials/mesh-static-material/tex-oscillator-triggered";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
-import _decodeTexture, { copyTextureFiltering, copyTextureLOD, updateTextureFiltering } from "./texture-decoder";
+import _decodeTexture from "./texture-decoder";
+import { copyTextureFiltering, copyTextureLOD, updateTextureFiltering } from "../../materials/texture-settings";
 import { restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import { Color, CompressedCubeTexture, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
@@ -43,7 +45,7 @@ const cacheStaticMaterialsByName = new Map<string, WeakCacheEntry_T<Map<string, 
 const canonicalStaticMaterials = new Map<string, WeakCacheEntry_T<THREE.Material>>();
 const dynamicUniformNames = new Set([
     "ambientLightColor", "cameraBillboardRight", "cameraBillboardUp", "directionalLights",
-    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTimeSeconds",
+    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTimeSeconds", "levelTimeSeconds",
     "hemisphereLights", "ltc_1", "ltc_2", "pointLights", "pointLightShadows", "rectAreaLights",
     "spotLights", "spotLightShadows"
 ]);
@@ -245,7 +247,7 @@ function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | nul
     };
 }
 
-function decodeFadeColorModifier(library: DecodeLibrary, info: MaterialContracts.IFadeColorDecodeInfo): MaterialContracts.IDecodedParameter {
+function decodeFadeColorModifier(_library: DecodeLibrary, info: MaterialContracts.IFadeColorDecodeInfo): MaterialContracts.IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
     const period = info.fadeColors.period;
@@ -364,7 +366,10 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: MaterialContra
                 typeU: info.transform.typeU === "pan" ? 0 : info.transform.typeU === "stretch" ? 1 : info.transform.typeU === "stretchRepeat" ? 2 : 3,
                 typeV: info.transform.typeV === "pan" ? 0 : info.transform.typeV === "stretch" ? 1 : info.transform.typeV === "stretchRepeat" ? 2 : 3,
                 offsetU: info.transform.offsetU,
-                offsetV: info.transform.offsetV
+                offsetV: info.transform.offsetV,
+                useLocalTime: !!info.transform.triggered,
+                timeSeconds: 0,
+                triggered: info.transform.triggered ? new TexOscillatorTriggered(info.transform.triggered.path, info.transform.triggered.properties, info.transform.rateU, info.transform.rateV) : null
             },
             innerTransforms: resolved.innerTransforms,
             numInnerTransforms: resolved.innerTransforms.length
@@ -535,6 +540,7 @@ function decodeCombiner(library: DecodeLibrary, info: MaterialContracts.ICombine
             material1,
             material2,
             invertMask: info.invertMask,
+            maskIsVertexColor: info.maskIsVertexColor,
             alphaFrom1: info.alphaFrom1,
             alphaFrom2: info.alphaFrom2
         }
@@ -589,7 +595,15 @@ function decodeShader(library: DecodeLibrary, info: MaterialContracts.IShaderDec
         modulateStaticLighting2X: info.modulateStaticLighting2X,
         modulateSpecular2X: info.modulateSpecular2X,
         selfIllumination: useSelfIllumination,
-        combiner: combiner?.materialType === "combiner" && !combiner.mask ? { combineMode: combiner.combineMode, material1: diffuse, material2: decodeParameter(library, library.materials[combiner.material2]), invertMask: combiner.invertMask, alphaFrom1: combiner.alphaFrom1, alphaFrom2: combiner.alphaFrom2 } : null
+        combiner: combiner?.materialType === "combiner" && !combiner.mask ? {
+            maskIsVertexColor: combiner.maskIsVertexColor,
+            combineMode: combiner.combineMode,
+            material1: diffuse,
+            material2: decodeParameter(library, library.materials[combiner.material2]),
+            invertMask: combiner.invertMask,
+            alphaFrom1: combiner.alphaFrom1,
+            alphaFrom2: combiner.alphaFrom2
+        } : null
     });
 }
 
@@ -672,9 +686,11 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IMaterialTerrainSegm
     return MeshTerrainMaterial.create({
         uvs,
         layers: terrainMaterial.layers.map(({ map, alphaMap }) => {
+            const texture = map ? library.materials[map] as ITextureDecodeInfo : null;
             return {
-                map: map ? decodeParameter(library, library.materials[map]) : null,
-                alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
+                map: texture ? decodeParameter(library, texture) : null,
+                alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null,
+                transparent: !!(texture && (texture.isAlphaTexture || texture.isMasked))
             };
         })
     });
@@ -696,14 +712,14 @@ function decodeLightmapped(library: DecodeLibrary, info: MaterialContracts.ILigh
         .setLightmap(info.lightmaps.map(uuid => fetchTexture(library, library.materials[uuid] as ITextureDecodeInfo)));
 }
 
-function applyModAmbient(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: MaterialContracts.ILightAmbientMaterialModifier) {
+function applyModAmbient(_library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: MaterialContracts.ILightAmbientMaterialModifier) {
     material.enableAmbient({
         vector: new Color().fromArray(color),
         brightness
     });
 }
 
-function applyModDirectional(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness, direction }: MaterialContracts.ILightDirectionalMaterialModifier) {
+function applyModDirectional(_library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness, direction }: MaterialContracts.ILightDirectionalMaterialModifier) {
     material.enableDirectionalAmbient({
         vector: new Color().fromArray(color),
         direction: new Vector3().fromArray(direction),
@@ -737,7 +753,7 @@ function decodeInstancedMaterial(library: DecodeLibrary, info: IMaterialInstance
     return materials;
 }
 
-function decodeSolidColor(library: DecodeLibrary, info: MaterialContracts.ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
+function decodeSolidColor(_library: DecodeLibrary, info: MaterialContracts.ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
     return new MeshBasicMaterial({
         color: info["solidColor"]
     });

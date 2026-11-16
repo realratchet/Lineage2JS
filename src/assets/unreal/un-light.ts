@@ -1,8 +1,9 @@
 import hsvToRgb, { saturationToBrightness } from "./utils/hsv-to-rgb";
-import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
+import { generateUUID } from "three/src/math/MathUtils";
 import UAActor, { type IEdgesObjectDecodeInfo } from "./un-aactor";
 import FVector from "./un-vector";
 import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
+import type { ISunLightDecodeInfo } from "./un-movable-sunlight";
 
 export type ILightDecodeInfo = IBaseObjectDecodeInfo & {
     type: "Light",
@@ -147,7 +148,7 @@ export abstract class ULight extends UAActor {
         return [x * brightness, y * brightness, z * brightness];
     }
 
-    public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
+    public getDecodeInfo(_library: DecodeLibrary): ILightDecodeInfo | ISunLightDecodeInfo {
         // debugger;
 
         return {
@@ -214,67 +215,67 @@ export enum LightType_T {
 
 export default ULight;
 
-function LODWORD(x: number) { return x & 0xFFFFFFFF };
+// function LODWORD(x: number) { return x & 0xFFFFFFFF };
 
-function __CFADD__(x: number, y: number) {
-    return Number(x > (x + y));
-}
+// function __CFADD__(x: number, y: number) {
+    // return Number(x > (x + y));
+// }
 
-function f2i(v: number) { return new Uint32Array(new Float32Array([v]).buffer)[0]; }
-function i2f(v: number) { return new Float32Array(new Uint32Array([v]).buffer)[0]; }
+// function f2i(v: number) { return new Uint32Array(new Float32Array([v]).buffer)[0]; }
+// function i2f(v: number) { return new Float32Array(new Uint32Array([v]).buffer)[0]; }
 
-function ftol2(a1: number) {
-    // let b = Math.ceil(a);
+// function ftol2(a1: number) {
+    // // let b = Math.ceil(a);
 
-    // if (isFinite(b) && b !== 0) {
-    //     let c = a - b;
+    // // if (isFinite(b) && b !== 0) {
+    // //     let c = a - b;
 
-    //     if (c >= 0) {
-    //         debugger;
-    //     } else {
-    //         let d = f2i(c);
-    //         let e = (d + 0x7FFFFFFF)/* - 1*/;
-    //         let carry = Number(new Uint32Array([e])[0] < e);
+    // //     if (c >= 0) {
+    // //         debugger;
+    // //     } else {
+    // //         let d = f2i(c);
+    // //         let e = (d + 0x7FFFFFFF)/* - 1*/;
+    // //         let carry = Number(new Uint32Array([e])[0] < e);
 
-    //         if (!carry)
-    //             debugger;
+    // //         if (!carry)
+    // //             debugger;
 
-    //         return b - carry;
-    //     }
-    // } else {
-    //     debugger;
-    // }
+    // //         return b - carry;
+    // //     }
+    // // } else {
+    // //     debugger;
+    // // }
 
 
-    let a = Math.trunc(a1);
-    let v1 = a;
-    let result = Math.trunc(a1);
-    if (result || (v1 = Math.trunc(a1) >> 32, (v1 & 0x7FFFFFFF) != 0)) {
-        if (v1 >= 0) {
+    // let a = Math.trunc(a1);
+    // let v1 = a;
+    // let result = Math.trunc(a1);
+    // if (result || (v1 = Math.trunc(a1) >> 32, (v1 & 0x7FFFFFFF) != 0)) {
+        // if (v1 >= 0) {
+            // // debugger;
+            // let c = a1 - Math.trunc(a1);
+            // let dwc = f2i(c);
+            // let carry = __CFADD__(LODWORD(dwc), 0x7FFFFFFF);
+
+            // if (carry > 0)
+                // debugger;
+
+            // result = result - carry;
+        // } else {
             // debugger;
-            let c = a1 - Math.trunc(a1);
-            let dwc = f2i(c);
-            let carry = __CFADD__(LODWORD(dwc), 0x7FFFFFFF);
+            // // return (__PAIR64__(result, -(float)(a1 - (double)(__int64)a1)) + 0x7FFFFFFF) >> 32;
+        // }
+    // }
+    // return result;
+// }
 
-            if (carry > 0)
-                debugger;
+// function toSin(v: number) { return Math.sin((v + v) * 0.0001917475984857051); }
+// function toSqrt(v: number) { return Math.sqrt(v * 6.103516e-05); }
 
-            result = result - carry;
-        } else {
-            debugger;
-            // return (__PAIR64__(result, -(float)(a1 - (double)(__int64)a1)) + 0x7FFFFFFF) >> 32;
-        }
-    }
-    return result;
-}
+// const LUT_SIN = new Array(0x4000).fill(1).map((_, i) => toSin(i));
+// const LUT_SQRT = new Array(0x4000).fill(1).map((_, i) => toSqrt(i));
 
-function toSin(v: number) { return Math.sin((v + v) * 0.0001917475984857051); }
-function toSqrt(v: number) { return Math.sqrt(v * 6.103516e-05); }
-
-const LUT_SIN = new Array(0x4000).fill(1).map((_, i) => toSin(i));
-const LUT_SQRT = new Array(0x4000).fill(1).map((_, i) => toSqrt(i));
-
-const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
+// const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
 
 // debugger;
 

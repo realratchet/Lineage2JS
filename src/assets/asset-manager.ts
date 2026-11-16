@@ -1,5 +1,7 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
 import loginServer from "../network/login-server";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
+import { printLoadingProfile } from "../loading-profile";
 import decodeCursors from "./decoders/cursor-decoder";
 import UConfigBigHead from "./unreal/conf-files/un-conf-bighead";
 import fetchAssetHandle from "./unreal/asset-handle";
@@ -10,15 +12,17 @@ import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type { IScriptFieldDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
+import type { ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
 import { PropertyFlags_T } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { createSectorStaticMeshDecodeJob, decodeAnimations, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
+import { createSectorStaticMeshDecodeJob, decodeAnimations, decodeObject3D, decodePackage, decodeSectorCoreSteps, stepSectorStaticMeshDecodeJob } from "./decoders/object3d-decoder";
 import decodeEnv from "./decoders/env-decoder";
 import DecodeWorkerClient from "./decode-worker/decode-worker-client";
-import type { GameStrings_T, MatineeScene_T, PlayerSkillInfo_T, UITexture_T } from "./decode-worker/decode-protocol";
-import { refreshSoundBlobUris, revokeSoundUri } from "./decode-worker/decode-cache";
+import type { ClientConfig_T, GameStrings_T, MatineeScene_T, PlayerSkillInfo_T, UITexture_T } from "./decode-worker/decode-protocol";
+import { hasCachedLibrary } from "./decode-worker/decode-cache";
+import { refreshSoundBlobUris, revokeSoundUri } from "./sound-uris";
 import { AnimationClip, MathUtils, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM, { getProperty, type ScriptHost_T } from "../ue-script/vm";
@@ -50,10 +54,10 @@ const npcSpawnOffset = new Vector3(-600, -600, 0);
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
+const SECTOR_RETIRE_DELAY_MS = 1000; // prefetch reach follows frame time, uneven frames flicker the sector ahead
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
-const STATIC_MESH_BUILD_FRAME_MS = 2;
 const BIND_POSE_EPSILON = 1e-3;
 const NPC_SPAWN_FLOOR_DISTANCE = 2000;
 const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
@@ -68,7 +72,8 @@ const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
-type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, steps: Generator<void, void> };
+type BuildSteps_T = { steps: Generator<void, unknown>, resolve: (value: any) => void, reject: (error: unknown) => void };
 export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
 function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo | null {
@@ -198,7 +203,11 @@ async function loadCachedLibrary(cache: Map<string, CachedLibrary_T>, key: strin
 }
 
 function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
-    const library = Object.assign(Object.create(Object.getPrototypeOf(source)), source, { sourceLibrary: source, npcSkillAttacks: source.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })), soundBlobCache: new Map() });
+    const library = Object.assign(
+        Object.create(Object.getPrototypeOf(source)),
+        source,
+        { sourceLibrary: source, npcSkillAttacks: source.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })), soundBlobCache: new Map() }
+    );
 
     for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         library[key] = Object.assign({}, source[key]);
@@ -206,7 +215,7 @@ function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
     for (const [id, value] of Object.entries(source.materials)) {
         const material = Object.assign({}, value) as any;
 
-        if (material.materialType === "sprite") material.sprites = material.sprites.map(texture => Object.assign({}, texture));
+        if (material.materialType === "sprite") material.sprites = material.sprites.map((texture: ITextureDecodeInfo) => Object.assign({}, texture));
         library.materials[id] = material;
     }
 
@@ -228,7 +237,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected isWorkerReady = false;
     protected failedSectors = new Map<string, number>();
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>();
+    protected readonly arrRemovedSectors: SectorObject[] = [];
     protected inFlightSectors = new Map<string, number>();
+    protected readonly requiredSectors = new Set<string>();
     protected nextSectorRequest = 0;
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
@@ -239,6 +250,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
     protected charGroups: ICharacterGroup[] = null;
     protected characterPrecache: Promise<void> = null;
+    protected startupLevelLibrary: DecodeLibrary = null;
     protected effectLibrary: DecodeLibrary = null;
     protected arrCursors: string[] = [];
     protected cursorLoad: Promise<void> = null;
@@ -250,6 +262,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly pawnSkillRequests = new WeakMap<BaseActor, number>();
     protected readonly cacheSkillVisuals = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcLibraries = new Map<string, CachedLibrary_T>();
+    protected readonly cacheNpcVMs = new WeakMap<DecodeLibrary, Promise<UnScriptVM>>();
+    protected pawnBuildTick: Promise<void> = null;
+    protected readonly pendingBuildSteps: BuildSteps_T[] = [];
     protected readonly cacheCharacterLibraries = new Map<string, CachedLibrary_T>();
     protected readonly cacheCharacterScripts = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcs = new Map<string | number, Promise<INpcDefinition>>();
@@ -262,7 +277,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected gameManager: GameManager;
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
     public getParent(): GameManager { return this.gameManager; }
-    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length; }
+    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length + this.pendingBuildSteps.length; }
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
@@ -305,7 +320,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
                 progress.total++;
                 const sector = isCenter ? renderManager.getSector(position) : renderManager.getSectorByCoords(x, y);
-                const isWarm = sector && sector.staticMeshGroup && renderManager.isSectorWarm(sector);
+                const isWarm = sector && sector.hasFinishedLoading && renderManager.isSectorWarm(sector);
 
                 if (!isWarm && this.decodeWorker.isBuildingSector(`${x}_${y}`)) progress.building++;
 
@@ -320,7 +335,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return progress;
     }
 
-    public async onInit(): Promise<this> {
+    protected prepareDecodeWorker(): void {
         const manRender = this.getParent().getComponent("render");
         const textureMode = (this.loadSettings as any).textures ?? "auto";
 
@@ -330,7 +345,24 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
-        this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
+        this.decodeWorker = this.createDecodeWorker();
+        this.decodeWorker.waitFrame = () => this.isStreaming && this.gameManager.getCurrentTime() > 0 ? this.waitFrameBudget() : null;
+    }
+
+    protected createDecodeWorker(): DecodeWorkerClient { return new DecodeWorkerClient(this.decodeWorkerPoolSize); }
+
+    protected applyClientConfig(clientConfig: ClientConfig_T, charGroups: ICharacterGroup[]): void {
+        this.userConfig = clientConfig.userConfig;
+        this.warriorAnimations = clientConfig.warriorAnimations;
+        this.charGroups = charGroups;
+        this.getParent().getComponent("render").audioManager.setSubsystemConfig(this.userConfig.alAudio);
+    }
+
+    public async onInit(): Promise<this> {
+        const manRender = this.getParent().getComponent("render");
+
+        this.prepareDecodeWorker();
+        if (loginServer) setLoadingProgress(null, loadingTexts.gameDataWorkers(), true);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
@@ -338,22 +370,62 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (isLogin) setPawnComponents(manRender, new DecodeLibrary(), manRender.player);
 
-        const clientConfigLoad = this.decodeWorker.getClientConfig();
+        if (isLogin) void this.precacheCharacters();
+
+        const clientConfigLoad = this.decodeWorker.getClientConfig(this.loadSettings);
         const playerControllerLoad = (async () => {
             const [library, config] = await Promise.all([this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]), clientConfigLoad]);
 
-            UnScriptVM.setConfig(new ConfigCache(config.scriptConfig, "l2.ini", "user.ini", localStorage, `unrealConfig:${getAssetSourceId()}`));
-            return new PlayerController(library);
+            const scriptConfig = new ConfigCache(config.scriptConfig, "l2.ini", "user.ini", localStorage, `unrealConfig:${getAssetSourceId()}`);
+
+            UnScriptVM.setConfig(scriptConfig);
+            this.getParent().getComponent("input").initBindings(scriptConfig);
+            const controller = new PlayerController(library);
+            const inputClass = controller.scriptProperties.get("InputClass") as string;
+
+            if (!inputClass) throw new Error(`Player controller has no InputClass.`);
+            mergePawnLibrary(library, await this.decodeWorker.decodeScriptClass(this.loadSettings, inputClass));
+            controller.initInputSystem();
+            return controller;
         })();
-        const [clientConfig, charGroups, envInfo, musicInfo, characterLibrary, playerController, effectLibrary, skyLibrary] = await Promise.all([
-            clientConfigLoad,
-            this.decodeWorker.getCharGroups(),
-            this.decodeWorker.decodeEnv(),
-            this.decodeWorker.getMusicInfo(),
-            isLogin ? null : this.decodeWorker.decodeCharacter(this.loadSettings),
-            playerControllerLoad,
-            playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"], [controller.getUnderWaterLoopSound()], [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"])),
-            this.decodeWorker.decodeSector("skylevel", {
+        const arrPending = ["settings", "character data", "environment", "music", "player model", "player scripts", "effects", "sky", "game text", "login scene"];
+        if (isLogin) arrPending[4] = null;
+        const total = arrPending.filter(Boolean).length;
+        let completed = 0;
+        function updateProgress() {
+            if (isLogin) setLoadingProgress(null, loadingTexts.gameDataParts(completed, total, arrPending.filter(Boolean)), true);
+        }
+        async function loadStartup<T>(i: number, task: Promise<T>): Promise<T> {
+            const result = await task;
+
+            if (arrPending[i]) {
+                arrPending[i] = null;
+                completed++;
+                updateProgress();
+            }
+
+            return result;
+        }
+
+        updateProgress();
+        const startup = Promise.all([
+            loadStartup(0, clientConfigLoad),
+            loadStartup(1, this.decodeWorker.getCharGroups(this.loadSettings)),
+            loadStartup(2, this.decodeWorker.decodeEnv(this.loadSettings)),
+            loadStartup(3, this.decodeWorker.getMusicInfo()),
+            isLogin ? null : loadStartup(4, this.decodeWorker.decodeCharacter(this.loadSettings)),
+            loadStartup(5, playerControllerLoad),
+            loadStartup(6, (async () => {
+                const controller = await playerControllerLoad;
+
+                return await this.decodeWorker.decodeEffectTemplates(
+                    this.loadSettings,
+                    [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"],
+                    [controller.getUnderWaterLoopSound()],
+                    [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"]
+                );
+            })()),
+            loadStartup(7, this.decodeWorker.decodeSector("skylevel", {
                 ...this.loadSettings, isSkyLevel: true,
                 loadTerrain: true,
                 loadBaseModel: true,
@@ -362,22 +434,28 @@ export class AssetManager implements IEngineComponent<GameManager> {
                 loadStaticModelList: undefined,
                 loadAudio: false,
                 batching: { staticMeshes: false, terrain: false }
-            })
+            })),
+            isLogin ? loadStartup(8, this.decodeWorker.getGameStrings(this.loadSettings)) : null,
+            isLogin ? loadStartup(9, this.decodeWorker.decodeSector("lobby", this.loadSettings)) : null
         ]);
+
+        const [clientConfig, charGroups, envInfo, musicInfo, characterLibrary, playerController, effectLibrary, skyLibrary, gameStrings, startupLevelLibrary] = await startup;
+        printLoadingProfile(true);
+        if (isLogin) setLoadingProgress(null, loadingTexts.gameEffects(), true);
         const underwaterLoopSound = playerController.getUnderWaterLoopSound();
 
+        this.startupLevelLibrary = startupLevelLibrary;
+        if (gameStrings) this.gameStrings = gameStrings;
         UnScriptVM.setLocalization(clientConfig.scriptLocalization);
-        this.userConfig = clientConfig.userConfig;
         this.playerController = playerController;
         if ((playerController.scriptProperties.get("MinZoomingDist") as number) > (playerController.scriptProperties.get("MaxZoomingDist") as number)) throw new Error(`Invalid camera zoom limits.`);
         // The comparison client's User.ini allows 10000; stock C4 CABs restrict it to 250.
         playerController.scriptProperties.set("MaxZoomingDist", Math.max(10000, playerController.scriptProperties.get("MaxZoomingDist") as number));
+        this.applyClientConfig(clientConfig, charGroups);
         manRender.audioManager.setSoundVolume(this.userConfig.audio.soundVolume);
         manRender.audioManager.setMusicVolume(this.userConfig.audio.musicVolume);
         manRender.audioManager.setWavVoiceVolume(this.userConfig.audio.wavVoiceVolume);
         manRender.audioManager.setOggVoiceVolume(this.userConfig.audio.oggVoiceVolume);
-        this.warriorAnimations = clientConfig.warriorAnimations;
-        this.charGroups = charGroups;
 
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
@@ -652,7 +730,18 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected async getCharacterLibrary(charIndex: number, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
-        const key = JSON.stringify([charIndex, faceVariant, hairVariant, hairColour, armor.chest, armor.legs, armor.gloves, armor.boots, equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel], this.loadSettings.rgbaTextures !== false]);
+        const key = JSON.stringify([
+            charIndex,
+            faceVariant,
+            hairVariant,
+            hairColour,
+            armor.chest,
+            armor.legs,
+            armor.gloves,
+            armor.boots,
+            equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel],
+            this.loadSettings.rgbaTextures !== false
+        ]);
 
         return copyPawnLibrary(await loadCachedLibrary(this.cacheCharacterLibraries, key, () => this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor, equipment)));
     }
@@ -679,6 +768,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         attack.attack(target, attack.addSkill(previewRange === undefined ? skill : { ...skill, castRange: previewRange }), [], [target]);
     }
+
+    public getPawnLibrary(actor: BaseActor): DecodeLibrary { return this.pawnLibraries.get(actor); }
 
     public async loadPawnSkill(actor: BaseActor, id: number, level: number, isTransient: boolean = false) {
         const pawnLibrary = this.pawnLibraries.get(actor);
@@ -740,7 +831,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const { id, level } = record;
         const key = record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name, record.castStyle === 0]) : record.visualEffect.toLowerCase();
 
-        if (urgent || !this.cacheSkillVisuals.has(key)) this.cacheSkillVisuals.set(key, this.decodeWorker.decodeSkill(this.loadSettings, id, level, urgent, Object.assign({}, record, { visual: null, assets: undefined })));
+        if (urgent || !this.cacheSkillVisuals.has(key))
+            this.cacheSkillVisuals.set(key, this.decodeWorker.decodeSkill(this.loadSettings, id, level, urgent, Object.assign({}, record, { visual: null, assets: undefined })));
 
         const library = await this.cacheSkillVisuals.get(key), prepared = library.npcSkillAttacks[0];
 
@@ -761,9 +853,38 @@ export class AssetManager implements IEngineComponent<GameManager> {
         actor.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
     }
 
+    protected async waitFrameBudget(): Promise<number> {
+        await this.gameManager.getComponent("network").waitNextTick();
+
+        return this.gameManager.getBackgroundBudget();
+    }
+
+    protected async waitPawnBuild(): Promise<void> {
+        const network = this.gameManager.getComponent("network");
+
+        if (!this.isStreaming || this.gameManager.getCurrentTime() <= 0 || network.isWorldLoading()) return new Promise<void>(resolve => setTimeout(resolve, 0));
+
+        while (this.pawnBuildTick === network.waitNextTick()) await this.pawnBuildTick;
+
+        this.pawnBuildTick = network.waitNextTick();
+    }
+
+    protected async loadNpcVM(source: DecodeLibrary): Promise<UnScriptVM> {
+        await this.waitPawnBuild();
+
+        if (!this.isStreaming || this.gameManager.getCurrentTime() <= 0) return new UnScriptVM(source);
+
+        const vm = new UnScriptVM(source, true);
+
+        await this.runBuildSteps(vm.loadSteps()); // 12 ms in one frame otherwise, the first time an npc type shows up
+        return vm;
+    }
+
     public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: INpcEquipment | null = null, preloadSkills: boolean = true) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
-        const libraryPromise = npcId === null ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment) : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
+        const libraryPromise = npcId === null
+            ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment)
+            : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
         const [library, localization] = await Promise.all([libraryPromise, localizationPromise]);
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();
@@ -771,10 +892,17 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         const meshes: THREE.SkinnedMesh[] = [];
         for (const info of library.pawnActors) {
-            await new Promise<void>(resolve => setTimeout(resolve, 0));
+            await this.waitPawnBuild();
             meshes.push(decodeObject3D(library, info) as THREE.SkinnedMesh);
         }
         const animations = (meshes.length ? (meshes[0] as any).meshAnimations : {}) as Record<string, THREE.AnimationClip>;
+        const source = npcId === null ? library : library.sourceLibrary;
+
+        if (scriptClassPath && !this.cacheNpcVMs.has(source)) this.cacheNpcVMs.set(source, this.loadNpcVM(source));
+
+        const vm = scriptClassPath ? await this.cacheNpcVMs.get(source) : null;
+
+        await this.waitPawnBuild();
 
         if (!animations) throw new Error(`'${library.name}' animations failed to decode.`);
 
@@ -806,8 +934,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
             if (!classId) throw new Error(`'${library.name}' has no transferred script class.`);
 
             applyScriptLocalization(library, classId, localization);
-
-            const vm = new UnScriptVM(library);
 
             actor.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, library, effectClassId, vm));
             if (renderManager.getLevel()) actor.setUnrealScriptProperty("Level", renderManager.getLevel().levelInfoActor as any);
@@ -866,9 +992,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public createScriptActor(vm: UnScriptVM, classId: string, outer: ScriptHost_T, template: ScriptHost_T = null): Actor {
-        const actor = new Actor({ uuid: MathUtils.generateUUID(), name: "", scriptClassId: vm.getDefaultObject(classId).scriptClassId, scriptProperties: {} });
+        const actor = new Actor({ uuid: MathUtils.generateUUID(), name: "", scriptClassId: vm.getDefaultObject(classId).scriptClassId, scriptProperties: null });
 
-        actor.scriptProperties.delete("Touching");
         vm.constructActor(actor, outer, template);
         actor.name = getProperty(actor, "Name") as string;
         return actor;
@@ -930,7 +1055,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return effect;
     }
 
-    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null, beginPlay: boolean = true): Promise<BaseActor> {
         const npc = await this.resolveNpc(selector);
         const index = npc.mesh.indexOf(".");
 
@@ -966,7 +1091,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         try {
             if (collisionSize) actor.setCollisionSize(collisionSize[0], collisionSize[1]);
-            renderManager.addPawn(actor);
+            renderManager.addPawn(actor, beginPlay);
 
             if (isEntering && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
         } catch (e) {
@@ -984,7 +1109,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public listPlayerSkills(includeAssetVariants: boolean = false): Promise<PlayerSkillInfo_T[]> { return this.decodeWorker.listPlayerSkills(includeAssetVariants); }
     protected gameStrings: GameStrings_T = null;
     public async getGameStrings(): Promise<GameStrings_T> {
-        if (!this.gameStrings) this.gameStrings = await this.decodeWorker.getGameStrings();
+        if (!this.gameStrings) this.gameStrings = await this.decodeWorker.getGameStrings(this.loadSettings);
 
         return this.gameStrings;
     }
@@ -1008,7 +1133,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected async precacheCharacterAssets(): Promise<void> {
-        await this.decodeWorker.precacheCharacters(this.loadSettings);
+        await Promise.all([this.decodeWorker.precacheCharacters(this.loadSettings), loginServer ? this.prefetchCharacterScripts() : null]);
 
         if (loginServer) return;
 
@@ -1026,7 +1151,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public async getCharGroups(): Promise<ICharacterGroup[]> { return this.charGroups; }
 
     public async prefetchCharacterScripts(): Promise<void> {
-        await Promise.all(this.charGroups.map(group => this.decodeWorker.prefetchScriptClass(this.loadSettings, `LineageWarrior.${this.getClassName(group.index)}`)));
+        const groups = this.charGroups || await this.decodeWorker.getCharGroups(this.loadSettings);
+
+        await Promise.all(groups.map(group => this.decodeWorker.prefetchScriptClass(this.loadSettings, `LineageWarrior.${group.name}`)));
     }
 
     public getStreaming() { return this.isStreaming; }
@@ -1034,9 +1161,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public setStreaming(renderManager: RenderManager, isStreaming: boolean) {
         if (this.isStreaming !== isStreaming) this.streamingGeneration++;
         this.isStreaming = isStreaming;
+        if (!isStreaming && this.decodeWorker) this.decodeWorker.setWorldLoading(false);
 
         if (isStreaming) return;
 
+        this.requiredSectors.clear();
         this.decodeWorker?.setActiveSector(null);
         this.decodeWorker?.cancelQueuedSectors();
 
@@ -1058,7 +1187,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         this.inFlightSectors.set(sectorName, request);
 
         try {
-            const decodeLibrary = await this.decodeWorker.decodeSector(sectorName, this.loadSettings, this.gameManager.getComponent("network").isWorldLoading());
+            const decodeLibrary = this.startupLevelLibrary && sectorName === "lobby" ? this.startupLevelLibrary : await this.decodeWorker.decodeSector(sectorName, this.loadSettings, this.gameManager.getComponent("network").isWorldLoading());
+
+            if (decodeLibrary === this.startupLevelLibrary) this.startupLevelLibrary = null;
 
             decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
             (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
@@ -1079,20 +1210,53 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected setSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): void {
+        const steps = this.stepSectorScriptRuntime(renderManager, library, sector);
+
+        while (!steps.next().done) { }
+    }
+
+    protected *stepSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): Generator<void, void> {
+        const objects: any[] = [];
+
+        sector.physicsManager = renderManager.getPhysicsManager();
         sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
-        sector.traverse((object: any) => {
+        sector.traverse(object => { objects.push(object); });
+        for (const object of objects) {
+            if (object.isBSPCollider && !object.isVolume) object.levelInfoActor = sector.levelInfoActor;
             if (object.isTerrain) object.terrainInfoActor = sector.getTerrainInfoActor(object.terrainInfoUuid);
             if (object.isTerrainBatch)
                 for (const terrain of object.sectors) terrain.terrainInfoActor = sector.getTerrainInfoActor(terrain.terrainInfoUuid);
 
-            if (!object.isVolume && !object.isStaticMeshActor) return;
+            if (!object.isVolume && !object.isStaticMeshActor) continue;
 
-            object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
+            object.setScriptRuntime(sector.scriptVM, (classId: string) => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
             if (object.isMovableObject && !object.findComponent("sound")) object.addComponent(new SoundComponent(renderManager.audioManager).setLibrary(library));
             if (object.isStaticMeshActor && object.scriptClassId && !object.getUnrealScriptProperty("bStatic") && object.getUnrealScriptProperty("bMovable") && !object.findComponent("transform"))
                 object.addComponent(new TransformComponent(renderManager, object.getBasedActors()));
-        });
+            yield;
+        }
         sector.rearrangeLevelActors();
+        yield;
+        for (const object of objects)
+            if (sector.initializeL2GameEventActor(object)) yield;
+        sector.initializeL2GameEvents();
+    }
+
+    protected *stepStaticMeshBuild(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): Generator<void, void> {
+        const job = createSectorStaticMeshDecodeJob(library, sector);
+
+        job.prepareBounds = root => renderManager.prepareSector(sector, root);
+
+        while (!stepSectorStaticMeshDecodeJob(job)) yield;
+
+        yield;
+        yield* this.stepSectorScriptRuntime(renderManager, library, sector);
+        yield; // the last build step, the level events and the attach cost 5-7 ms each
+        renderManager.attachStaticMeshGroup(sector);
+    }
+
+    protected runBuildSteps<T>(steps: Generator<void, T>): Promise<T> {
+        return new Promise((resolve, reject) => this.pendingBuildSteps.push({ steps, resolve, reject }));
     }
 
     protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes, isActive: boolean = false): boolean {
@@ -1118,39 +1282,67 @@ export class AssetManager implements IEngineComponent<GameManager> {
         this.inFlightSectors.set(sectorIdx, request);
         const generation = this.streamingGeneration;
 
-        this.decodeWorker.decodeSector(sectorIdx, this.loadSettings, this.gameManager.getComponent("network").isWorldLoading(), true)
-            .then(decodeLibrary => {
-                if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request) {
-                    if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
-                    return;
-                }
-
-                decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
-                (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
-
-                const sector = decodeSectorCore(decodeLibrary);
-                this.setSectorScriptRuntime(renderManager, decodeLibrary, sector);
-                renderManager.addSector(sector);
-                this.gameManager.getComponent("physics").setEmitterWarmupGate(sector, false);
-
-                this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, decodeJob: null });
-                this.failedSectors.delete(sectorIdx);
-            })
-            .catch(e => {
-                if (e.name === "AbortError") return;
-
-                console.error(`Failed to decode sector '${sectorIdx}':`, e);
-                if (generation === this.streamingGeneration && this.inFlightSectors.get(sectorIdx) === request)
-                    this.failedSectors.set(sectorIdx, performance.now() + FAILED_SECTOR_RETRY_MS);
-            })
-            .finally(() => {
-                if (this.inFlightSectors.get(sectorIdx) === request) this.inFlightSectors.delete(sectorIdx);
-            });
+        void this.loadSector(renderManager, sectorIdx, request, generation);
 
         return true;
     }
 
-    protected retireSector(renderManager: RenderManager, sector: SectorObject) {
+    protected async loadSector(renderManager: RenderManager, sectorIdx: string, request: number, generation: number): Promise<void> {
+        const network = this.gameManager.getComponent("network");
+
+        try {
+            if (network.movement.getPendingTeleportPosition() && await hasCachedLibrary(sectorIdx, this.loadSettings)) {
+                while (network.movement.getPendingTeleportPosition()) await network.waitNextTick();
+
+                const [x, y] = sectorIdx.split("_").map(Number);
+
+                if (sectorDistance(renderManager.player.position, x, y) > this.getRenderDistance(renderManager)) return;
+            }
+
+            if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request) return;
+
+            const decodeLibrary = await this.decodeWorker.decodeSector(sectorIdx, this.loadSettings, network.isWorldLoading() || !!network.movement.getPendingTeleportPosition(), true);
+
+            while (network.movement.getPendingTeleportPosition()) await network.waitNextTick();
+
+            if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request || !this.requiredSectors.has(sectorIdx)) {
+                if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
+                return;
+            }
+
+            decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+            (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+
+            const sector = await this.runBuildSteps(decodeSectorCoreSteps(decodeLibrary));
+
+            await this.runBuildSteps(this.stepSectorScriptRuntime(renderManager, decodeLibrary, sector));
+            await this.runBuildSteps(renderManager.prepareSector(sector, sector));
+
+            if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request || !this.requiredSectors.has(sectorIdx)) {
+                if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
+                return;
+            }
+
+            const steps = renderManager.addSectorSteps(sector);
+
+            steps.next();
+            this.gameManager.getComponent("physics").setEmitterWarmupGate(sector, false);
+
+            this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, steps: null });
+            this.failedSectors.delete(sectorIdx);
+            await this.runBuildSteps(steps);
+        } catch (e) {
+            if (e.name === "AbortError") return;
+
+            console.error(`Failed to decode sector '${sectorIdx}':`, e);
+            if (generation === this.streamingGeneration && this.inFlightSectors.get(sectorIdx) === request)
+                this.failedSectors.set(sectorIdx, performance.now() + FAILED_SECTOR_RETRY_MS);
+        } finally {
+            if (this.inFlightSectors.get(sectorIdx) === request) this.inFlightSectors.delete(sectorIdx);
+        }
+    }
+
+    protected retireSector(_renderManager: RenderManager, sector: SectorObject) {
         if (sector.isRetired) return;
         const sectorIdx = `${sector.index.x}_${sector.index.y}`;
 
@@ -1164,6 +1356,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected destroyExpiredSectors(renderManager: RenderManager, immediate = false) {
         const now = performance.now();
 
+        while (this.arrRemovedSectors.length > 0) {
+            renderManager.disposeSector(this.arrRemovedSectors.pop());
+            if (!immediate) return;
+        }
+
         for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
             if (!immediate && now - retiredAt < RETIRED_SECTOR_DISPOSE_MS) continue;
 
@@ -1172,9 +1369,13 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.retiredSectors.delete(sectorIdx);
             this.dropPendingBuild(sector);
             renderManager.removeSector(sector);
-            renderManager.disposeSector(sector);
-
             this.decodeWorker?.freeSector(sectorIdx);
+
+            if (immediate) renderManager.disposeSector(sector);
+            else {
+                this.arrRemovedSectors.push(sector); // removal and disposal cost 7 ms each
+                return;
+            }
         }
     }
 
@@ -1184,7 +1385,34 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (jobIndex >= 0) this.pendingStaticMeshBuilds.splice(jobIndex, 1);
     }
 
+    protected processPendingBuildSteps(deadline: number): void {
+        while (this.pendingBuildSteps.length > 0) {
+            const pending = this.pendingBuildSteps[0];
+            let step: IteratorResult<void, unknown>;
+
+            try {
+                do step = pending.steps.next();
+                while (!step.done && performance.now() < deadline);
+            } catch (e) {
+                this.pendingBuildSteps.shift();
+                pending.reject(e);
+                continue;
+            }
+
+            if (!step.done) return;
+
+            this.pendingBuildSteps.shift();
+            pending.resolve(step.value);
+            if (performance.now() >= deadline) return; // every queued job runs at least one step, ten short ones took 20 ms of a 1 ms budget
+        }
+    }
+
     protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
+        const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : this.gameManager.getBackgroundBudget());
+
+        this.processPendingBuildSteps(deadline);
+        if (this.pendingBuildSteps.length > 0 || performance.now() >= deadline) return;
+
         let jobIndex = -1;
         let jobDistance = Infinity;
 
@@ -1206,19 +1434,16 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!job) return;
 
         try {
-            if (!job.decodeJob) job.decodeJob = createSectorStaticMeshDecodeJob(job.library, job.sector);
+            if (!job.steps) job.steps = this.stepStaticMeshBuild(renderManager, job.library, job.sector);
 
-            const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : STATIC_MESH_BUILD_FRAME_MS);
-            let complete = false;
+            let step: IteratorResult<void, void>;
 
-            do complete = stepSectorStaticMeshDecodeJob(job.decodeJob);
-            while (!complete && performance.now() < deadline);
+            do step = job.steps.next();
+            while (!step.done && performance.now() < deadline);
 
-            if (!complete) return;
+            if (!step.done) return;
 
             this.pendingStaticMeshBuilds.splice(jobIndex, 1);
-            this.setSectorScriptRuntime(renderManager, job.library, job.sector);
-            renderManager.attachStaticMeshGroup(job.sector);
         } catch (e) {
             this.pendingStaticMeshBuilds.splice(jobIndex, 1);
             console.error(`Failed to build static meshes for sector '${job.sector.name}':`, e);
@@ -1232,17 +1457,24 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.isTicking = true;
 
             if (!this.isStreaming) {
+                const start = performance.now();
+
+                this.processPendingBuildSteps(start + this.gameManager.getBackgroundBudget());
                 this.destroyExpiredSectors(renderManager);
+                this.gameManager.addBackgroundTime(performance.now() - start);
                 return;
             }
 
             const input = this.gameManager.getComponent("input");
-            const isWorldLoading = this.gameManager.getComponent("network").isWorldLoading();
-            const maxConcurrentDecodes = isWorldLoading ? Math.max(this.maxConcurrentDecodes, this.decodeWorkerPoolSize) : this.maxConcurrentDecodes;
+            const network = this.gameManager.getComponent("network");
+            const isWorldLoading = network.isWorldLoading();
+            const teleportPosition = network.movement.getPendingTeleportPosition();
+            this.decodeWorker.setWorldLoading(isWorldLoading || !!teleportPosition);
+            const maxConcurrentDecodes = isWorldLoading || teleportPosition ? Math.max(this.maxConcurrentDecodes, this.decodeWorker.getLoadingWorkerPoolSize()) : this.maxConcurrentDecodes;
             const cameraPosition = input.isFollowingPlayer() || isWorldLoading ? tmpCameraPosition.copy(renderManager.player.position) : renderManager.camera.getWorldPosition(tmpCameraPosition); // orbiting the player must not read as movement, it prefetched the whole 3x3 ring
             const [sx, sy] = renderManager.getSectorId(cameraPosition);
             const originIdx = `${sx}_${sy}`;
-            this.decodeWorker?.setActiveSector(isWorldLoading ? null : originIdx);
+            this.decodeWorker?.setActiveSector(isWorldLoading || teleportPosition ? null : originIdx);
             const sectorsLoaded = renderManager.getLoadedSectors();
             const sectorsLoadedIds = sectorsLoaded.map(({ index }) => `${index.x}_${index.y}`)
             const isValidOrigin = this.hasSector(originIdx);
@@ -1250,11 +1482,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
             const sampleDelta = now - this.lastCameraSampleTime;
             const renderDistance = this.getRenderDistance(renderManager);
 
-            tmpPrefetchPosition.copy(cameraPosition);
+            tmpPrefetchPosition.copy(teleportPosition || cameraPosition);
             tmpCameraMovement.subVectors(cameraPosition, this.lastCameraPosition).setZ(0);
             const teleported = this.lastCameraSampleTime > 0 && tmpCameraMovement.lengthSq() > renderDistance * renderDistance;
 
-            if (!isWorldLoading && !teleported && this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
+            if (!teleportPosition && !isWorldLoading && !teleported && this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
                 tmpCameraMovement.multiplyScalar(SECTOR_PREFETCH_LOOKAHEAD_MS / sampleDelta);
 
                 if (tmpCameraMovement.lengthSq() > SECTOR_PREFETCH_MAX_DISTANCE * SECTOR_PREFETCH_MAX_DISTANCE)
@@ -1265,19 +1497,27 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             this.lastCameraPosition.copy(cameraPosition);
             this.lastCameraSampleTime = now;
+            network.actors.updateWorldLevel();
 
             for (const sector of sectorsLoaded) {
-                if (sector.neverUnload || !sector.index) continue;
+                if (sector.neverUnload || !sector.index || sector === renderManager.getLevel()) continue;
                 if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= renderDistance || sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= renderDistance) {
+                    sector.lastInRangeTime = now;
                     if (sector.isRetired) this.requestSector(renderManager, `${sector.index.x}_${sector.index.y}`);
                     continue;
                 }
 
-                this.retireSector(renderManager, sector);
+                if (teleported || now - sector.lastInRangeTime >= SECTOR_RETIRE_DELAY_MS) this.retireSector(renderManager, sector);
             }
 
+            let start = performance.now();
+
             this.destroyExpiredSectors(renderManager, teleported);
+            this.gameManager.addBackgroundTime(performance.now() - start);
+            start = performance.now();
+
             this.processPendingBuilds(renderManager, cameraPosition);
+            this.gameManager.addBackgroundTime(performance.now() - start);
 
             const sectorsToLoad: string[] = [];
 
@@ -1304,6 +1544,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             neighbours.sort((a, b) => a.prefetchDist - b.prefetchDist || a.dist - b.dist);
             sectorsToLoad.push(...neighbours.map(n => n.idx));
+
+            this.requiredSectors.clear();
+            this.requiredSectors.add(originIdx);
+            for (const sectorIdx of sectorsToLoad) this.requiredSectors.add(sectorIdx);
 
             this.decodeWorker?.cancelQueuedSectors(sectorsToLoad, originIdx);
 

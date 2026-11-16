@@ -17,6 +17,8 @@ export type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
     type: "TerrainSegment",
     terrainInfoUuid?: string,
     collisionRadius: number,
+    terrainSectorIndex: number,
+    decorationCenter: Vector3Arr,
     lighting?: {
         lights: { light: string, flags: Uint8Array }[],
         shadowMaps: Uint8Array[],
@@ -37,6 +39,8 @@ export type IMaterialTerrainSegmentDecodeInfo = IBaseMaterialDecodeInfo & {
 };
 
 type TerrainSegmentDecodeResult_T = { object: ITerrainSegmentDecodeInfo, geometry: IGeometryDecodeInfo, material: IMaterialTerrainSegmentDecodeInfo };
+
+const tmpVertexNormal: Vector3Arr = [0, 0, 0];
 
 class FTerrainLightInfo implements Constructable_T {
     public lightIndex: number;
@@ -101,6 +105,19 @@ export abstract class UTerrainSector extends UObject {
         const library = builder.library;
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oy, z: oz } = center;
+        const terrainSectorIndex = info.getTerrainSectorIndex(this);
+        const v = FVector.make();
+        // UTerrainSector::Serialize 0x9b6ad4..0x9b6adc forces 16 runtime quads for the seamless client.
+        const corners = [[0, 0], [0, 16], [16, 0]].map(([x, y]) => {
+            const hmx = x + this.offsetX, hmy = y + this.offsetY;
+            const offset = Math.min(hmy, iTerrainMap.width - 1) * iTerrainMap.width + Math.min(hmx, iTerrainMap.width - 1);
+            return v.set(hmx, hmy, data[offset]).transformBy(info.toWorld, v).getElements().map(Math.fround);
+        });
+        // UTerrainSector::CalcLocation 0x9a36c2..0x9a376f.
+        const decorationCenter = corners[0].map((value, i) => {
+            const first = Math.fround(value + Math.fround((corners[1][i] - value) / 2));
+            return Math.fround(first + Math.fround((corners[2][i] - value) / 2));
+        }) as Vector3Arr;
 
 
         if (this.uuid in library.geometries) return {
@@ -109,6 +126,8 @@ export abstract class UTerrainSector extends UObject {
                 name: this.objectName,
                 type: "TerrainSegment",
                 collisionRadius: info.collisionRadius,
+                terrainSectorIndex,
+                decorationCenter,
                 geometry: this.uuid,
                 materials: this.uuid,
                 position: [ox, oy, oz]
@@ -132,9 +151,7 @@ export abstract class UTerrainSector extends UObject {
         const tmpVector = FVector.make();
 
 
-        const v = FVector.make();
-
-        let iii = 0;
+        // let iii = 0;
 
         normals.set(this.normals)
 
@@ -331,7 +348,7 @@ export abstract class UTerrainSector extends UObject {
             terrainMaterial: info.uuid,
             uvs: {
                 textureType: "float",
-                buffer: uvs,
+                buffer: uvs.buffer,
                 materialType: "texture",
                 width: 17 * 17,
                 height: layerCount + 2,
@@ -345,6 +362,8 @@ export abstract class UTerrainSector extends UObject {
             terrainInfoUuid: info.uuid,
             // Engine.dll MultiPointCheck 0x85f6f9..0x85f6fc: terrain hits return ATerrainInfo.
             collisionRadius: info.collisionRadius,
+            terrainSectorIndex,
+            decorationCenter,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
@@ -483,12 +502,12 @@ export abstract class UTerrainSector extends UObject {
         return vertices[offset];
     }
 
-    protected getVertexNormal(x: number, y: number): FVector {
+    protected getVertexNormal(x: number, y: number): Vector3Arr {
         const info = this.info;
         const ox = this.offsetX, oy = this.offsetY;
         const tx = (ox === 240 && x === 16) ? 15 : x;
         const ty = (oy === 240 && y === 16) ? 15 : y;
-        const normal = info.getVertexNormal(ox + tx, oy + ty);
+        const normal = info.getVertexNormalElements(ox + tx, oy + ty, tmpVertexNormal);
 
         return normal;
     }
@@ -506,9 +525,9 @@ export abstract class UTerrainSector extends UObject {
             for (let x = 0; x <= 16; x++, i += 3) {
                 const normal = this.getVertexNormal(x, y);
 
-                normals[i] = normal.x;
-                normals[i + 1] = normal.y;
-                normals[i + 2] = normal.z;
+                normals[i] = normal[0];
+                normals[i + 1] = normal[1];
+                normals[i + 2] = normal[2];
             }
         }
 
@@ -644,16 +663,16 @@ export abstract class UTerrainSector extends UObject {
     protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
 
     // Get appropriate shadow map based on time of day
-    protected getShadowMapForTime(timeOfDay: number): FPrimitiveArray<"uint8"> {
-        if (!this.hasShadows || !this.shadowMaps || this.shadowMaps.length === 0) {
-            return null;
-        }
+    // protected getShadowMapForTime(timeOfDay: number): FPrimitiveArray<"uint8"> {
+    //     if (!this.hasShadows || !this.shadowMaps || this.shadowMaps.length === 0) {
+    //         return null;
+    //     }
 
-        // Use generic time-to-index conversion (works with explicit times or evenly distributed slots)
-        const shadowIndex = timeToIndex(timeOfDay, this.shadowMapTimes);
+    //     // Use generic time-to-index conversion (works with explicit times or evenly distributed slots)
+    //     const shadowIndex = timeToIndex(timeOfDay, this.shadowMapTimes);
 
-        return this.shadowMaps[shadowIndex];
-    }
+    //     return this.shadowMaps[shadowIndex];
+    // }
 
     protected triangulateLayer(passIndex: number) {
         const info = this.info;
@@ -741,7 +760,7 @@ export abstract class UTerrainSector extends UObject {
 
             return true;
         } else {
-
+            return undefined;
         }
     }
 
@@ -749,7 +768,7 @@ export abstract class UTerrainSector extends UObject {
         const info = this.info;
         const alphaMap = info.layers[layerIndex].alphaMap;
 
-        if (alphaMap.width === info.heightmapX) {
+        if (info.getTextureSource(alphaMap, false).width === info.heightmapX) {
             // Special-case 1:1 alphamap:heightmap ratio for performance
 
             const ox = x + this.offsetX;
@@ -788,7 +807,7 @@ export abstract class UTerrainSector extends UObject {
                 }
             }
         } else {
-            let ratio = alphaMap.width / info.heightmapX;
+            let ratio = info.getTextureSource(alphaMap, false).width / info.heightmapX;
 
             let minX = Math.floor(ratio * (x + this.offsetX));
             let maxX = Math.ceil(ratio * (x + this.offsetX + 1));
@@ -849,7 +868,7 @@ export abstract class UTerrainSector extends UObject {
 
         if (!alphaMap) return false;
 
-        const ratio = (alphaMap.width || 0) / info.heightmapX;
+        const ratio = (info.getTextureSource(alphaMap, false).width || 0) / info.heightmapX;
 
         const minx = Math.floor(ratio * this.offsetX), maxx = Math.ceil(ratio * (this.offsetX + this.quadsX));
         const miny = Math.floor(ratio * this.offsetY), maxy = Math.ceil(ratio * (this.offsetY + this.quadsY));

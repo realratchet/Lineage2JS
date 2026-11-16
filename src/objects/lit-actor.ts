@@ -1,7 +1,7 @@
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
-import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
+import { Box3, BufferAttribute, Color, DynamicDrawUsage, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
 import { cancelStaticLighting, computeStaticLighting } from "../rendering/static-lighting";
 import SortedIndexBuffer from "../rendering/sorted-index-buffer";
 import VertexLighting, { getAffectedVertices } from "../rendering/vertex-lighting";
@@ -24,6 +24,8 @@ const arrPermeatingLights: string[] = [];
 const tmpHardwareBox = new Box3();
 
 type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
+type LightSets_T = { all: AugmentedLight_T[], staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[], dynamicScene: AugmentedLight_T[], dynamicEnv: AugmentedLight_T[] };
+
 export type BatchRenderGroup_T = { start: number, count: number, materialIndex: number, bounds: Box3, boundsStart: number, boundsCount: number, position: BufferAttribute | InterleavedBufferAttribute, index: BufferAttribute, positionVersion: number, indexVersion: number };
 
 export class LitActorMesh extends GameMesh {
@@ -107,7 +109,7 @@ export class LitActorMesh extends GameMesh {
                     new Uint8ClampedArray(attrPositions.count * 3),
                     3,
                     true
-                )
+                ).setUsage(DynamicDrawUsage)
             );
 
             const sunAffected = new Uint8Array(attrPositions.count);
@@ -129,7 +131,7 @@ export class LitActorMesh extends GameMesh {
             if (actor.isSunAffected)
                 arrSunAffected.fill(255, actor.startVertex, actor.startVertex + actor.count);
 
-        if (perActorAmbient.some(actor => actor.hardware)) this.geometry.setAttribute("hardwareSun", new BufferAttribute(new Float32Array(arrSunAffected.length), 1));
+        if (perActorAmbient.some(actor => actor.hardware)) this.geometry.setAttribute("hardwareSun", new BufferAttribute(new Float32Array(arrSunAffected.length), 1).setUsage(DynamicDrawUsage));
     }
 
     protected perVertexGlow?: Float32Array;
@@ -220,7 +222,7 @@ export class LitActorMesh extends GameMesh {
 
     protected computeHardwareLighting(sector: SectorObject, target: Uint8ClampedArray) {
         const attrPositions = this.geometry.getAttribute("position");
-        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: typeof this.ambient, hardware: BatchHardwareLighting_T | null }[] | undefined;
+        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: LitActorMesh["ambient"], hardware: BatchHardwareLighting_T | null }[] | undefined;
 
         if (perActorAmbient) {
             const attrHardwareSun = this.geometry.getAttribute("hardwareSun");
@@ -310,11 +312,20 @@ export class LitActorMesh extends GameMesh {
     protected lastStaticEnvIndex: number = -1;
     protected lastStaticEnvNextIndex: number = -1;
     protected lastStaticEnvLerp: number = -1;
+    protected lastDynamicEnvVersion: number = -1;
+    protected lastSeenTime: number = -1;
 
     public needsInitialLighting(): boolean {
         if (this.ambient?.hardwareLighting) return this.lastEnvVersion < 0;
 
-        return this.staticLightingPending || !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+        return this.staticLightingPending || !!this.vertexLighting && this.vertexLighting.isBuilding() || !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+    }
+
+    public needsSeenLighting(currentTime: number, previousTime: number): boolean {
+        const wasSeen = this.lastSeenTime === previousTime;
+
+        this.lastSeenTime = currentTime;
+        return !wasSeen;
     }
 
     public cancelPendingLighting(): void {
@@ -327,14 +338,24 @@ export class LitActorMesh extends GameMesh {
 
     public lightingGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
 
-    protected lightSets?: {
-        all: AugmentedLight_T[],
-        staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[],
-        dynamicScene: AugmentedLight_T[], dynamicEnv: AugmentedLight_T[]
-    };
+    protected lightSets?: LightSets_T;
+    protected pendingLightSets?: LightSets_T;
+    protected pendingDynamicLights?: boolean[];
 
     protected resolveLightSets(sector: SectorObject) {
         if (this.lightSets) return this.lightSets;
+
+        if (this.pendingLightSets) {
+            let unchanged = true;
+            const lights = this.pendingLightSets.all;
+
+            for (let i = 0; i < lights.length; i++) {
+                const light = sector.lights[lights[i].light];
+                if (light !== lights[i].instance || !!light && (light.isDynamic || light.isTimeBased) !== this.pendingDynamicLights[i]) { unchanged = false; break; }
+            }
+
+            if (unchanged) return this.pendingLightSets;
+        }
 
         const scene: AugmentedLight_T[] = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
         const environment: AugmentedLight_T[] = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
@@ -350,7 +371,14 @@ export class LitActorMesh extends GameMesh {
             dynamicEnv: environment.filter(isDynamic)
         };
 
-        if (sets.all.every(l => l.instance)) this.lightSets = sets;
+        if (sets.all.every(l => l.instance)) {
+            this.lightSets = sets;
+            this.pendingLightSets = undefined;
+            this.pendingDynamicLights = undefined;
+        } else {
+            this.pendingLightSets = sets;
+            this.pendingDynamicLights = sets.all.map(l => !!l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
+        }
 
         return sets;
     }
@@ -412,7 +440,11 @@ export class LitActorMesh extends GameMesh {
             }
         }
 
-        let anyDynamicLightNeedsUpdate = false;
+        let dynamicEnvVersion = 0;
+
+        for (const { instance: light } of dynamicEnv) dynamicEnvVersion += light.version;
+
+        let anyDynamicLightNeedsUpdate = this.lastDynamicEnvVersion !== dynamicEnvVersion;
         for (const { instance: light } of allLights) {
             if (!light) continue;
 
@@ -437,7 +469,6 @@ export class LitActorMesh extends GameMesh {
 
         const perActorAmbientForFilter = this.perActorAmbient as { startVertex: number, count: number }[] | undefined;
         const canFilterByVisibility = !!this.elemVisibility && !!perActorAmbientForFilter;
-        const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
         const relight = canFilterByVisibility && !staticCacheDirty && !anyDynamicLightNeedsUpdate ? this.elemRelight : undefined;
         const filterVisibility = relight ?? (canFilterByVisibility ? this.elemVisibility : undefined);
 
@@ -446,7 +477,7 @@ export class LitActorMesh extends GameMesh {
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
             if (this.perActorAmbient) {
-                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: typeof this.ambient }[];
+                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: LitActorMesh["ambient"] }[];
                 for (const actor of perActorAmbient) {
                     if (actor.ambient && actor.ambient.isUnlit) {
                         // unlit renders at 1x: EnableLighting(1,1,0) + SetAmbientLight(255) (UnRenderStaticMesh.cpp line 470), 127 = 1.0 in the Modulate2X domain
@@ -538,12 +569,18 @@ export class LitActorMesh extends GameMesh {
                 const glow = this.perActorAmbient ? this.getPerVertexGlow(this.perActorAmbient, this.geometry.getAttribute("position").count) : new Float32Array(this.geometry.getAttribute("position").count).fill(this.scaledGlow);
                 this.vertexLighting = new VertexLighting(this.lightingRenderer, this.geometry, glow, dynamicScene.concat(dynamicEnv), dynamicScene.length, this.staticLightingCache);
                 this.geometry.setAttribute("lightingSource", attrColors);
+                colorArray.set(this.staticLightingCache); // shown until the GPU tables are built
+                attrColors.needsUpdate = true;
             }
 
             const indices = dynamicEnv.length >= 2 ? env.selectEnvironmentLightIndices(dynamicEnv.length) : [0, -1, 0];
             env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);
-            this.vertexLighting.update(this.lightInfo.matrix, this.staticLightingCache, staticCacheDirty, tmpEnvColor, indices[0], indices[1], indices[2]);
-            this.geometry.setAttribute("lighting", this.vertexLighting.output);
+            if (!this.vertexLighting.update(this.lightInfo.matrix, this.staticLightingCache, staticCacheDirty, tmpEnvColor, indices[0], indices[1], indices[2])) {
+                this.needsRelightPass = true;
+                return;
+            }
+            this.geometry.setAttribute("lighting", this.vertexLighting.output as any);
+            this.lastDynamicEnvVersion = dynamicEnvVersion;
             this.needsRelightPass = false;
             if (this.elemRelight) this.elemRelight.fill(0);
             return;
@@ -557,6 +594,8 @@ export class LitActorMesh extends GameMesh {
                 colorArray.set(this.staticLightingCache!.subarray(startVertex * 3, (startVertex + count) * 3), startVertex * 3);
             }
         } else colorArray.set(this.staticLightingCache!);
+
+        const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
 
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0, filterVisibility, vertexToElement);
         if (dynamicEnv.length > 0) env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);
@@ -593,6 +632,7 @@ export class LitActorMesh extends GameMesh {
         attrColors.clearUpdateRanges();
         if (rangeCount >= 0) attrColors.addUpdateRange(rangeOffset, rangeCount);
         attrColors.needsUpdate = true;
+        this.lastDynamicEnvVersion = dynamicEnvVersion;
     }
 
     protected sampleIntensity(light: DynamicLight, samplingPoint: Vector3, samplingNormal: Vector3): number {

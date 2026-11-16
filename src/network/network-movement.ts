@@ -1,3 +1,4 @@
+import waitForAreaLoad from "./world-loading";
 import type NetworkManager from "./network-manager";
 import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 import type NProjectileComponent from "../physics/components/projectile-component";
@@ -8,42 +9,93 @@ import PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type PawnAppendixComponent from "../objects/components/pawn-appendix-component";
 import Vehicle from "../objects/vehicle";
 import { sinRotator } from "../assets/unreal/utils/rotator";
+import { EL2ObjectType_T } from "../assets/unreal/un-aactor";
+import { PawnMeshType_T } from "../assets/unreal/un-pawn";
+import type { CollisionQuery_T } from "../physics/collision-world";
 import * as GamePackets from "./game-packets";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import PacketReader from "./packet-reader";
 import type { NetObject_T } from "./network-actors";
 import { setVector } from "./network-location";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
+import type { Vector3Arr } from "@l2js/engine";
 
 type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 
-export const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
+const VALIDATE_POSITION_INTERVAL = 1000;
+const STUCK_INTERVAL = 600;
+const STUCK_DISTANCE = 2;
+
+const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
 
 const tmpTeleportPosition = new Vector3();
 
 const tmpVehicleLocation = new Vector3();
+const tmpChairPosition = new Vector3();
+const tmpChairDirection = new Vector3();
+const tmpChairQuery: CollisionQuery_T = { location: new Vector3(), delta: new Vector3(), extent: new Vector3(), sourceIsPlayer: false, traceWorld: true, ignorePawns: true };
 
-export const tmpVehicleOrigin = new Vector3();
+const tmpVehicleOrigin = new Vector3();
 
 export class NetworkMovement {
     public isMounted = false;
     public isRunning = true;
-    public lastValidateAt = 0;
-    public wasMoving = false;
-    public readonly stuckPosition = new Vector3();
+    protected lastValidateAt = 0;
+    protected wasMoving = false;
+    protected readonly stuckPosition = new Vector3();
     public readonly vehicles = new Map<number, NetVehicle_T>();
     public readonly mounts = new Map<number, GamePackets.Ride_T>();
     public readonly riders = new Map<number, BaseActor>();
     public observation: GamePackets.Location_T = null;
     public specialCamera: GamePackets.SpecialCamera_T = null;
     public cameraMode = 0;
-    public stuckCheckAt = 0;
+    protected stuckCheckAt = 0;
     protected readonly teleportPosition = new Vector3();
     protected teleportPending = false;
     protected teleportLoading = false;
 
     public constructor(protected readonly network: NetworkManager) {}
+
+    public tick(currentTime: number): void {
+        const player = this.network.getParent().getComponent("render").player;
+        const isMoving = player.isLocomoting();
+
+        if ((isMoving || this.wasMoving) && currentTime - this.lastValidateAt >= VALIDATE_POSITION_INTERVAL) {
+            this.lastValidateAt = currentTime;
+            this.wasMoving = isMoving;
+            const base = player.getBaseActor() as Vehicle;
+
+            if (base && base.isVehicle) {
+                tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
+                base.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
+                this.network.session.game.validatePosition(tmpVehicleOrigin, player.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
+            } else this.network.session.game.validatePosition(player.position, player.getRotationYaw());
+        }
+
+        if (!isMoving || !player.isInteractive()) this.stuckCheckAt = 0;
+        else if (this.stuckCheckAt === 0) {
+            this.stuckCheckAt = currentTime;
+            this.stuckPosition.copy(player.position);
+        } else if (currentTime - this.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
+            if (player.position.distanceTo(this.stuckPosition) < STUCK_DISTANCE) this.cannotMoveAnymore();
+            else {
+                this.stuckCheckAt = currentTime;
+                this.stuckPosition.copy(player.position);
+            }
+        }
+    }
+
+    public cannotMoveAnymore(isHitWall = false) {
+        const player = this.network.getParent().getComponent("render").player, base = player.getBaseActor() as Vehicle;
+
+        if (!isHitWall) player.stopMoving();
+        if (base && base.isVehicle) this.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
+        else if (!isHitWall) this.network.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+        if (!isHitWall) this.stuckCheckAt = 0;
+    }
+
+    public getPendingTeleportPosition(): Vector3 { return this.teleportPending ? this.teleportPosition : null; }
 
     public readLocation(packet: PacketReader): GamePackets.Location_T {
         tmpLocation.x = packet.d();
@@ -103,8 +155,13 @@ export class NetworkMovement {
 
         this.adjustPawnLocation(object, object.position);
 
-        if (object.kind === "user") object.actor.goTo(destination);
-        else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveTo(object.position, destination);
+        if (object.kind === "user") {
+            const properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
+
+            // UGameEngine::OnMoveToLocation 0x1047898c..0x104789a0.
+            if (properties.get("bDesiredKeyboardMoving")) properties.set("bKeyboardMoving", true);
+            object.actor.goTo(destination);
+        } else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveTo(object.position, destination);
     }
 
     public async onMoveToPawn(packet: PacketReader) {
@@ -253,40 +310,29 @@ export class NetworkMovement {
         const render = this.network.getParent().getComponent("render");
         const asset = this.network.getParent().getComponent("asset");
         const generation = ++this.network.actors.teleportGeneration;
-        const startTime = performance.now();
         const sector = render.getSector(render.player.position);
         const isLoading = !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
+
+        render.cutCamera();
 
         if (isLoading) {
             this.teleportLoading = true;
             render.setZoneMusicEnabled(false);
             this.network.ui.showLoading(true);
 
-            while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration) {
-                const progress = asset.getAreaLoadProgress(render, render.player.position);
-
-                if (progress.ready === progress.total) break;
-
-                const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
-                const action = progress.building > 0 ? "Building" : "Loading";
-                const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
-
-                setLoadingProgress(value || null, `${stage} · ${Math.round(value * 100)}% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+            await waitForAreaLoad(asset, render, () => this.network.actors.inWorld && generation === this.network.actors.teleportGeneration);
 
             if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
-        }
+        } else if ((sector.getMusicIdAt(render.player.position).musicId ?? -1) !== render.getActiveMusicId()) render.cancelMusic();
 
         this.network.actors.teleportInfoPending = true;
         this.network.session.game.appearing();
 
         // Lisvus Appearing sends the destination known list before UserInfo.
-        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) {
+        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (
+            this.network.actors.teleportInfoPending || !render.areProgramsReady() || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) {
             if (this.teleportLoading) {
-                const stage = this.network.actors.teleportInfoPending ? "Waiting for destination server response" : `Loading nearby characters (${this.network.actors.npcSpawnCount} loading, ${this.network.actors.npcSpawnWaiters.length} queued)`;
-
-                setLoadingProgress(0.9, `${stage} · 90% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
+                setLoadingProgress(0.9, this.network.actors.teleportInfoPending ? loadingTexts.destinationResponse() : loadingTexts.nearbyCharacters(this.network.actors.npcSpawnCount + this.network.actors.npcSpawnWaiters.length));
             }
             await new Promise(resolve => setTimeout(resolve, 100));
         }
@@ -367,9 +413,59 @@ export class NetworkMovement {
         if (!actor) return;
 
         actor.stopMoving();
+        this.placeInChair(object, staticObjectId);
         const animation = (actor.getUnrealScriptProperty("ChairSitAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
 
         if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnChairSitPacket 0x10481e38..0x10481e8e.
+    }
+
+    protected placeInChair(object: NetObject_T, staticObjectId: number): void {
+        const render = this.network.getParent().getComponent("render"), chair = render.findLevelActorByRealId(staticObjectId);
+
+        if (!chair || getProperty(chair, "L2ServerObjectType") !== EL2ObjectType_T.EL2_CHAIR) return;
+
+        const actor = object.actor, rotation = getProperty(chair, "Rotation") as Vector3Arr;
+        const heading = (rotation[1] - 0x4000) & 65535;
+        let distance = 17, adjustment = 0;
+
+        // UGameEngine::OnChairSitPacket 0x751a95..0x751e2f.
+        switch (actor.charClassId) {
+            case PawnMeshType_T.MFighter: case PawnMeshType_T.MDwarf: break;
+            case PawnMeshType_T.FFighter: adjustment = 1.5; break;
+            case PawnMeshType_T.FDwarf: distance = 13; break;
+            case PawnMeshType_T.FMagic: distance = 14; break;
+            case PawnMeshType_T.MOrc: distance = 20; adjustment = 1.5; break;
+            case PawnMeshType_T.MDarkElf: case PawnMeshType_T.FDarkElf: case PawnMeshType_T.MElf: case PawnMeshType_T.FElf: case PawnMeshType_T.MMagic: case PawnMeshType_T.FOrc: case PawnMeshType_T.MShaman: distance = 15; break;
+            case PawnMeshType_T.FShaman: distance = 16; break;
+        }
+
+        tmpChairDirection.set(sinRotator(rotation[0] + 0x4000) * sinRotator(heading + 0x4000), sinRotator(rotation[0] + 0x4000) * sinRotator(heading), sinRotator(rotation[0]));
+        tmpChairPosition.fromArray(getProperty(chair, "Location") as Vector3Arr).addScaledVector(tmpChairDirection, distance);
+        const height = actor.getCollisionHeight(), centerZ = actor.position.z + height, query = tmpChairQuery;
+        tmpChairPosition.z = actor.position.z;
+        query.sourceActor = actor;
+        query.extent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), height);
+
+        for (let i = 1; i <= 30; i++) {
+            query.location.set(tmpChairPosition.x, tmpChairPosition.y, centerZ + i * 30);
+            query.delta.set(0, 0, -i * 60);
+            const hit = render.getPhysicsManager().singleLineCheck(query);
+
+            if (!hit || hit.location.z === 0) continue;
+
+            tmpChairPosition.copy(hit.location);
+            tmpChairPosition.z -= height;
+            const floorDistance = hit.time * 12;
+            if (floorDistance < 1.9) tmpChairPosition.z += (2.4 + 1.9) * 0.5 - floorDistance;
+            break;
+        }
+
+        tmpChairPosition.addScaledVector(tmpChairDirection, -adjustment);
+        actor.teleportTo(tmpChairPosition);
+        actor.setRotationYaw(heading);
+        object.position.copy(tmpChairPosition);
+        object.heading = heading;
+        object.pendingRotation = null;
     }
 
     public onStaticObject(packet: PacketReader) {

@@ -61,6 +61,7 @@ export class QuestArrow {
         effect.visible = true;
         try {
             effect.traverseVisible(object => { if ((object as any).particlePool) (object as any).onRender(); });
+            this.render.renderer.state.buffers.depth.setReversed(this.render.camera.reversedDepth);
             this.render.renderer.render(effect, this.render.camera);
         } finally { effect.visible = false; }
     }

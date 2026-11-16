@@ -23,7 +23,17 @@ class HeroListCtrl extends NCListCtrl {
     protected arrCrests: { clan: CanvasImageSource, ally: CanvasImageSource }[] = [];
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, 7, 34, 586, 255, [{ width: 169, label: SysString_T.CharacterName, numeric: false }, { width: 120, label: SysString_T.ClassAbbreviation, numeric: false }, { width: 128, label: SysString_T.HeroClan, numeric: false }, { width: 119, label: SysString_T.Ally, numeric: false }, { width: 50, label: SysString_T.Count, numeric: false }], 18, 13);
+        super(
+            layer,
+            parent,
+            7,
+            34,
+            586,
+            255,
+            [{ width: 169, label: SysString_T.CharacterName, numeric: false }, { width: 120, label: SysString_T.ClassAbbreviation, numeric: false }, { width: 128, label: SysString_T.HeroClan, numeric: false }, { width: 119, label: SysString_T.Ally, numeric: false }, { width: 50, label: SysString_T.Count, numeric: false }],
+            18,
+            13
+        );
     }
 
     public setEntries(entries: HeroEntry_T[]) {
@@ -89,7 +99,10 @@ export class NCHeroTowerWnd {
     public setCrestGetter(getter: (crestId: number, isAlly: boolean) => CanvasImageSource) { this.list.getCrest = getter; }
     public refreshCrests() { this.list.refreshCrests(); }
     public getList() { return this.list; }
-    public getSelectedClassId() { const entry = this.list.getEntry(this.list.getSelectedRow()); return entry ? entry.classId : null; }
+    public getSelectedClassId() {
+        const entry = this.list.getEntry(this.list.getSelectedRow());
+        return entry ? entry.classId : null;
+    }
     public show(entries: HeroEntry_T[], isHero?: boolean) {
         this.list.setEntries(entries);
         this.setVisible(true);

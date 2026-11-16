@@ -1,11 +1,9 @@
 attribute vec3 instancePosition;
-#if !defined(USE_WORLD_PARTICLE_BATCH) || !defined(USE_FIXED_NORMAL)
+#ifndef USE_WORLD_PARTICLE_BATCH
 attribute vec2 instanceScale;
 attribute float instanceSpin;
 #endif
 attribute vec4 instanceColor;
-// texture-atlas subdivision cell for this instance (xy = offset, zw = scale) - see
-// shader-particle.vs's uvOffsetScale for the legacy-path equivalent
 attribute vec4 instanceUV;
 #ifdef USE_SUBDIVISION_BLEND
 attribute vec3 instanceUVBlend;
@@ -16,10 +14,8 @@ attribute vec3 instanceDirection;
 uniform vec3 particleViewLocation;
 #endif
 #ifdef USE_WORLD_PARTICLE_BATCH
-#ifdef USE_FIXED_NORMAL
 attribute vec3 instanceRight;
 attribute vec3 instanceUp;
-#endif
 #endif
 
 varying vec2 vUv;
@@ -42,17 +38,9 @@ void main() {
     vColor = instanceColor;
 
     #ifdef USE_WORLD_PARTICLE_BATCH
-    #ifdef USE_FIXED_NORMAL
         vec3 worldPosition = instancePosition + instanceRight * position.x + instanceUp * position.y;
-    #else
-        float s = sin(instanceSpin);
-        float c = cos(instanceSpin);
-        vec3 right = cameraBillboardRight * c + cameraBillboardUp * s;
-        vec3 up = cameraBillboardUp * c - cameraBillboardRight * s;
-        vec3 worldPosition = instancePosition + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y);
-    #endif
     #elif defined(USE_VELOCITY_UP)
-        vec3 viewCross = cross(instancePosition - particleViewLocation, instanceDirection); // PTDU_Up, ParticleMesh.onBeforeRender order: local basis, spin, both axes negated
+        vec3 viewCross = cross(instancePosition - particleViewLocation, instanceDirection);
         float viewCrossLength = length(viewCross);
         vec3 localRight = viewCrossLength > 0.0 ? viewCross / viewCrossLength : vec3(0.0);
         vec3 localUp = instanceDirection;
@@ -62,37 +50,33 @@ void main() {
         vec3 up = -(localUp * c - localRight * s);
         vec3 worldPosition = (modelMatrix * vec4(instancePosition + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y), 1.0)).xyz;
     #else
+        mat3 modelBasis = mat3(modelMatrix);
     #ifdef USE_FIXED_NORMAL
-        // PTDU_Normal has one emitter-local basis for every particle. Transform it
-        // into world space here, matching ParticleMesh's local quaternion followed
-        // by its emitter parent's model matrix.
         vec3 direction = normalize(particleProjectionNormal);
         vec3 nonParallel = abs(direction.x) < 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
         vec3 localUp = normalize(cross(nonParallel, direction));
         vec3 localRight = normalize(cross(localUp, direction));
-        vec3 baseRight = normalize(mat3(modelMatrix) * -localRight);
-        vec3 baseUp = normalize(mat3(modelMatrix) * -localUp);
+        vec3 baseRight = -localRight;
+        vec3 baseUp = -localUp;
     #else
-        vec3 baseRight = cameraBillboardRight;
-        vec3 baseUp = cameraBillboardUp;
+        vec3 axisX = normalize(modelBasis[0]);
+        vec3 axisY = normalize(modelBasis[1]);
+        vec3 axisZ = normalize(modelBasis[2]);
+        vec3 rowX = cross(axisY, axisZ);
+        vec3 rowY = cross(axisZ, axisX);
+        vec3 rowZ = cross(axisX, axisY);
+        float determinant = dot(axisX, rowX);
+        vec3 baseRight = -normalize(vec3(dot(rowX, cameraBillboardRight), dot(rowY, cameraBillboardRight), dot(rowZ, cameraBillboardRight)) / determinant);
+        vec3 baseUp = -normalize(vec3(dot(rowX, cameraBillboardUp), dot(rowY, cameraBillboardUp), dot(rowZ, cameraBillboardUp)) / determinant);
     #endif
 
-    // per-instance roll around the shared billboard basis (matches the CPU path's
-    // newRight = right*cos + up*sin; newUp = up*cos - right*sin in sprite-emitter.ts)
     float s = sin(instanceSpin);
     float c = cos(instanceSpin);
     vec3 right = baseRight * c + baseUp * s;
     vec3 up = baseUp * c - baseRight * s;
 
-    // instancePosition is emitter-local (matches the old per-particle Object3D's
-    // .position, a child of the emitter) - modelMatrix carries the emitter's own
-    // placement/rotation/drawScale, same as the scene graph used to do implicitly.
-    // The billboard offset itself is already in world space: camera-facing bases
-    // start there, while fixed-normal bases were transformed above. instanceScale
-    // has the emitter's 1/drawScale baked in on the JS side to compensate for not
-    // applying modelMatrix's scale to the offset here.
         vec3 anchorWorld = (modelMatrix * vec4(instancePosition, 1.0)).xyz;
-        vec3 worldPosition = anchorWorld + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y);
+        vec3 worldPosition = anchorWorld + modelBasis * (right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y));
     #endif
 
     vec4 mvPosition = viewMatrix * vec4(worldPosition, 1.0);

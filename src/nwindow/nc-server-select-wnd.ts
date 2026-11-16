@@ -130,6 +130,11 @@ export class NCServerSelectListCtrl { // NCServerSelectListCtrl: NCListCtrl 300x
 
     public getSelected() { return this.selected; }
 
+    public setPing(index: number, ping: number) {
+        this.items[index][3].text = `${ping}`;
+        this.update();
+    }
+
     public setItems(items: Cell_T[][]) {
         this.items = items;
         this.selected = -1;
@@ -223,6 +228,15 @@ export class NCServerSelectWnd { // NCServerSelectWnd: 316x330, OnCreate 0x10101
         this.topServerId = this.rows.some(row => row.id === lastServerId) ? lastServerId : 0;
         this.updateItems();
         this.list.select(Math.max(0, this.rows.findIndex(row => row.id === lastServerId)));
+    }
+
+    public setServerPing(serverId: number, ping: number) {
+        const index = this.rows.findIndex(row => row.id === serverId);
+
+        if (index < 0) return;
+
+        this.rows[index].ping = ping;
+        this.list.setPing(index, ping);
     }
 
     protected updateItems() {

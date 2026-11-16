@@ -1,7 +1,7 @@
 import { Vector2, Vector3 } from "three";
 import { IObject } from "../../game/components";
 import { PhysicsComponent } from "./physics-component";
-import { encompassesVolume, findVolumeTransition } from "../volume-bsp";
+import { findVolumeTransition } from "../volume-bsp";
 import UnderWaterEffect from "../../rendering/under-water-effect";
 import WaterHitEffect from "../../rendering/water-hit-effect";
 import type PhysicsManager from "../../physics/physics-manager";
@@ -82,7 +82,10 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
             const moving = Math.abs(tmpWaterVelocity.x) >= 0.0001 || Math.abs(tmpWaterVelocity.y) >= 0.0001 || Math.abs(tmpWaterVelocity.z) >= 0.0001;
             const wait = (owner.getUnrealScriptProperty("SitWaitAnimName") as string[])[owner.getUnrealScriptProperty("CurWeaponType") as number];
             const action = owner.getAnimationAction();
-            const resting = !moving && action && action.getClip().name.toLowerCase() === wait.toLowerCase() && (owner.getUnrealScriptProperty("Location") as number[])[2] - tmpWaterHitPosition.z <= owner.getCollisionHeight() * 0.2;
+            const resting = !moving &&
+                action &&
+                action.getClip().name.toLowerCase() === wait.toLowerCase() &&
+                (owner.getUnrealScriptProperty("Location") as number[])[2] - tmpWaterHitPosition.z <= owner.getCollisionHeight() * 0.2;
             if (!resting) {
                 const effectName = WaterEffectsComponent.getWaterHitEffectName(sector, foot, moving);
                 if (effectName) owner.setUnrealScriptProperty("RecentHitWaterInterval", this.waterHitEffect.spawn(sector, effectName, tmpWaterHitPosition, tmpWaterVelocity, moving));

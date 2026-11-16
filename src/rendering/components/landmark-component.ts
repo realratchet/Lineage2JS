@@ -48,7 +48,10 @@ export class LandmarkComponent extends ObjectComponent<Player> {
         if (this.completionEffect && !this.completionEffect.parent) this.completionEffect = null;
 
         if (!this.activeEffect) return;
-        if (!this.activeEffect.parent) { this.activeEffect = null; return; }
+        if (!this.activeEffect.parent) {
+            this.activeEffect = null;
+            return;
+        }
 
         this.activeEffect.getWorldPosition(tmpLocation);
 

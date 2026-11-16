@@ -59,6 +59,7 @@ export type DecodableObject_T =
 
 export type IBaseObjectOrInstanceDecodeInfo = {
     uuid: string,
+    name?: string,
     type: DecodableObject_T | "StaticMeshInstance"
 };
 
@@ -91,6 +92,7 @@ export type IGeometryDecodeInfo = {
         positions?: Float32Array;
         normals?: Float32Array;
         colors?: Float32Array | Uint8Array | Uint8ClampedArray,
+        vertexAlpha?: Uint8Array,
         colorsInstance?: Float32Array | Uint8Array | Uint8ClampedArray,
         sway?: Float32Array,
         uvs?: Float32Array | Float32Array[];
@@ -114,7 +116,7 @@ export type IAudioDecodeInfo = {
     type: "MusicVolume" | "AmbientSoundObject"
 };
 
-type ScriptObject_T = { path: string, classId: string, classParents: Record<string, string | null>, outer: ScriptObject_T | null };
+export type ScriptObject_T = { path: string, classId: string, classParents: Record<string, string | null>, outer: ScriptObject_T | null, properties?: Record<string, ScriptPropertyValue_T> };
 
 export class DecodeLibrary {
     public name: string = "Untitled";
@@ -142,7 +144,7 @@ export class DecodeLibrary {
     // public readonly zones: Record<string, IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
     public readonly geometries: Record<string, IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
     public readonly geometryInstances: Record<string, number> = {};               // a dictionary containing all geometray instance decode info
-    public readonly materials: Record<string, IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
+    public materials: Record<string, IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
     public readonly materialModifiers: Record<string, IMaterialModifier> = {};    // a dictionary containing all material modifiers
     public readonly leafActors: IBaseObjectOrInstanceDecodeInfo[][] = [];
     // flat (not leaf-indexed like leafActors) - emitters register at a single origin point
@@ -167,6 +169,7 @@ export class DecodeLibrary {
     public sourceLibrary: DecodeLibrary = null;
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};
+    public readonly stepSounds: Record<number, (string | null)[]> = {};
     public pawnSounds: IPawnSoundsDecodeInfo = null;
     public readonly scriptClasses: Record<string, IScriptClassDecodeInfo> = {};
     public readonly scriptFunctions: Record<string, IScriptFunctionDecodeInfo> = {};

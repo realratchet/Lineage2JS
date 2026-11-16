@@ -2,9 +2,18 @@ import type * as RAPIER from "@dimforge/rapier3d";
 import type * as THREE from "three";
 import type { ScriptHost_T } from "../ue-script/vm";
 import type Terrain from "./terrain";
+import type BSPCollider from "./bsp-collider";
+import type { IBSPNodeSurfaceDecodeInfo_T } from "@l2js/engine/contracts/mesh";
 
 export function getScriptActor(actor: ICollidable | null): ScriptHost_T | null {
     if (!actor) return null;
+    if ((actor as any).isBSPCollider) {
+        const collider = actor as BSPCollider;
+        const host = collider.scriptActor || collider.levelInfoActor;
+
+        if (!host) throw new Error(`BSP '${actor.name}' has no script actor.`);
+        return host;
+    }
     if ((actor as any).isTerrain) {
         const host = (actor as Terrain).terrainInfoActor;
 
@@ -14,8 +23,9 @@ export function getScriptActor(actor: ICollidable | null): ScriptHost_T | null {
     return actor as unknown as ScriptHost_T;
 }
 
-export type ICollidable = THREE.Object3D<THREE.Event> & {
+export type ICollidable = THREE.Object3D & {
     readonly isCollidable: boolean;
+    scriptClassId?: string;
 
     createCollider(physicsWorld: RAPIER.World): RAPIER.Collider;
     releaseCollider?(): void;
@@ -45,6 +55,7 @@ export type CollisionModel_T = {
     hulls: CollisionHull_T[];
     rootOutside: boolean;
     bounds: THREE.Box3;
+    surfaces?: IBSPNodeSurfaceDecodeInfo_T[];
 };
 
 export type CollisionTriangleIndex_T = {
@@ -56,7 +67,8 @@ export type CollisionTriangleIndex_T = {
     sizeY: number;
     offsets: Uint32Array;
     triangleIndices: Uint32Array;
-    marks: Uint32Array;
+    triangleBounds?: Float32Array;
+    marks: Uint16Array | Uint32Array;
     queryTag: number;
 };
 
@@ -73,6 +85,9 @@ type CollisionPrimitiveUnion_T =
     }
     | {
         kind: "staticMesh";
+        materialIndices?: Int32Array;
+        materials?: (string | null)[];
+        defaultMaterial?: string | null;
         vertices: Float32Array;
         indices: Uint32Array;
         collisionNodes: Int32Array;

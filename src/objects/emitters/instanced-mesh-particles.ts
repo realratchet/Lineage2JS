@@ -1,4 +1,4 @@
-import { DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, type BufferGeometry, type Event, type Quaternion, type Vector3, type Vector4 } from "three";
+import { StreamDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, type BufferGeometry, type Event, type Quaternion, type Vector3, type Vector4 } from "three";
 import type MeshEmitterMaterial from "../../materials/mesh-emitter-material/mesh-emitter-material";
 
 const tmpMatrix = new Matrix4();
@@ -21,8 +21,8 @@ export class InstancedMeshParticles extends Mesh<InstancedBufferGeometry, MeshEm
         super(geometry, material);
 
         this.source = source;
-        this.transformAttr = new InstancedBufferAttribute(new Float32Array(capacity * 16), 16).setUsage(DynamicDrawUsage);
-        this.tintAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(DynamicDrawUsage);
+        this.transformAttr = new InstancedBufferAttribute(new Float32Array(capacity * 16), 16).setUsage(StreamDrawUsage);
+        this.tintAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(StreamDrawUsage);
         geometry.setAttribute("instanceTransform", this.transformAttr);
         geometry.setAttribute("instanceTint", this.tintAttr);
 

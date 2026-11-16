@@ -36,12 +36,15 @@ export class NTownMapWnd {
             event.preventDefault();
             const x = layer.toUI(event.clientX) + this.viewport.scrollLeft, y = layer.toUI(event.clientY) + this.viewport.scrollTop;
 
-            layer.beginDrag(e => { this.viewport.scrollLeft = x - layer.toUI(e.clientX); this.viewport.scrollTop = y - layer.toUI(e.clientY); }, () => layer.getManager().setCursor(""));
+            layer.beginDrag(e => {
+                this.viewport.scrollLeft = x - layer.toUI(e.clientX);
+                this.viewport.scrollTop = y - layer.toUI(e.clientY);
+            }, () => layer.getManager().setCursor(""));
             layer.getManager().setCursor(layer.getManager().getCursor(3));
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
 

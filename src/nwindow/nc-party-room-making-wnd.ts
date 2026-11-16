@@ -1,5 +1,5 @@
 import NDomLayer, { NDOM_EDIT_TEXTURES, type NDomEdit_T } from "./ndom";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -13,7 +13,7 @@ const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 export type PartyRoomSettings_T = { roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string };
 
 export class NCPartyRoomMakingWnd {
-    public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, ...NDOM_EDIT_TEXTURES, ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down"]; }
+    public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, ...NDOM_EDIT_TEXTURES, ...NCComboBox.getTextures()]; }
     public readonly element: HTMLDivElement;
     public readonly title: NDomEdit_T;
     public readonly minimum: NDomEdit_T;

@@ -74,7 +74,9 @@ export class Vehicle extends CollidingMesh {
     public getLocalLocation(location: Vector3, target: Vector3): Vector3 {
         const yaw = (this.getUnrealScriptProperty("Rotation") as number[])[1];
         const sine = sinRotator(-yaw), cosine = sinRotator(-yaw + 16384);
-        const x = Math.fround(location.x - this.position.x), y = Math.fround(location.y - this.position.y), z = Math.fround(location.z - this.position.z);
+        const x = Math.fround(location.x - this.position.x);
+        const y = Math.fround(location.y - this.position.y);
+        const z = Math.fround(location.z - this.position.z);
 
         return target.set(Math.fround(x * cosine - y * sine), Math.fround(x * sine + y * cosine), z);
     }

@@ -126,7 +126,7 @@ export abstract class FZoneInfo extends AInfo implements IInfo {
 
     // }
 
-    public getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo {
+    public getDecodeInfo(_library: DecodeLibrary): IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
             hasTerrain: this.hasTerrain,

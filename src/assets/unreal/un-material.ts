@@ -1,5 +1,6 @@
 import { type FPrimitiveArray, type UnserializedProperty_T } from "@l2js/core";
 import UObject from "./un-object";
+import { dumpObjectClass, dumpObjectScriptProperties } from "./script-dump-loader";
 import type { FColor } from "./un-color";
 import type { FMatrix } from "./un-matrix";
 import type { FRotator } from "./un-rotator";
@@ -107,7 +108,8 @@ export type ITexOscillatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
         typeU: "pan" | "stretch" | "stretchRepeat" | "jitter",
         typeV: "pan" | "stretch" | "stretchRepeat" | "jitter",
         offsetU: number,
-        offsetV: number
+        offsetV: number,
+        triggered?: { path: string, properties: Record<string, any> }
     }
 };
 
@@ -140,6 +142,7 @@ export type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
     material1: string,
     material2: string,
     mask: string,
+    maskIsVertexColor?: boolean,
     invertMask: boolean,
     alphaFrom1: boolean,
     alphaFrom2: boolean
@@ -190,10 +193,10 @@ abstract class UBaseMaterial extends UObject {
         });
     }
 
-    public abstract getTextureSize(): { width: number, height: number } | null;
+    public abstract getTextureSize(builder?: DecodeLibraryBuilder): { width: number, height: number } | null;
 }
 
-abstract class UBaseModifier extends UBaseMaterial {
+export abstract class UBaseModifier extends UBaseMaterial {
     declare protected texCoordSource: number;
     // protected texCoordCount: number;
     // protected texCoordProjected: number;
@@ -206,8 +209,8 @@ abstract class UBaseModifier extends UBaseMaterial {
         });
     }
 
-    public getTextureSize(): { width: number; height: number; } | null {
-        return this.material?.loadSelf?.().getTextureSize() || null;
+    public getTextureSize(builder?: DecodeLibraryBuilder): { width: number; height: number; } | null {
+        return builder ? builder.getMaterialTextureSize(this.material) : this.material?.loadSelf?.().getTextureSize() || null;
     }
 }
 export abstract class UMaterial extends UBaseMaterial { }
@@ -345,6 +348,7 @@ export abstract class UCombiner extends UBaseModifier {
             material1: builder.pullMaterial(this.material1),
             material2: builder.pullMaterial(this.material2),
             mask: builder.pullMaterial(this.mask),
+            maskIsVertexColor: !!(this.mask as any)?.isVertexColor,
             invertMask: this.invertMask,
             alphaFrom1: this.alphaOperation.valueOf() === EAlphaOperation_T.AO_Use_Alpha_From_Material1,
             alphaFrom2: this.alphaOperation.valueOf() === EAlphaOperation_T.AO_Use_Alpha_From_Material2
@@ -401,13 +405,34 @@ export abstract class UFinalBlend extends UBaseModifier {
         let transparent = false;
         switch (this.frameBufferBlending.valueOf()) {
             case EFrameBufferBlending.FB_Overwrite: blendingMode = "normal"; break;
-            case EFrameBufferBlending.FB_Modulate: blendingMode = "modulate"; transparent = true; break;
-            case EFrameBufferBlending.FB_AlphaBlend: blendingMode = "normal"; transparent = true; break;
-            case EFrameBufferBlending.FB_AlphaModulate_MightNotFogCorrectly: blendingMode = "alphaModulate"; transparent = true; break;
-            case EFrameBufferBlending.FB_Translucent: blendingMode = "translucent"; transparent = true; break;
-            case EFrameBufferBlending.FB_Darken: blendingMode = "darken"; transparent = true; break;
-            case EFrameBufferBlending.FB_Brighten: blendingMode = "brighten"; transparent = true; break;
-            case EFrameBufferBlending.FB_Invisible: blendingMode = "invisible"; transparent = true; break;
+            case EFrameBufferBlending.FB_Modulate:
+                blendingMode = "modulate";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_AlphaBlend:
+                blendingMode = "normal";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_AlphaModulate_MightNotFogCorrectly:
+                blendingMode = "alphaModulate";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Translucent:
+                blendingMode = "translucent";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Darken:
+                blendingMode = "darken";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Brighten:
+                blendingMode = "brighten";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Invisible:
+                blendingMode = "invisible";
+                transparent = true;
+                break;
             default: console.warn("Unknown FinalBlend blending mode:", this.frameBufferBlending); break;
         }
 
@@ -541,8 +566,8 @@ export abstract class UShader extends UMaterial {
         } as IShaderDecodeInfo;
     }
 
-    public getTextureSize(): { width: number; height: number; } | null {
-        return this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
+    public getTextureSize(builder?: DecodeLibraryBuilder): { width: number; height: number; } | null {
+        return builder ? builder.getMaterialTextureSize(this.diffuse) || builder.getMaterialTextureSize(this.opacity) : this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
     }
 }
 
@@ -613,8 +638,8 @@ export abstract class UColorModifier extends UBaseMaterial {
         } as IColorModifierDecodeInfo;
     }
 
-    public getTextureSize(): { width: number; height: number; } | null {
-        return this.material?.loadSelf?.().getTextureSize() || null;
+    public getTextureSize(builder?: DecodeLibraryBuilder): { width: number; height: number; } | null {
+        return builder ? builder.getMaterialTextureSize(this.material) : this.material?.loadSelf?.().getTextureSize() || null;
     }
 
     protected getPropertyMap() {
@@ -764,6 +789,43 @@ export abstract class UTexOscillator extends UBaseModifier {
     }
 }
 
+export enum ERetriggerAction_T {
+    RTA_Reverse,
+    RTA_Reset,
+    RTA_Ignore,
+    RTA_Retrigger
+}
+
+export abstract class UTexOscillatorTriggered extends UTexOscillator {
+    declare protected retriggerAction: ERetriggerAction_T;
+    declare protected stopAfterPeriod: number;
+    declare protected triggeredTime: number;
+    declare protected reverse: boolean;
+    declare protected triggered: boolean;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "RetriggerAction": "retriggerAction",
+            "StopAfterPeriod": "stopAfterPeriod",
+            "TriggeredTime": "triggeredTime",
+            "Reverse": "reverse",
+            "Triggered": "triggered"
+        });
+    }
+
+    public getDecodeInfo(builder: DecodeLibraryBuilder): ITexOscillatorDecodeInfo {
+        const info = super.getDecodeInfo(builder) as ITexOscillatorDecodeInfo;
+        const properties = dumpObjectScriptProperties(this);
+        const object = { ...dumpObjectClass(this), properties };
+
+        builder.pullScriptClasses([(this.constructor as any).hostClass]);
+        builder.library.scriptObjects[this.name.toLowerCase()] = object;
+        info.transform.triggered = { path: this.name, properties };
+
+        return info;
+    }
+}
+
 export abstract class UTexCoordSource extends UBaseModifier {
     public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo {
         return {
@@ -777,6 +839,7 @@ export abstract class UTexCoordSource extends UBaseModifier {
 }
 
 export abstract class UVertexColor extends UBaseModifier {
+    public readonly isVertexColor = true;
     // vertex color modulation isn't supported - combiners treat a null material as absent
     public getDecodeInfo(builder: DecodeLibraryBuilder): string {
         return builder.pullMaterial(this.material);
@@ -852,3 +915,6 @@ export abstract class UStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
+
+(UBaseMaterial.prototype as any).isPackageAsset = true;
+(UBaseMaterial.prototype as any).isMaterial = true;

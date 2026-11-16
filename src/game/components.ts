@@ -1,4 +1,5 @@
 import { BufferGeometry, Material, Mesh, Object3D } from "three";
+import type { ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
 
 export type IEngineComponent<T extends IEngineComponent<T>> = {
     startTicking?(currentTime: number): void; // for syncing clocks
@@ -25,6 +26,8 @@ export type IObject = {
     detachComponents(): void;
 };
 
+export type ScriptActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, ScriptValue_T>, scriptOwner: ScriptActor_T, getUnrealScriptProperty(id: string): ScriptValue_T };
+
 export type IComponent<TParent extends IObject = IObject> = {
     readonly componentName: string;
     readonly updateOrder?: number;
@@ -45,6 +48,7 @@ class ComponentCollection<TParent extends IObject> {
     protected readonly parent: TParent;
     protected readonly components: IComponent<any>[] = [];
     protected readonly updateComponents: IComponent<any>[] = [];
+    protected readonly cacheComponents = new Map<string, IComponent<any>>();
 
     public constructor(parent: TParent) {
         this.parent = parent;
@@ -55,6 +59,7 @@ class ComponentCollection<TParent extends IObject> {
         if (component.isAttached()) throw new Error(`Component '${component.componentName}' is already attached.`);
 
         this.components.push(component);
+        this.cacheComponents.clear();
         if (component.onUpdate) {
             const updateOrder = component.updateOrder || 0;
             let index = this.updateComponents.length;
@@ -69,13 +74,14 @@ class ComponentCollection<TParent extends IObject> {
     }
 
     public remove(component: IComponent<any>): boolean {
-        const index = this.components.indexOf(component);
+        const index = this.components.lastIndexOf(component); // a sector drops thousands of ambient sounds newest first
 
         if (index < 0) return false;
 
         component.onDetach?.();
         this.components.splice(index, 1);
-        const updateIndex = this.updateComponents.indexOf(component);
+        this.cacheComponents.clear();
+        const updateIndex = this.updateComponents.lastIndexOf(component);
         if (updateIndex >= 0) this.updateComponents.splice(updateIndex, 1);
         component.setParent(null);
 
@@ -91,10 +97,16 @@ class ComponentCollection<TParent extends IObject> {
     }
 
     public find<T extends IComponent<any>>(componentName: string): T | null {
-        for (const component of this.components)
-            if (component.componentName === componentName) return component as T;
+        let found = this.cacheComponents.get(componentName);
 
-        return null;
+        if (found !== undefined) return found as T;
+
+        found = null;
+        for (const component of this.components)
+            if (component.componentName === componentName) { found = component; break; }
+        this.cacheComponents.set(componentName, found);
+
+        return found as T;
     }
 
     public getAll<T extends IComponent<any>>(componentName?: string): T[] {
@@ -131,6 +143,7 @@ class ComponentCollection<TParent extends IObject> {
 
         this.components.length = 0;
         this.updateComponents.length = 0;
+        this.cacheComponents.clear();
     }
 }
 
@@ -153,7 +166,7 @@ export abstract class ObjectComponent<TParent extends IObject = IObject> impleme
 
 export class GameObject extends Object3D implements IObject {
     public readonly isGameObject = true;
-    public scriptOwner: Object3D & IObject = null;
+    public scriptOwner: ScriptActor_T = null;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
     public addComponent<T extends IComponent<any>>(component: T): T { return this.componentCollection.add(component); }
@@ -168,7 +181,7 @@ export class GameObject extends Object3D implements IObject {
 
 export class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial extends Material | Material[] = Material | Material[]> extends Mesh<TGeometry, TMaterial> implements IObject {
     public readonly isGameObject = true;
-    public scriptOwner: Object3D & IObject = null;
+    public scriptOwner: ScriptActor_T = null;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
     public addComponent<T extends IComponent<any>>(component: T): T { return this.componentCollection.add(component); }

@@ -1,11 +1,11 @@
-import { Box3, BufferGeometry, Frustum, Matrix4, Object3D, PerspectiveCamera, Sprite, Vector2, Vector3 } from "three";
+import { Box3, BufferGeometry, Frustum, Matrix4, Object3D, PerspectiveCamera, Sprite, Vector2, Vector3, WebGLCoordinateSystem } from "three";
 
 const tmpPoint = new Vector3();
 const tmpProjection = new Matrix4();
 
 type DepthGroup_T = { start: number; count: number; materialIndex: number };
 type DepthBounds_T = { box: Box3; frame: number; visible: boolean };
-type DepthBatch_T = { bounds: Map<number, DepthBounds_T>; groups: DepthGroup_T[]; pool: DepthGroup_T[]; geometry: BufferGeometry; original: DepthGroup_T[] };
+type DepthBatch_T = { bounds: Map<number, DepthBounds_T>; groups: DepthGroup_T[]; pool: DepthGroup_T[]; geometry: BufferGeometry; original: THREE.GeometryGroup[] };
 
 export class NameplateDepthCulling {
     protected readonly frustum = new Frustum();
@@ -46,7 +46,7 @@ export class NameplateDepthCulling {
             elements[i] = (elements[i] - centerX * elements[i + 3]) / halfX;
             elements[i + 1] = (elements[i + 1] - centerY * elements[i + 3]) / halfY;
         }
-        this.frustum.setFromProjectionMatrix(tmpProjection.multiply(camera.matrixWorldInverse));
+        this.frustum.setFromProjectionMatrix(tmpProjection.multiply(camera.matrixWorldInverse), WebGLCoordinateSystem, camera.reversedDepth);
         this.frame++;
         scene.traverseVisible(object => {
             const mesh = object as any;

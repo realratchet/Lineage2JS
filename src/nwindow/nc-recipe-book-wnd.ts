@@ -118,7 +118,10 @@ export class NCRecipeBookWnd {
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 558, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; if (!visible) { this.endDrag(); if (this.onHideTooltip) this.onHideTooltip(); if (this.onHide) this.onHide(); } }
+    public setVisible(visible: boolean) {
+        this.element.hidden = !visible;
+        if (!visible) { this.endDrag(); if (this.onHideTooltip) this.onHideTooltip(); if (this.onHide) this.onHide(); }
+    }
     public getGrid() { return this.list; }
     public setLimits(dwarf: number, common: number) { this.dwarfLimit = dwarf; this.commonLimit = common; this.drawCounter(); }
     public async show(book: RecipeBook_T) {
@@ -175,7 +178,9 @@ export class NCRecipeBookWnd {
         this.layer.place(this.counter, 246 - this.layer.measureText(text), 33);
     }
     protected getIndex(event: MouseEvent) {
-        const rect = this.list.getBoundingClientRect(), x = this.layer.toUI(event.clientX - rect.left), y = this.layer.toUI(event.clientY - rect.top);
+        const rect = this.list.getBoundingClientRect();
+        const x = this.layer.toUI(event.clientX - rect.left);
+        const y = this.layer.toUI(event.clientY - rect.top);
 
         if (x < 0 || x > 222 || y < 0 || y > 280) return -1;
 

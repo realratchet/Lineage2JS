@@ -1,8 +1,10 @@
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
-import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
+import EXPERIENCE_TABLE from "../game/experience";
 import type { UserInfo_T, ClanInfo_T, HennaStatus_T } from "../network/game-packets";
 import SysString_T from "./sys-string";
+
+export type DetailStatus_T = Pick<UserInfo_T, "name" | "title" | "classId" | "clanId" | "level" | "exp" | "sp" | "str" | "dex" | "con" | "int" | "wit" | "men" | "curHp" | "maxHp" | "curMp" | "maxMp" | "curCp" | "maxCp" | "curLoad" | "maxLoad" | "pAtk" | "pDef" | "accuracy" | "critical" | "atkSpd" | "mAtk" | "mDef" | "evasion" | "castSpd" | "runSpd" | "walkSpd" | "moveMultiplier" | "karma" | "pkKills" | "pvpKills" | "recommendations" | "recommendationsLeft" | "isHero" | "isNoble"> & { isRunning?: boolean };
 
 const TEX_BACK = "L2UI_CH3.PlayerStatusWnd.myinfo_back";
 const TEX_HP = "L2UI_CH3.PlayerStatusWnd.ps_hpbar";
@@ -21,7 +23,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
     protected readonly values: HTMLDivElement;
     protected readonly bars: HTMLDivElement[];
     protected readonly rank: HTMLDivElement;
-    protected status: UserInfo_T = null;
+    protected status: DetailStatus_T = null;
     protected clan: ClanInfo_T = null;
     protected henna: HennaStatus_T = null;
 
@@ -38,7 +40,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
         this.values.style.pointerEvents = "none";
     }
 
-    public setStatus(status: UserInfo_T) { this.status = status; this.paint(); }
+    public setStatus(status: DetailStatus_T) { this.status = status; this.paint(); }
     public setClan(clan: ClanInfo_T) { this.clan = clan; this.paint(); }
     public setHenna(henna: HennaStatus_T) { this.henna = henna; this.paint(); }
 
@@ -107,7 +109,12 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         if (title) this.drawText(15, 9, title, 0xffa2f9ec);
         this.drawText(title ? layer.measureText(title) + 21 : 15, 9, name, (0xffff0000 | (255 - karmaColor) << 8 | (255 - karmaColor)) >>> 0);
-        this.drawText(layer.measureText(layer.getManager().getSysString(SysString_T.ClanNameLabel)) + 20, 25, this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(SysString_T.NoClan), 0xffdcdcdc);
+        this.drawText(
+            layer.measureText(layer.getManager().getSysString(SysString_T.ClanNameLabel)) + 20,
+            25,
+            this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(SysString_T.NoClan),
+            0xffdcdcdc
+        );
         this.drawText(35, 46, `${info.level} ${layer.getManager().getClassName(info.classId)}`);
 
         [info.pAtk, info.pDef, info.accuracy, info.critical, info.atkSpd].forEach((value, index) => this.drawText(114, 132 + index * 15, String(value), VALUE_COLOR, "right"));

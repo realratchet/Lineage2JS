@@ -109,7 +109,7 @@ export class NCCommandInfoWnd {
         this.paintToggle();
     }
 
-    public placeOnScreen(width: number, height: number) {}
+    public placeOnScreen(_width: number, _height: number) {}
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;

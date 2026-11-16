@@ -1,5 +1,6 @@
+import { DECODE_CACHE_VERSION } from "./assets/decode-version";
 import RenderManager, { type HTMLViewportElement_T } from "./rendering/render-manager";
-import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
+import { BoxHelper } from "three";
 
 import AssetManager from "./assets/asset-manager";
 import runSectorPrecache, { preloadStartupSectors } from "./sector-precache";
@@ -7,7 +8,7 @@ import GameManager from "./game/game-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import fetchAsset from "./assets/asset-source";
 import pickAssetSource from "./asset-source-picker";
-import { setLoadingProgress, hideLoadingProgress } from "./loading-progress";
+import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "./loading-progress";
 import loginServer from "./network/login-server";
 // import { ensureWasmInitialized } from "@l2js/core";
 
@@ -18,7 +19,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
     // await ensureWasmInitialized();
 
     if (globalThis.isSecureContext && "storage" in navigator && !await navigator.storage.persisted()) {
-        setLoadingProgress(null, "Allow persistent storage to keep cached game files. You can continue without it.", true);
+        setLoadingProgress(null, loadingTexts.persistentStorage(), true, false);
         document.querySelector<HTMLElement>(".storage-warning").hidden = await navigator.storage.persist();
         hideLoadingProgress();
     }
@@ -33,7 +34,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         },
         cache: {
             enabled: true,
-            version: 178 // bump when decode logic changes, invalidates all previously cached assets
+            version: DECODE_CACHE_VERSION
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
@@ -107,7 +108,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
-    if (loginServer) setLoadingProgress(0, "Loading game data…", true);
+    if (loginServer) setLoadingProgress(null, loadingTexts.gameData(), true);
     const assetList = await (await fetchAsset("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");
@@ -121,8 +122,10 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
     if (loginServer) void engine.getComponent("network").showLogin(loginServer);
 
     if (interactive) {
-        uiManager.addClippingRangeControls();
-        uiManager.addDisplayGammaControls();
+        if (!loginServer) {
+            uiManager.addClippingRangeControls();
+            uiManager.addDisplayGammaControls();
+        }
         uiManager.addNpcControls();
         await uiManager.addCharacterControls();
 
@@ -388,7 +391,9 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
 
     // renderManager.enableZoneCulling = false;
     renderManager.scene.add(objectGroup);
-    renderManager.scene.add(new BoxHelper(objectGroup));
+    const helper = new BoxHelper(objectGroup);
+    renderManager.scene.add(helper);
+    renderManager.queueShaderCompile(helper);
     engine.startTicking(performance.now());
 
     return renderManager;

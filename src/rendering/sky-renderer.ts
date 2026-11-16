@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color, OneMinusSrcAlphaFactor } from "three";
+import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "../utils/color-byte";
 import { SectorObject, ZoneObject } from "../objects/zone-object";
@@ -21,6 +21,8 @@ const tmpColorByte = new ColorByte();
 const tmpModifierColorByte = new ColorByte();
 const tmpFogColor = new Color();
 
+
+type SkyLayers_T = { skybox: Mesh[], haze: Mesh[], clouds: { mesh: Mesh, index: number }[] };
 
 class CelestialMaterial extends MeshBasicMaterial {
     public constructor() {
@@ -57,6 +59,7 @@ export default class SkyRenderer {
     public sun: Celestial = new Celestial();
     protected camera: PerspectiveCamera | null = null;
     protected skyZone: ZoneObject = null;
+    protected skyZoneCloudsVisible = false;
     protected readonly skyCamera = new PerspectiveCamera();
 
     protected sunData: any = null;
@@ -68,11 +71,8 @@ export default class SkyRenderer {
     };
     protected skyLayerGroup: Group = new Group();
 
-    public skyLayers: {
-        skybox: Mesh[];
-        haze: Mesh[];
-        clouds: { mesh: Mesh, index: number }[];
-    } = { skybox: [], haze: [], clouds: [] };
+    public skyLayers: SkyLayers_T = { skybox: [], haze: [], clouds: [] };
+    protected skyZoneLayers: SkyLayers_T = { skybox: [], haze: [], clouds: [] };
 
     protected moonActors: { mesh: Mesh; data: any; envType: EEnvCycle }[] = [];
 
@@ -95,7 +95,7 @@ export default class SkyRenderer {
         });
 
         const celestials = skyLevel.celestials;
-        const setup = envInfo.setup;
+        // const setup = envInfo.setup;
 
         this.moonActors.forEach(actor => this.celestialScene.remove(actor.mesh));
         this.moonActors = [];
@@ -260,8 +260,10 @@ export default class SkyRenderer {
         this.updateSkyLayers(env, skyColor, _hazeColor, hazeColors, cloudColors, _fogColor, skyVisibility, clearColor);
     }
 
-    protected updateSkyLayers(_env: L2Environment, _skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], fogColor: ColorByte, skyVisibility: number, _clearColor: ColorByte) {
+    protected updateSkyLayers(_env: L2Environment, _skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], _fogColor: ColorByte, _skyVisibility: number, _clearColor: ColorByte) {
         if (!this.envInfo) return;
+
+        const skyLayers = this.skyZone ? this.skyZoneLayers : this.skyLayers;
 
         function applyModifierColor(material: any, colorByte: ColorByte) {
             const r = colorByte.r / 255;
@@ -279,12 +281,12 @@ export default class SkyRenderer {
 
         // const modulatedHazeBase = _hazeColor.clone();
 
-        this.skyLayers.skybox.forEach(mesh => {
-            mesh.visible = false;
+        skyLayers.skybox.forEach(mesh => {
+            mesh.visible = !!this.skyZone;
         });
 
 
-        this.skyLayers.haze.forEach((mesh) => {
+        skyLayers.haze.forEach((mesh) => {
 
             const material = mesh.material as any;
             const nameParts = mesh.name.split("/");
@@ -309,17 +311,17 @@ export default class SkyRenderer {
             const targetColor = hazeColors[0];
             const modulator = tmpModifierColorByte.set(targetColor.r, targetColor.g, targetColor.b, 255);
 
-            applyModifierColor(material, modulator);
+            if (!this.skyZone) applyModifierColor(material, modulator);
         });
 
-        this.skyLayers.clouds.forEach(({ mesh, index }) => {
+        skyLayers.clouds.forEach(({ mesh, index }) => {
 
-            mesh.visible = this.config.starsClouds;
+            mesh.visible = this.config.starsClouds && (!this.skyZone || this.skyZoneCloudsVisible);
             if (!mesh.visible) return;
 
             const modulated = cloudColors[index] || cloudColors[0];
 
-            applyModifierColor(mesh.material, modulated);
+            if (!this.skyZone) applyModifierColor(mesh.material, modulated);
 
         });
 
@@ -424,6 +426,7 @@ export default class SkyRenderer {
         if (!this.camera) return;
 
         if (this.skyZone) {
+            (this.skyCamera as any)._reversedDepth = this.camera.reversedDepth;
             this.skyCamera.copy(this.camera, false);
             this.skyCamera.layers.set(1);
             // FSkySceneNode::FSkySceneNode (Engine.dll 0x8ea050): recenter the view at SkyZoneInfo.
@@ -436,5 +439,39 @@ export default class SkyRenderer {
         renderer.render(this.celestialScene, this.camera);
     }
 
-    public setSkyZone(zone: ZoneObject) { this.skyZone = zone; }
+    public setSkyZoneCloudsVisible(visible: boolean) { this.skyZoneCloudsVisible = visible; }
+
+    public setSkyZone(zone: ZoneObject) {
+        this.skyZone = zone;
+        this.skyZoneLayers = { skybox: [], haze: [], clouds: [] };
+
+        if (!zone) return;
+
+        zone.traverse(object => {
+            const mesh = object as Mesh;
+            if (!(mesh as any).isBSPSection) return;
+
+            const material = mesh.material as any;
+            const flags = parseInt(mesh.name.split("/")[1]);
+            const cloud = this.skyLayers.clouds.find(layer => (layer.mesh.material as any).name === material.name);
+
+            if (this.skyLayers.skybox.some(layer => (layer.material as any).name === material.name)) {
+                mesh.renderOrder = -9500;
+                this.skyZoneLayers.skybox.push(mesh);
+            } else if (this.skyLayers.haze.some(layer => (layer.material as any).name === material.name)) {
+                mesh.renderOrder = flags & PF_TwoSided ? -7000 : -8500;
+                this.skyZoneLayers.haze.push(mesh);
+            } else if (cloud) {
+                mesh.renderOrder = -8000 + cloud.index * 100;
+                this.skyZoneLayers.clouds.push({ mesh, index: cloud.index });
+            } else return;
+
+            mesh.frustumCulled = false;
+            delete material.defines.USE_RANGE_FADE;
+            material.side = DoubleSide;
+            material.depthWrite = false;
+            material.depthTest = false;
+            material.needsUpdate = true;
+        });
+    }
 }

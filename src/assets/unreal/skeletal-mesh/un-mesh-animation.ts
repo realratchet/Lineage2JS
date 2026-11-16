@@ -46,22 +46,6 @@ class FAnimVector {
     }
 }
 
-class FAnimQuaternion {
-    public x: number;
-    public y: number;
-    public z: number;
-    public w: number;
-
-    public load(pkg: APackage): this {
-        this.x = pkg.read("float");
-        this.y = pkg.read("float");
-        this.z = pkg.read("float");
-        this.w = pkg.read("float");
-
-        return this;
-    }
-}
-
 class FNamedBone {
     public boneName: string;
     public flags: number;
@@ -78,14 +62,14 @@ class FNamedBone {
 
 class FAnalogTrack {
     public flags: number;
-    public keyQuat = new FArray(FAnimQuaternion);
-    public keyPos = new FArray(FAnimVector);
+    public keyQuat: DataView;
+    public keyPos: DataView;
     public keyTime = new FPrimitiveArray(BufferValue.float);
 
     public load(pkg: APackage): this {
         this.flags = pkg.read("uint32");
-        this.keyQuat.load(pkg);
-        this.keyPos.load(pkg);
+        this.keyQuat = pkg.read(pkg.read("compat32") * 16);
+        this.keyPos = pkg.read(pkg.read("compat32") * 12);
         this.keyTime.load(pkg);
 
         return this;

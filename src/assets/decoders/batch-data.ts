@@ -17,6 +17,7 @@ type PreparedActorGeometryData_T = {
     normals: Float32Array;
     uvs: Float32Array | null;
     colors: ColorTypedArray_T | null;
+    vertexAlpha: Uint8Array | null;
     colorsInstance: ColorTypedArray_T | null;
     sway: IStaticMeshSwayDecodeInfo | null;
     swayPhase: number;
@@ -49,7 +50,10 @@ function groupActorsForBatching(
         const meshMaterials = actor.instance?.mesh?.materials;
         const meshGeometry = library.geometries[actor.instance?.mesh?.geometry];
         const collision = actor.collision;
-        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel || !!(actor.scriptProperties.bOnlyAffectPawns ?? actor.sharedScriptProperties?.bOnlyAffectPawns);
+        const hasDistinctCollision = collision.useCylinderCollision
+            || collision.blockZeroExtent !== collision.blockNonZeroExtent
+            || !!meshGeometry?.staticMeshCollision?.collisionModel
+            || !!(actor.scriptProperties.bOnlyAffectPawns ?? actor.sharedScriptProperties?.bOnlyAffectPawns);
         const isBatchable = !(actor as any).dontBatch && !hasDistinctCollision && meshMaterials && meshGeometry && !(actor.ambient?.hardwareLighting && isReachedByDynamicLight(dynamicLights, (actor as any).bounds));
 
         if (!isBatchable) {
@@ -203,6 +207,7 @@ function prepareActorGeometriesData(
             normals: meshGeo.attributes.normals as Float32Array,
             uvs: (uvs as Float32Array) ?? null,
             colors: (meshGeo.attributes.colors as ColorTypedArray_T) ?? null,
+            vertexAlpha: meshGeo.attributes.vertexAlpha ?? null,
             colorsInstance: ((info.attributes as any)?.colors as ColorTypedArray_T) ?? null,
             sway: info.mesh.sway ?? null,
             swayPhase: info.swayPhase ?? 0,
@@ -245,7 +250,10 @@ function mergeMeshLightFlags(
         globalVertex += vertexCounts[ai];
     }
 
-    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; }
+    if (rangeStart > rangeEnd) {
+        rangeStart = 0;
+        rangeEnd = 0;
+    }
 
     const flagsOffset = rangeStart >> 3;
     const result = new Uint8Array(Math.ceil(rangeEnd / 8) - flagsOffset);
@@ -256,16 +264,16 @@ function mergeMeshLightFlags(
         const actorFlags = flagArrays[ai];
 
         if (actorFlags) {
-            for (let vi = 0; vi < actorVertexCount; vi++) {
-                const srcByte = Math.floor(vi / 8);
-                const srcBit = vi % 8;
+            const count = Math.min(actorFlags.length, Math.ceil(actorVertexCount / 8));
+            const shift = globalVertex & 7;
+            const offset = Math.floor(globalVertex / 8) - flagsOffset;
+            const tail = actorVertexCount & 7;
 
-                if (srcByte < actorFlags.length && (actorFlags[srcByte] & (1 << srcBit))) {
-                    const dstVertex = globalVertex + vi;
-                    const dstByte = Math.floor(dstVertex / 8) - flagsOffset;
-                    const dstBit = dstVertex % 8;
-                    result[dstByte] |= (1 << dstBit);
-                }
+            for (let bi = 0; bi < count; bi++) {
+                const bits = tail && bi === Math.floor(actorVertexCount / 8) ? actorFlags[bi] & ((1 << tail) - 1) : actorFlags[bi];
+
+                result[offset + bi] |= bits << shift;
+                if (shift) result[offset + bi + 1] |= bits >>> (8 - shift);
             }
         }
         globalVertex += actorVertexCount;
@@ -280,6 +288,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let totalColliderIndices = 0;
     let hasColors = false;
     let hasColorsInstance = false;
+    let hasVertexAlpha = false;
     let hasSway = false;
     let hasUVs = false;
     let ColorArrayConstructor: any = Float32Array;
@@ -297,12 +306,14 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             hasColorsInstance = true;
             ColorInstanceConstructor = geo.colorsInstance.constructor;
         }
+        if (geo.vertexAlpha) hasVertexAlpha = true;
         if (geo.sway) hasSway = true;
         if (geo.uvs) hasUVs = true;
     }
 
     const mergedPositions = new Float32Array(totalVertices * 3);
     const mergedNormals = new Float32Array(totalVertices * 3);
+    const mergedVertexAlpha = hasVertexAlpha ? new Uint8Array(totalVertices).fill(255) : null;
     const mergedUVs = hasUVs ? new Float32Array(totalVertices * 2) : null;
     const mergedColors = hasColors ? new ColorArrayConstructor(totalVertices * 3) : null;
     const mergedColorsInstance = hasColorsInstance ? new ColorInstanceConstructor(totalVertices * 3).fill(127) : null; // 127 = 1.0 in the halved Modulate2X
@@ -325,7 +336,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const tmpN = new Vector3();
 
     for (let ai = 0; ai < actorGeometries.length; ai++) {
-        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider, collision } = actorGeometries[ai];
+        const { positions, normals, uvs, colors, vertexAlpha, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider } = actorGeometries[ai];
 
         for (let vi = 0; vi < vertexCount; vi++) {
             tmpV.fromArray(positions, vi * 3);
@@ -341,6 +352,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             mergedNormals[(vertexOffset + vi) * 3 + 2] = tmpN.z;
         }
 
+        if (mergedVertexAlpha && vertexAlpha) mergedVertexAlpha.set(vertexAlpha.subarray(0, vertexCount), vertexOffset);
         if (mergedUVs && uvs) mergedUVs.set(uvs.subarray(0, vertexCount * 2), vertexOffset * 2);
         if (mergedColors && colors) mergedColors.set(colors.subarray(0, vertexCount * 3), vertexOffset * 3);
         if (mergedColorsInstance && colorsInstance) mergedColorsInstance.set(colorsInstance.subarray(0, vertexCount * 3), vertexOffset * 3);
@@ -435,6 +447,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             normals: mergedNormals,
             uvs: mergedUVs,
             colors: mergedColors,
+            vertexAlpha: mergedVertexAlpha,
             colorsInstance: mergedColorsInstance,
             sway: mergedSway
         },
@@ -495,12 +508,16 @@ function mortonKey(position: number[] | undefined): number {
 
     let x = Math.max(0, Math.min(0xffff, ((position[0] + 165000) / 6) | 0));
     let y = Math.max(0, Math.min(0xffff, ((position[1] + 165000) / 6) | 0));
-    let key = 0;
+    x = (x | x << 8) & 0x00ff00ff;
+    y = (y | y << 8) & 0x00ff00ff;
+    x = (x | x << 4) & 0x0f0f0f0f;
+    y = (y | y << 4) & 0x0f0f0f0f;
+    x = (x | x << 2) & 0x33333333;
+    y = (y | y << 2) & 0x33333333;
+    x = (x | x << 1) & 0x55555555;
+    y = (y | y << 1) & 0x55555555;
 
-    for (let i = 0; i < 16; i++)
-        key += ((x >> i) & 1) * Math.pow(2, 2 * i) + ((y >> i) & 1) * Math.pow(2, 2 * i + 1);
-
-    return key;
+    return (x | y << 1) >>> 0;
 }
 
 function equalScriptProperties(a: any, b: any): boolean {
@@ -617,32 +634,32 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
             const colliderIndices = actorGeometries[0].collision.collideActors ? mergedColliderIndices : null;
 
             const batchUuid = generateUUID();
-            const batchElements: BatchElement_T[] = actors.map((a, ai) => ({
+            const batchElements: BatchElement_T[] = actors.map(a => ({
                 uuid: a.uuid,
                 boundsMin: a.bounds?.min || [0, 0, 0],
                 boundsMax: a.bounds?.max || [0, 0, 0],
-                groups: mergedGroups
-                    .filter(g => g.actorIndex === ai)
-                    .map(g => ({ start: g.start, count: g.count, materialIndex: g.materialIndex })),
+                groups: [] as BatchElementGroup_T[],
                 zoneMask: (a as any).zoneMask || 0n,
                 isRangeIgnored: !!(a as any).isRangeIgnored,
                 leaves: actorLeaves.get(a.uuid) ?? null
             }));
 
+            for (const group of mergedGroups)
+                batchElements[group.actorIndex].groups.push({ start: group.start, count: group.count, materialIndex: group.materialIndex });
+
             // Regroup indices per material if multi-material
             let finalGroups: [number, number, number][];
 
             if (mergedGroups.some(g => g.materialIndex !== 0)) {
-                const materialGroupsMap = new Map<number, { indices: number[], elementGroup: BatchElementGroup_T }[]>();
+                const sourceIndices = mergedIndices.slice();
+                const materialGroupsMap = new Map<number, { start: number, count: number, elementGroup: BatchElementGroup_T }[]>();
                 for (const group of mergedGroups) {
                     const matIndex = group.materialIndex;
                     if (!materialGroupsMap.has(matIndex)) materialGroupsMap.set(matIndex, []);
-                    const indices: number[] = [];
-                    for (let ii = 0; ii < group.count; ii++) indices.push(mergedIndices[group.start + ii]);
                     const elementGroup = batchElements[group.actorIndex].groups.find(g =>
                         g.start === group.start && g.count === group.count && g.materialIndex === group.materialIndex
                     )!;
-                    materialGroupsMap.get(matIndex)!.push({ indices, elementGroup });
+                    materialGroupsMap.get(matIndex)!.push({ start: group.start, count: group.count, elementGroup });
                 }
                 finalGroups = [];
                 let globalIndexOffset = 0;
@@ -650,12 +667,12 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     const entries = materialGroupsMap.get(matIndex)!;
                     const matGroupStart = globalIndexOffset;
                     let matGroupCount = 0;
-                    for (const { indices, elementGroup } of entries) {
+                    for (const { start, count, elementGroup } of entries) {
                         elementGroup.start = globalIndexOffset;
 
-                        mergedIndices.set(indices, globalIndexOffset);
-                        globalIndexOffset += indices.length;
-                        matGroupCount += indices.length;
+                        mergedIndices.set(sourceIndices.subarray(start, start + count), globalIndexOffset);
+                        globalIndexOffset += count;
+                        matGroupCount += count;
                     }
                     finalGroups.push([matGroupStart, matGroupCount, matIndex]);
                 });
@@ -669,11 +686,12 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     normals: attributes.normals,
                     ...(attributes.uvs ? { uvs: attributes.uvs } : {}),
                     ...(attributes.colors ? { colors: attributes.colors } : {}),
+                    ...(attributes.vertexAlpha ? { vertexAlpha: attributes.vertexAlpha } : {}),
                     ...(attributes.colorsInstance ? { colorsInstance: attributes.colorsInstance } : {}),
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
-                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices) : null,
+                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices, true) : null,
                 groups: finalGroups
             } as IGeometryDecodeInfo;
             library.materials[batchUuid] = {
@@ -701,7 +719,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 actors,
                 colliderIndices,
                 actorColliderIndices: mergedColliderIndices,
-                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length }] : []),
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index], true), staticMeshCollision: library.geometries[actor.instance.mesh.geometry].staticMeshCollision }] : []),
                 lights: mergedLights,
                 staticLighting,
                 perActorAmbient,

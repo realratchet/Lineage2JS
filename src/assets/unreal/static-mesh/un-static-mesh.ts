@@ -5,7 +5,8 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 // import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-import { BufferValue, type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
+import FRawColorStream from "../un-raw-color-stream";
+import { type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
 import UObject from "../un-object";
 import { FStaticMeshCollisionData } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
@@ -24,6 +25,9 @@ export type IStaticMeshSwayDecodeInfo = { pivotZ: number, frequency: number, max
 export type IMaterialInstancedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "instance", baseMaterial: string, modifiers: string[] };
 export type StaticMeshDecodeResult_T = { object: IStaticMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, materials: [string, IBaseMaterialDecodeInfo][], colorMaterials: string[] };
 export type IStaticMeshCollisionDecodeInfo = {
+    materialIndices: Int32Array;
+    materials: (string | null)[];
+    defaultMaterial: string | null;
     useSimpleLineCollision: boolean;
     useSimpleBoxCollision: boolean;
     collisionModel: IBSPCollisionModelDecodeInfo | null;
@@ -39,7 +43,7 @@ export abstract class UStaticMesh extends UPrimitive {
     declare protected sections: FArray<FStaticMeshSection>;
     declare protected vertexStream: FStaticMeshVertexStream;
     // declare protected colorStream: FRawColorStream;
-    // declare protected alphaStream: FRawColorStream;
+    declare protected alphaStream: FRawColorStream;
     declare protected uvStream: FArray<FStaticMeshUVStream>;
     declare protected indexStream: FRawIndexBuffer; // triangle indices
     // declare protected wireframeIndexBuffer: FRawIndexBuffer; // triangle edge indices
@@ -85,7 +89,7 @@ export abstract class UStaticMesh extends UPrimitive {
             ["bStaticMeshLod", "BoolProperty"],
             ["bStaticMeshLodBlend", "BoolProperty"],
             ["bMakeTwoSideMesh", "BoolProperty"],
-            ["bUseBillBoard", "FloatProperty"],
+            ["bUseBillBoard", "BoolProperty"],
         ];
     }
 
@@ -123,7 +127,7 @@ export abstract class UStaticMesh extends UPrimitive {
         this.sections = new FArray(FStaticMeshSection);
         this.vertexStream = new FStaticMeshVertexStream();
         // this.colorStream = new FRawColorStream();
-        // this.alphaStream = new FRawColorStream();
+        this.alphaStream = new FRawColorStream();
         this.uvStream = new FArray(FStaticMeshUVStream);
         this.indexStream = new FRawIndexBuffer(); // triangle indices
         // this.wireframeIndexBuffer = new FRawIndexBuffer(); // triangle edge indices
@@ -136,8 +140,7 @@ export abstract class UStaticMesh extends UPrimitive {
         this.vertexStream.load(pkg);
         // this.colorStream.load(pkg);
         pkg.seek(pkg.read("compat32") * 4 + 4);
-        // this.alphaStream.load(pkg);
-        pkg.seek(pkg.read("compat32") * 4 + 4);
+        this.alphaStream.load(pkg);
         this.uvStream.load(pkg);
         this.indexStream.load(pkg);
         // this.wireframeIndexBuffer.load(pkg);
@@ -331,41 +334,29 @@ export abstract class UStaticMesh extends UPrimitive {
         const normals = new Float32Array(countVerts * 3);
         const uvs = Array.from({ length: countUvs }, () => new Float32Array(countVerts * 2));
         const indices = new TypedIndicesArray(countIndices);
+        const alphaCount = this.alphaStream.getElemCount();
+        if (alphaCount && alphaCount !== countVerts) throw new Error(`Static mesh '${this.objectName}' has ${alphaCount} alpha values for ${countVerts} vertices.`);
+        const vertexAlpha = alphaCount ? new Uint8Array(countVerts) : null;
+        if (vertexAlpha) for (let i = 0; i < countVerts; i++) vertexAlpha[i] = this.alphaStream.getColor(i)[3];
 
         // if (countVerts === 0x42)
         //     debugger;
 
-        for (let i = 0; i < countVerts; i++) {
-            const [px, py, pz, nx, ny, nz] = this.vertexStream.getElem(i);
+        // if (Math.abs(px - 241.79730224609375) < 1 && Math.abs(py + 235.71449279785156) < 1 && Math.abs(pz + 622.3489990234375) < 1) {
+        //     debugger;
+        // }
 
-            // if (Math.abs(px - 241.79730224609375) < 1 && Math.abs(py + 235.71449279785156) < 1 && Math.abs(pz + 622.3489990234375) < 1) {
-            //     debugger;
-            // }
+        this.vertexStream.copyTo(positions, normals);
+        colors.fill(255);
 
-            positions[i * 3 + 0] = px;
-            positions[i * 3 + 1] = py;
-            positions[i * 3 + 2] = pz;
-
-            normals[i * 3 + 0] = nx;
-            normals[i * 3 + 1] = ny;
-            normals[i * 3 + 2] = nz;
-
-            colors[i * 3 + 0] = 255;
-            colors[i * 3 + 1] = 255;
-            colors[i * 3 + 2] = 255;
-
-            for (let s = 0; s < countUvs; s++) {
-                const [u, v] = this.uvStream.getElem(s).getUV(i);
-
-                uvs[s][i * 2 + 0] = u;
-                uvs[s][i * 2 + 1] = v;
-            }
-        }
+        for (let s = 0; s < countUvs; s++) this.uvStream.getElem(s).copyTo(uvs[s]);
 
         for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
-        const { indices: collision, nodes: collisionNodes, bounds: collisionBounds } = this.collisionData.getDecodeInfo();
+        const { indices: collision, materialIndices, nodes: collisionNodes, bounds: collisionBounds } = this.collisionData.getDecodeInfo();
+        const materialClass = (this as any).pkg.loader.getEnginePackage().fetchObjectByType("Class", "Material").loadSelf();
+        builder.pullScriptClasses([materialClass]);
 
         // const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
         // collision[offset + 0] = verts[0][0];
@@ -383,18 +374,22 @@ export abstract class UStaticMesh extends UPrimitive {
                 positions,
                 colors,
                 normals,
+                ...(vertexAlpha ? { vertexAlpha } : {}),
                 uvs
             },
             indices,
             colliderIndices: collision,
             staticMeshCollision: {
+                materialIndices,
+                materials: this.materials.map(material => builder.pullScriptObject(material.propertyDict.get("Material"))),
+                defaultMaterial: builder.pullScriptObject(materialClass.propertyDict.get("DefaultMaterial")),
                 useSimpleLineCollision: this.useSimpleLineCollision,
                 useSimpleBoxCollision: this.UseSimpleBoxCollision,
-                collisionModel: this.collisionModel ? this.collisionModel.loadSelf().getCollisionModelDecodeInfo() : null,
+                collisionModel: this.collisionModel ? this.collisionModel.loadSelf().getCollisionModelDecodeInfo(builder) : null,
                 nodes: collisionNodes,
                 bounds: collisionBounds
             },
-            groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
+            groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index] as [number, number, number]),
             bounds: this.decodeBoundsInfo()
         };
 
@@ -460,9 +455,11 @@ export abstract class UStaticMesh extends UPrimitive {
         return this.collisionModel ? bounds.addBox(this.collisionModel.loadSelf().getCollisionBoundingBox(owner)) : bounds;
     }
 
-    public getRenderBoundingBox(owner?: UAActor): FBox {
+    public getRenderBoundingBox(_owner?: UAActor): FBox {
         return this.boundingBox;
     }
 }
 
 export default UStaticMesh;
+
+(UStaticMesh.prototype as any).isPackageAsset = true;

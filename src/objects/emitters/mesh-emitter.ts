@@ -51,8 +51,17 @@ export class MeshEmitter extends BaseEmitter {
             transparent: true,
             depthWrite: this.isDepthWriting,
             depthTest: this.isDepthTesting,
-            isInstanced
+            isInstanced,
+            rangeFade: this.rangeFade
         });
+    }
+
+    public getLightTexture(): THREE.Texture | null {
+        const settings = this.materials[0] as ParticleMaterialInitSettings_T;
+
+        if ((settings as any).isMaterial) return super.getLightTexture();
+
+        return (settings.type === "sprite" ? settings.sprites[0]?.uniforms.map.texture : settings.map?.uniforms.map.texture) ?? null;
     }
 
     protected createInstancedMesh(capacity: number): any { return new InstancedMeshParticles(this.geometry, this.createMaterial(this.materials[0] as ParticleMaterialInitSettings_T, true), capacity); }
@@ -67,7 +76,7 @@ export class MeshEmitter extends BaseEmitter {
                 return (m as THREE.Material).clone();
             }
 
-            return this.createMaterial(m, false);
+            return this.createMaterial(m as ParticleMaterialInitSettings_T, false);
         });
 
         return new ParticleMesh(

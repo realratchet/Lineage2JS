@@ -1,6 +1,6 @@
 import { Box3, Vector3 } from "three";
 import type { CollisionHull_T, CollisionModel_T } from "../objects/objects";
-import type { IBSPCollisionNodeDecodeInfo_T } from "@l2js/engine/contracts/mesh";
+import type { IBSPCollisionNodeDecodeInfo_T, IBSPNodeSurfaceDecodeInfo_T } from "@l2js/engine/contracts/mesh";
 
 const HULL_FLIP = 0x40000000;
 
@@ -51,7 +51,46 @@ export function buildCollisionModel(nodes: IBSPCollisionNodeDecodeInfo_T[], root
         bounds.union(hull.bounds);
     }
 
-    return { planes, children, isCsg, hullIndices, hulls, rootOutside, bounds };
+    const surfaces = nodes.length && nodes[0].surface ? nodes.map(node => node.surface) : undefined;
+
+    return { planes, children, isCsg, hullIndices, hulls, rootOutside, bounds, surfaces };
+}
+
+export function findCoplanarSurface(surfaces: IBSPNodeSurfaceDecodeInfo_T[], nodeIndex: number, location: Vector3): number {
+    // Retail UModel::LineCheck calls 0x9cbd10 after the hit backoff.
+    while (nodeIndex !== -1) {
+        const surface = surfaces[nodeIndex];
+
+        if (!surface) throw new Error(`BSP node ${nodeIndex} has no surface.`);
+        const vertices = surface.vertices, normal = surface.normal;
+        let previous = 0;
+        let last = vertices.length - 3;
+        let outside = false;
+
+        for (let i = 0; i < vertices.length; i += 3) {
+            const dx = vertices[i] - vertices[last];
+            const dy = vertices[i + 1] - vertices[last + 1];
+            const dz = vertices[i + 2] - vertices[last + 2];
+            const nx = Math.fround(dy * normal[2] - dz * normal[1]);
+            const ny = Math.fround(dz * normal[0] - dx * normal[2]);
+            const nz = dx * normal[1] - dy * normal[0];
+            const pointDot = nx * location.x + ny * location.y + nz * location.z;
+            const vertexDot = nx * vertices[i] + ny * vertices[i + 1] + nz * vertices[i + 2];
+            const distance = pointDot - vertexDot;
+
+            if (distance < 0 && previous > 0 || distance > 0 && previous < 0) {
+                outside = true;
+                break;
+            }
+            previous = Math.fround(distance);
+            last = i;
+        }
+
+        if (!outside) return nodeIndex;
+        nodeIndex = surface.nextCoplanar;
+    }
+
+    return -1;
 }
 
 export default buildCollisionModel;

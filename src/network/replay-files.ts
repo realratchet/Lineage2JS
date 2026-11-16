@@ -41,7 +41,7 @@ export function deleteReplayFile(name: string): Promise<void> {
 
 export function saveReplayFile(bytes: Uint8Array, name: string = null): Promise<string> {
     if (name !== null && !/^[^\\/]+\.l2r$/i.test(name)) throw new Error(`Invalid replay filename '${name}'.`);
-    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
 
     return accessFiles("readwrite", (store, result) => {
         const request = store.getAllKeys();

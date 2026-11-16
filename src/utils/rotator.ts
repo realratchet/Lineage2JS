@@ -70,10 +70,17 @@ export class Rotator {
         const elements = matrix.elements;
 
         // Retail Core FCoords::OrthoRotation 0x1014f940: double[0x10195450]=32768/PI, integer truncation at 0x1017cfa0.
-        this.set(Math.trunc(Math.atan2(elements[2], Math.sqrt(elements[0] * elements[0] + elements[1] * elements[1])) * 32768 / Math.PI), Math.trunc(Math.atan2(elements[1], elements[0]) * 32768 / Math.PI), 0);
+        this.set(
+            Math.trunc(Math.atan2(elements[2], Math.sqrt(elements[0] * elements[0] + elements[1] * elements[1])) * 32768 / Math.PI),
+            Math.trunc(Math.atan2(elements[1], elements[0]) * 32768 / Math.PI),
+            0
+        );
         tmpYAxis.set(-sinRotator(this.yaw), sinRotator(this.yaw + 16384), 0);
         // 0x1014f9f5..0x1014fa3f: atan2(ZAxis dot S.YAxis, YAxis dot S.YAxis).
-        this.roll = Math.trunc(Math.atan2(elements[9] * tmpYAxis.y + elements[10] * tmpYAxis.z + elements[8] * tmpYAxis.x, elements[5] * tmpYAxis.y + elements[6] * tmpYAxis.z + elements[4] * tmpYAxis.x) * 32768 / Math.PI);
+        this.roll = Math.trunc(Math.atan2(
+            elements[9] * tmpYAxis.y + elements[10] * tmpYAxis.z + elements[8] * tmpYAxis.x,
+            elements[5] * tmpYAxis.y + elements[6] * tmpYAxis.z + elements[4] * tmpYAxis.x
+        ) * 32768 / Math.PI);
         return this;
     }
 }

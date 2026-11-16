@@ -4,6 +4,7 @@ import { decodeSkinnedMesh } from "../../assets/decoders/object3d-decoder";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type LitSkinnedMesh from "../../objects/lit-skinned-mesh";
+import type LocalSpaceSkeleton from "../../objects/local-space-skeleton";
 import type RenderManager from "../render-manager";
 
 type MeshActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
@@ -56,7 +57,7 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         this.mesh = decodeSkinnedMesh(this.library, info, skins);
         // LocalSpaceSkeleton poses exclude the mesh transform; retain its origin and rotation outside skinning.
         for (const inverse of this.mesh.skeleton.boneInverses) inverse.multiply(this.mesh.bindMatrix);
-        this.mesh.bind(this.mesh.skeleton, tmpIdentity);
+        this.mesh.bind(this.mesh.skeleton as LocalSpaceSkeleton, tmpIdentity);
         // Reference-pose bounds stay local; SkinnedMesh.computeBoundingSphere uses world-space bone matrices.
         this.mesh.geometry.computeBoundingSphere();
         this.mesh.boundingSphere = this.mesh.geometry.boundingSphere.clone();

@@ -1,25 +1,26 @@
-import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
+import { isOrderIndependentAdditive } from "../../materials/particle-blending";
+import { Camera, StreamDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix3, Matrix4, Mesh, Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from "three";
 import { copyShaderMaterial } from "../../materials/global-uniforms";
+import { EParticleFlags_T } from "./base-emitter";
+
+const rotationUnit = Math.PI * 2 / 65536;
 
 const baseGeometry = new PlaneGeometry(2, 2);
 const DEPTH_BUCKET_SIZE = 2048;
 const BATCH_IDLE_MS = 5000;
 
-type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: any[]; lastUsed: number };
+type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; actor: Object3D; emitters: any[]; lastUsed: number };
+type BatchMaterial_T = { refs: number, material: ShaderMaterial, disposed: boolean, dispose: () => void };
 
 const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
 const tmpSubdivBlend = new Vector3();
+const tmpMatrix = new Matrix3();
+const tmpRotation = new Matrix4();
+const tmpProjUp = new Vector3();
+const tmpProjFront = new Vector3();
+const tmpProjRight = new Vector3();
 const cacheMaterialKey = new WeakMap<ShaderMaterial, { textureUuid: string; key: string }>();
-
-export function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
-    return material?.isInstancedParticleMaterial === true
-        && material.blending === CustomBlending
-        && material.blendSrc === OneFactor
-        && material.blendDst === OneFactor
-        && material.blendSrcAlpha === ZeroFactor
-        && material.blendDstAlpha === OneFactor;
-}
 
 function materialKey(material: ShaderMaterial): string {
     const map = material.uniforms?.map?.value;
@@ -52,15 +53,21 @@ function materialKey(material: ShaderMaterial): string {
     return key;
 }
 
+class SpriteParticleBatchMesh extends Mesh<InstancedBufferGeometry, ShaderMaterial> {
+    public emitterActor: Object3D;
+    public isRendered = false;
+
+    public onAfterRender() { this.isRendered = true; }
+}
+
 class SpriteParticleBatch {
-    public readonly mesh: Mesh<InstancedBufferGeometry, ShaderMaterial>;
+    public readonly mesh: SpriteParticleBatchMesh;
+    public readonly sourceMaterial: ShaderMaterial;
     protected capacity = 0;
     protected readonly fixedNormal: boolean;
     protected positionAttr: InstancedBufferAttribute;
     protected rightAttr: InstancedBufferAttribute;
     protected upAttr: InstancedBufferAttribute;
-    protected scaleAttr: InstancedBufferAttribute;
-    protected spinAttr: InstancedBufferAttribute;
     protected colorAttr: InstancedBufferAttribute;
     protected uvAttr: InstancedBufferAttribute;
     protected uvBlendAttr: InstancedBufferAttribute;
@@ -77,6 +84,7 @@ class SpriteParticleBatch {
     protected readonly sortCenter = new Vector3();
 
     public constructor(sourceMaterial: ShaderMaterial, renderOrder: number) {
+        this.sourceMaterial = sourceMaterial;
         const fixedNormal = sourceMaterial.defines?.USE_FIXED_NORMAL !== undefined;
         const geometry = new InstancedBufferGeometry();
         geometry.setIndex(baseGeometry.index);
@@ -91,7 +99,7 @@ class SpriteParticleBatch {
         material.needsUpdate = true;
         material.name = `${sourceMaterial.name}_world_batch`;
 
-        this.mesh = new Mesh(geometry, material);
+        this.mesh = new SpriteParticleBatchMesh(geometry, material);
         this.mesh.name = `ParticleBatch_${sourceMaterial.name}`;
         this.mesh.frustumCulled = false;
         this.mesh.visible = false;
@@ -107,7 +115,7 @@ class SpriteParticleBatch {
         this.mesh.geometry.instanceCount = 0;
     }
 
-    public dispose() {
+    public dispose(keepMaterial = false) {
         const geometry = this.mesh.geometry;
 
         // Drop shared attributes before dispose so other batches keep their buffers.
@@ -115,10 +123,10 @@ class SpriteParticleBatch {
         geometry.deleteAttribute("uv");
         geometry.setIndex(null);
         geometry.dispose();
-        this.mesh.material.dispose();
+        if (!keepMaterial) this.mesh.material.dispose();
     }
 
-    public update(emitters: any[]) {
+    public update(emitters: any[], cameraRight: Vector3, cameraUp: Vector3) {
         let required = 0;
         for (const emitter of emitters)
             required += Math.min(emitter.maxActiveParticles, emitter.activeParticles);
@@ -126,10 +134,8 @@ class SpriteParticleBatch {
         this.ensureCapacity(Math.max(required, 1));
 
         const positions = this.positionAttr.array as Float32Array;
-        const rights = this.fixedNormal ? this.rightAttr.array as Float32Array : null;
-        const ups = this.fixedNormal ? this.upAttr.array as Float32Array : null;
-        const scales = this.fixedNormal ? null : this.scaleAttr.array as Float32Array;
-        const spins = this.fixedNormal ? null : this.spinAttr.array as Float32Array;
+        const rights = this.rightAttr.array as Float32Array;
+        const ups = this.upAttr.array as Float32Array;
         const colors = this.colorAttr.array as Float32Array;
         const uvs = this.uvAttr.array as Float32Array;
         const uvBlends = this.uvBlendAttr ? this.uvBlendAttr.array as Float32Array : null;
@@ -158,14 +164,19 @@ class SpriteParticleBatch {
                 if (Math.abs(direction.x) >= 0.5) nonParallel.set(0, 1, 0);
                 localUp.crossVectors(nonParallel, direction).normalize();
                 localRight.crossVectors(localUp, direction).normalize();
-                baseRight.copy(localRight).negate().transformDirection(mesh.matrixWorld);
-                baseUp.copy(localUp).negate().transformDirection(mesh.matrixWorld);
+                baseRight.copy(localRight).negate();
+                baseUp.copy(localUp).negate();
+            } else {
+                tmpRotation.extractRotation(mesh.matrixWorld).invert();
+                baseRight.copy(cameraRight).transformDirection(tmpRotation).negate();
+                baseUp.copy(cameraUp).transformDirection(tmpRotation).negate();
             }
+            tmpMatrix.setFromMatrix4(mesh.matrixWorld);
 
             const particleLimit = Math.min(emitter.maxActiveParticles, emitter.activeParticles);
             for (let i = 0; i < particleLimit; i++) {
                 const settings = emitter.particles[i];
-                if (!(settings.flags & 1)) continue;
+                if (!(settings.flags & EParticleFlags_T.PTF_Active)) continue;
 
                 const scaleX = settings.scale.x;
                 const scaleY = settings.scale.y;
@@ -175,13 +186,11 @@ class SpriteParticleBatch {
 
                 let angle = 0;
                 if (emitter.isSpinning || emitter.spinParticles)
-                    angle = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536);
-                if (this.fixedNormal) {
-                    const sin = Math.sin(angle);
-                    const cos = Math.cos(angle);
-                    right.copy(baseRight).multiplyScalar(cos).add(spinTemp.copy(baseUp).multiplyScalar(sin)).multiplyScalar(scaleX);
-                    up.copy(baseUp).multiplyScalar(cos).sub(spinTemp.copy(baseRight).multiplyScalar(sin)).multiplyScalar(scaleY);
-                }
+                    angle = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (rotationUnit);
+                const sin = Math.sin(angle);
+                const cos = Math.cos(angle);
+                right.copy(baseRight).multiplyScalar(cos).add(spinTemp.copy(baseUp).multiplyScalar(sin)).multiplyScalar(scaleX).applyMatrix3(tmpMatrix);
+                up.copy(baseUp).multiplyScalar(cos).sub(spinTemp.copy(baseRight).multiplyScalar(sin)).multiplyScalar(scaleY).applyMatrix3(tmpMatrix);
 
                 const subdivision = emitter.resolveSubdivision(settings);
                 const subdivUV = emitter.computeSubdivUV(subdivision, emitter.worldBatchSubdivUV);
@@ -191,19 +200,12 @@ class SpriteParticleBatch {
                 positions[p3] = anchor.x;
                 positions[p3 + 1] = anchor.y;
                 positions[p3 + 2] = anchor.z;
-                if (this.fixedNormal) {
-                    rights[p3] = right.x;
-                    rights[p3 + 1] = right.y;
-                    rights[p3 + 2] = right.z;
-                    ups[p3] = up.x;
-                    ups[p3 + 1] = up.y;
-                    ups[p3 + 2] = up.z;
-                } else {
-                    const p2 = count * 2;
-                    scales[p2] = scaleX;
-                    scales[p2 + 1] = scaleY;
-                    spins[count] = angle;
-                }
+                rights[p3] = right.x;
+                rights[p3 + 1] = right.y;
+                rights[p3 + 2] = right.z;
+                ups[p3] = up.x;
+                ups[p3 + 1] = up.y;
+                ups[p3 + 2] = up.z;
                 colors[p4] = settings.color.x;
                 colors[p4 + 1] = settings.color.y;
                 colors[p4 + 2] = settings.color.z;
@@ -234,13 +236,8 @@ class SpriteParticleBatch {
 
         if (count > 0) {
             this.markUpdated(this.positionAttr, count * 3);
-            if (this.fixedNormal) {
-                this.markUpdated(this.rightAttr, count * 3);
-                this.markUpdated(this.upAttr, count * 3);
-            } else {
-                this.markUpdated(this.scaleAttr, count * 2);
-                this.markUpdated(this.spinAttr, count);
-            }
+            this.markUpdated(this.rightAttr, count * 3);
+            this.markUpdated(this.upAttr, count * 3);
             this.markUpdated(this.colorAttr, count * 4);
             this.markUpdated(this.uvAttr, count * 4);
             if (this.uvBlendAttr) this.markUpdated(this.uvBlendAttr, count * 3);
@@ -259,15 +256,10 @@ class SpriteParticleBatch {
         this.capacity = Math.pow(2, Math.ceil(Math.log2(required)));
         const geometry = this.mesh?.geometry;
 
-        const make = (size: number) => new InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(DynamicDrawUsage);
+        const make = (size: number) => new InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(StreamDrawUsage);
         this.positionAttr = make(3);
-        if (this.fixedNormal) {
-            this.rightAttr = make(3);
-            this.upAttr = make(3);
-        } else {
-            this.scaleAttr = make(2);
-            this.spinAttr = make(1);
-        }
+        this.rightAttr = make(3);
+        this.upAttr = make(3);
         this.colorAttr = make(4);
         this.uvAttr = make(4);
         if (this.mesh.material.defines.USE_SUBDIVISION_BLEND !== undefined) this.uvBlendAttr = make(3);
@@ -277,13 +269,8 @@ class SpriteParticleBatch {
             (geometry as any)._maxInstanceCount = undefined;
 
             geometry.setAttribute("instancePosition", this.positionAttr);
-            if (this.fixedNormal) {
-                geometry.setAttribute("instanceRight", this.rightAttr);
-                geometry.setAttribute("instanceUp", this.upAttr);
-            } else {
-                geometry.setAttribute("instanceScale", this.scaleAttr);
-                geometry.setAttribute("instanceSpin", this.spinAttr);
-            }
+            geometry.setAttribute("instanceRight", this.rightAttr);
+            geometry.setAttribute("instanceUp", this.upAttr);
             geometry.setAttribute("instanceColor", this.colorAttr);
             geometry.setAttribute("instanceUV", this.uvAttr);
             if (this.uvBlendAttr) geometry.setAttribute("instanceUVBlend", this.uvBlendAttr);
@@ -295,9 +282,74 @@ export class InstancedSpriteBatcher {
     public readonly root = new Group();
     protected readonly batches = new Map<string, SpriteParticleBatch>();
     protected readonly groups = new Map<string, BatchGroup_T>();
+    protected readonly preparedBatches: SpriteParticleBatch[] = [];
+    protected readonly cacheMaterials = new Map<ShaderMaterial, BatchMaterial_T>();
 
     public constructor() {
         this.root.name = "InstancedSpriteBatches";
+    }
+
+    protected retainMaterial(source: ShaderMaterial) {
+        let entry = this.cacheMaterials.get(source);
+        if (!entry) {
+            entry = { refs: 0, material: null, disposed: false, dispose: null };
+            entry.dispose = () => {
+                entry.disposed = true;
+                source.removeEventListener("dispose", entry.dispose);
+                if (entry.material) entry.material.dispose();
+                entry.material = null;
+                if (!entry.refs) this.cacheMaterials.delete(source);
+            };
+            source.addEventListener("dispose", entry.dispose);
+            this.cacheMaterials.set(source, entry);
+        }
+        entry.refs++;
+    }
+
+    protected releaseBatch(batch: SpriteParticleBatch) {
+        const source = batch.sourceMaterial, entry = this.cacheMaterials.get(source)!;
+        entry.refs--;
+        // Keep one program reference while its source material is alive.
+        const keepMaterial = batch.mesh.isRendered && !entry.disposed && !entry.material;
+        if (keepMaterial) entry.material = batch.mesh.material;
+        batch.dispose(keepMaterial);
+        if (!entry.refs && !entry.material) {
+            source.removeEventListener("dispose", entry.dispose);
+            this.cacheMaterials.delete(source);
+        }
+    }
+
+    public prepare(root: Object3D, scene: Object3D) {
+        root.traverse(object => {
+            const mesh = object as any, source = mesh.material as ShaderMaterial;
+            if (!mesh.isWorldBatchCandidate || !isOrderIndependentAdditive(source) || this.cacheMaterials.has(source)) return;
+
+            const batch = new SpriteParticleBatch(source, mesh.renderOrder);
+            this.retainMaterial(source);
+            const entry = this.cacheMaterials.get(source)!;
+            entry.refs--;
+            entry.material = batch.mesh.material;
+            this.preparedBatches.push(batch);
+            scene.children.push(batch.mesh);
+        });
+    }
+
+    public finishPrepare() {
+        for (const batch of this.preparedBatches) batch.dispose(true);
+        this.preparedBatches.length = 0;
+    }
+
+    public dispose() {
+        this.finishPrepare();
+        for (const batch of this.batches.values()) this.releaseBatch(batch);
+        for (const [source, entry] of this.cacheMaterials) {
+            source.removeEventListener("dispose", entry.dispose);
+            if (entry.material) entry.material.dispose();
+        }
+        this.cacheMaterials.clear();
+        this.batches.clear();
+        this.groups.clear();
+        this.root.clear();
     }
 
     public update(emitters: any[], camera: Camera) {
@@ -306,6 +358,10 @@ export class InstancedSpriteBatcher {
         for (const group of this.groups.values()) group.emitters.length = 0;
 
         camera.updateMatrixWorld();
+        const projUp = tmpProjUp.copy(camera.up).normalize();
+        const projFront = tmpProjFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
+        const projRight = tmpProjRight.crossVectors(projFront, projUp).normalize();
+        projUp.crossVectors(projRight, projFront).normalize();
 
         for (const emitter of emitters) {
             const mesh = emitter.instancedMesh;
@@ -322,10 +378,11 @@ export class InstancedSpriteBatcher {
             tmpAnchor.setFromMatrixPosition(mesh.matrixWorld);
             tmpViewPosition.copy(tmpAnchor).applyMatrix4(camera.matrixWorldInverse);
             const depthBucket = Math.max(0, Math.floor(-tmpViewPosition.z / DEPTH_BUCKET_SIZE));
-            const key = `${materialKey(material)}|order:${mesh.renderOrder}|depth:${depthBucket}`;
+            const actor = emitter.parent;
+            const key = `${materialKey(material)}|actor:${actor.uuid}|order:${mesh.renderOrder}|depth:${depthBucket}`;
             let group = this.groups.get(key);
             if (!group) {
-                group = { material, renderOrder: mesh.renderOrder, emitters: [], lastUsed: currentTime };
+                group = { material, renderOrder: mesh.renderOrder, actor, emitters: [], lastUsed: currentTime };
                 this.groups.set(key, group);
             }
             group.material = material;
@@ -343,7 +400,7 @@ export class InstancedSpriteBatcher {
 
                 if (idle) {
                     this.root.remove(idle.mesh);
-                    idle.dispose();
+                    this.releaseBatch(idle);
                     this.batches.delete(key);
                 }
 
@@ -356,10 +413,12 @@ export class InstancedSpriteBatcher {
             let batch = this.batches.get(key);
             if (!batch) {
                 batch = new SpriteParticleBatch(group.material, group.renderOrder);
+                this.retainMaterial(group.material);
+                batch.mesh.emitterActor = group.actor;
                 this.batches.set(key, batch);
                 this.root.add(batch.mesh);
             }
-            batch.update(group.emitters);
+            batch.update(group.emitters, projRight, projUp);
         }
     }
 }

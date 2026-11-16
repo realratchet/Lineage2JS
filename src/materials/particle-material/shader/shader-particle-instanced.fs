@@ -9,6 +9,7 @@ varying vec3 vSubdivisionBlend;
 uniform sampler2D map;
 #endif
 #include <alphatest_pars_fragment>
+uniform float rangeFade;
 #include <fog_pars_fragment>
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
@@ -16,6 +17,7 @@ uniform sampler2D map;
 void main() {
 
     #include <clipping_planes_fragment>
+    if (rangeFade < 1.0 && rangeFade <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
 
     vec4 diffuseColor = vColor;
 

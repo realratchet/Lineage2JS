@@ -28,7 +28,18 @@ export class NCPrivateShopWnd extends NCShopWnd {
             if (this.onQuit) this.onQuit();
             this.setVisible(false);
         });
-        this.messageButton = layer.button(this.element, 87, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(SysString_T.StoreMessage), () => { if (this.onMessage) this.onMessage(); });
+        this.messageButton = layer.button(
+            this.element,
+            87,
+            372,
+            76,
+            23,
+            "L2UI_CH3.Button.Btn1_Normal",
+            "L2UI_CH3.Button.Btn1_NormalOn",
+            null,
+            layer.getManager().getSysString(SysString_T.StoreMessage),
+            () => { if (this.onMessage) this.onMessage(); }
+        );
         this.packageCheckbox = layer.checkbox(this.element, 11, 350, 100, 23, layer.getManager().getSysString(SysString_T.PackageSale));
         this.counter = layer.text(this.element, "", 0xffb09b79, undefined, 251, 198);
         this.quitButton.hidden = this.messageButton.hidden = this.packageCheckbox.hidden = this.counter.hidden = true;
@@ -43,7 +54,12 @@ export class NCPrivateShopWnd extends NCShopWnd {
     public setLimit(limit: number) { this.maxCount = limit; this.drawTotal(); }
     public async showManageStore(list: PrivateStoreManageSell_T) {
         this.setOwnMode(true);
-        const pending = this.show(false, list.adena, list.items.map(item => ({ ...item, type1: item.type2, originalCount: item.count, referencePrice: item.price, price: 0 })), list.listed.map(item => ({ ...item, type1: item.type2, originalCount: item.count })));
+        const pending = this.show(
+            false,
+            list.adena,
+            list.items.map(item => ({ ...item, type1: item.type2, originalCount: item.count, referencePrice: item.price, price: 0 })),
+            list.listed.map(item => ({ ...item, type1: item.type2, originalCount: item.count }))
+        );
 
         this.ownerId = list.playerId;
         this.packageCheckbox.setChecked(list.isPackage);
@@ -115,7 +131,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
     }
     protected getTransferCount(item: ShopItem_T, count: number) { return this.isOwn ? count : super.getTransferCount(item, count); }
     protected getLabelIds() { return this.isOwn ? [138, 137, 143] : [137, 139, 142]; }
-    protected getTooltipContext(side: number) { return this.isOwn ? side ? 4 : 0 : this.isPackage || side === 0 ? 4 : 0; }
+    protected getTooltipContext(side: number): number { return this.isOwn ? side ? 4 : 0 : this.isPackage || side === 0 ? 4 : 0; }
     protected drawTotal() {
         super.drawTotal();
         if (!this.counter) return;

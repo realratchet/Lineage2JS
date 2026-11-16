@@ -1,8 +1,5 @@
 varying vec2 vUv;
 
-// texture-atlas subdivision (ParticleEmitter TextureUSubdivisions/VSubdivisions) - which
-// cell of the atlas this particle shows. xy = offset, zw = scale. Identity (0,0,1,1) for
-// unsubdivided textures.
 uniform vec4 uvOffsetScale;
 #ifdef USE_SUBDIVISION_BLEND
 uniform vec3 subdivisionBlend;

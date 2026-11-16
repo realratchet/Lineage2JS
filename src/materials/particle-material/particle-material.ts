@@ -1,13 +1,12 @@
 import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, NoBlending, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib, Vector3, Vector4 } from "three";
-import { updateTextureFiltering } from "../../assets/decoders/texture-decoder";
+import { updateTextureFiltering } from "../texture-settings";
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import type { ParticleBlendModes_T } from "@l2js/engine/contracts/emitter";
 import type { IDecodedParameter } from "@l2js/engine/contracts/material";
 
-// Billboard quads never need to tile, so always clamp. Mip-disable is opt-in
-// (atlas-cropped textures only) since low mips blend neighboring atlas cells.
+// Atlas cells need clamping; cropped textures disable mips to avoid neighboring cells.
 export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean = false) {
     if (!texture) return;
     let changed = false;
@@ -26,7 +25,7 @@ export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean
 export class ParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
-    constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
+    public constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions, rangeFade }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -39,6 +38,7 @@ export class ParticleMaterial extends ShaderMaterial {
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
+        uniforms.rangeFade = rangeFade ?? { value: 1 };
 
         const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
 
@@ -83,7 +83,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
     protected sprites: IDecodedParameter[];
     public readonly isUpdatable = true;
 
-    constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
+    public constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions, rangeFade }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -96,6 +96,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
+        uniforms.rangeFade = rangeFade ?? { value: 1 };
 
         const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
         if (blendBetweenSubdivisions) {
@@ -143,11 +144,8 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
 export default ParticleMaterial;
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
-export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {
-    // UE2 renders these modes into a backbuffer whose alpha is irrelevant. Our
-    // transparent intermediate target uses alpha for later compositing, so custom
-    // RGB blends must leave destination alpha alone. Applying e.g. Darken's
-    // ZERO/ONE_MINUS_SRC_COLOR to alpha punches a rectangular transparent hole.
+export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T): ParticleBlendingSettings_T {
+    // Preserve destination alpha for later transparent compositing.
     const preserveDestinationAlpha = {
         blendSrcAlpha: ZeroFactor,
         blendDstAlpha: OneFactor
@@ -184,7 +182,8 @@ export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) 
             blending: CustomBlending,
             blendSrc: ZeroFactor,
             blendDst: OneMinusSrcColorFactor,
-            ...preserveDestinationAlpha
+            ...preserveDestinationAlpha,
+            isAdditive: true // D3DDrv.dll RVA 0xa583..0xa626 overrides fog to FColor(0, 0, 0, 0).
         };
         // PTDS_Brighten: ONE, ONE_MINUS_SRC_COLOR (screen blend).
         case "brighten": return {
@@ -200,6 +199,8 @@ export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) 
     }
 }
 
+type ParticleBlendingSettings_T = { blending: THREE.Blending, blendSrc?: THREE.BlendingDstFactor, blendDst?: THREE.BlendingDstFactor, blendSrcAlpha?: THREE.BlendingDstFactor, blendDstAlpha?: THREE.BlendingDstFactor, isAdditive?: boolean };
+
 export type ParticleMaterialInitSettings_T = {
     type: "sprite" | "texture",
     map?: any,
@@ -209,5 +210,6 @@ export type ParticleMaterialInitSettings_T = {
     opacity: number,
     name: string,
     usesSubdivision?: boolean,
-    blendBetweenSubdivisions?: boolean
+    blendBetweenSubdivisions?: boolean,
+    rangeFade?: THREE.IUniform
 };

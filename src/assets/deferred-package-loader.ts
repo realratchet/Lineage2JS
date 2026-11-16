@@ -1,3 +1,5 @@
+import type AssetLoader from "./asset-loader";
+
 export class DeferredPackageLoader {
     public readonly loader: AssetLoader;
     public readonly path: string;

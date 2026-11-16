@@ -4,14 +4,17 @@ import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import Rotator from "../../utils/rotator";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, type IObject } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
-import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import type { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type BaseActor from "../../base-actor";
+import type { AttackTarget_T } from "../../objects/components/pawn-attack-component";
 import type RenderManager from "../../rendering/render-manager";
 import type { CollisionQuery_T } from "../collision-world";
 import type NMover from "../mover";
 import type { ICollidable } from "../../objects/objects";
 
-export type ProjectileActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
+const QUARTER_PI = Math.PI / 4;
+
+export type ProjectileActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, any> };
 
 const tmpDirection = new Vector3();
 const tmpOldPosition = new Vector3();
@@ -28,7 +31,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     protected readonly targetLocation = new Vector3();
     protected readonly delta = new Vector3();
     protected readonly renderManager: RenderManager;
-    protected target: BaseActor;
+    protected target: AttackTarget_T;
     protected readonly caster: BaseActor;
     protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void | boolean;
     protected readonly mover: NMover;
@@ -36,7 +39,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     protected hasStarted = false;
     protected hasHit = false;
 
-    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void | boolean, mover: NMover = null) {
+    public constructor(renderManager: RenderManager, caster: BaseActor, target: AttackTarget_T, onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void | boolean, mover: NMover = null) {
         super();
 
         this.renderManager = renderManager;
@@ -69,7 +72,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         };
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
 
         const call = data as ScriptNativeCall_T;
@@ -92,7 +95,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         if (distance <= 550) return 0;
 
         // 0x78cbe8..0x78cc1a: float[0xaae7e0]=PI/4, angle then tangent.
-        const angle = Math.PI / 4 - Math.PI / 4 * factor / ((distance - 550) * Math.PI / 4 + factor);
+        const angle = QUARTER_PI - QUARTER_PI * factor / ((distance - 550) * Math.PI / 4 + factor);
         const height = distance * Math.tan(angle);
 
         properties.set("bHermiteInterpolation", true);
@@ -230,21 +233,21 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         return true;
     }
 
-    public replaceTarget(target: BaseActor, replacement: BaseActor): void {
+    public replaceTarget(target: AttackTarget_T, replacement: AttackTarget_T): void {
         if (this.target !== target) return;
 
         this.target = replacement;
         this.getParent().scriptProperties.set("TargetActor", replacement);
     }
 
-    public removeTarget(target: BaseActor): void {
+    public removeTarget(target: AttackTarget_T): void {
         const properties = this.getParent().scriptProperties;
 
         if (this.target === target) {
             this.target = null;
             properties.set("TargetActor", null);
         }
-        const arrAssociated = properties.get("MagicInfo").AssociatedActor as BaseActor[];
+        const arrAssociated = properties.get("MagicInfo").AssociatedActor as AttackTarget_T[];
 
         for (let index = arrAssociated.length - 1; index >= 0; index--)
             if (arrAssociated[index] === target) arrAssociated.splice(index, 1);

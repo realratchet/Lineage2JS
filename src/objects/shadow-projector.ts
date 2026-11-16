@@ -1,4 +1,4 @@
-import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, NoBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
+import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, InstancedBufferGeometry, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, NoBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import { sinRotator } from "../assets/unreal/utils/rotator";
 import type BaseActor from "../base-actor";
@@ -9,11 +9,17 @@ import type LocalSpaceSkeleton from "./local-space-skeleton";
 import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import type { BatchRenderGroup_T } from "./lit-actor";
 
+const near = 10;
+const far = 65536;
+const zScale = Math.fround(far / (far - near));
+const zOffset = Math.fround(-near * far / (far - near));
+
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
 const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
 const SHADOW_BAND_Z = 200;
 const LIGHT_DISTANCE = 704;
 const SHADOW_SIZE = 256;
+const VECTOR_ROTATION_SCALE = 32767.5 / Math.PI;
 const SHADOW_POOL_SIZE = 20; // UShadowBitmapMaterial::Get 0x93ec08..0x93ec51 reuses targets modulo20.
 
 const BLUR_VERTEX = `
@@ -42,7 +48,7 @@ void main() {
 type PawnProjector_T = { actor: BaseActor, origin: Vector3, matrix: Matrix4, view: Matrix4, projection: Matrix4, normals: Matrix3, bounds: Box3, depth: Vector2, fov: number, slot: number, revision: number, frame: number };
 type ShadowTarget_T = { target: WebGLRenderTarget, revision: number };
 type ShadowTexture_T = { texture: FramebufferTexture, frame: number };
-type ReceiverMaterial_T = { material: ShaderMaterial, version: number };
+type ReceiverMaterial_T = { material: ShaderMaterial, version: number, instanced?: ShaderMaterial };
 type ReceiverBounds_T = { geometry: THREE.BufferGeometry, position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, index: THREE.BufferAttribute, positionVersion: number, indexVersion: number, start: number, count: number, bounds: Box3 };
 
 const tmpFocusPos = new Vector3();
@@ -62,6 +68,7 @@ const arrHiddenAttachments: Object3D[] = [];
 const arrTraverse: Object3D[] = [];
 const arrPawnMeshes: PawnMesh[] = [];
 const arrPausedSkeletons: LocalSpaceSkeleton[] = [];
+const arrReceiverProjectors: number[] = [];
 
 export class ShadowProjector {
     public readonly target = new WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { minFilter: LinearFilter, magFilter: LinearFilter, format: RGBAFormat, depthBuffer: false });
@@ -105,10 +112,29 @@ export class ShadowProjector {
             const after = mesh.onAfterRender;
             mesh.onAfterRender = (renderer, scene, camera, geometry, material, group) => {
                 after.call(mesh, renderer, scene, camera, geometry, material, group);
-                this.drawReceiver(renderer, scene, camera, mesh, material as ShaderMaterial, group);
+                this.drawReceiver(renderer, scene, camera, mesh, material as ShaderMaterial, group as unknown as THREE.GeometryGroup);
             };
             this.receiverMeshes.add(mesh);
         });
+    }
+
+    public compileReceiver(renderer: THREE.WebGLRenderer, scene: Scene, camera: Camera, mesh: Mesh): { isReady(): boolean }[] {
+        const source = mesh.material as ShaderMaterial;
+        if (!source.isShaderMaterial || !source.colorWrite || !(source as any).isStaticMeshMaterial && !(source as any).isTerrainMaterial || "USE_ACTOR_LIGHTS" in source.defines || "NO_SHADOW_RECEIVE" in source.defines) return [];
+
+        const material = this.getReceiverMaterial(source);
+        const instanced = this.getReceiverMaterial(source, renderer);
+        const programs: { isReady(): boolean }[] = [];
+        try {
+            for (const receiver of material === instanced ? [material] : [material, instanced]) {
+                mesh.material = receiver;
+                renderer.compile(scene, camera);
+                const program = (renderer.properties.get(receiver) as { currentProgram: { isReady(): boolean } }).currentProgram;
+                if (!program) throw new Error(`Missing shadow receiver program for '${mesh.name}'.`);
+                programs.push(program);
+            }
+        } finally { mesh.material = source; }
+        return programs;
     }
 
     public update(_renderer: THREE.WebGLRenderer, focus: Object3D, casters: Iterable<Object3D>, lightDirection: Vector3): void {
@@ -149,25 +175,50 @@ export class ShadowProjector {
         const actor = projector.actor, sphere = actor.getComponent<PawnRenderableComponent>("pawnRenderable").getPrimitiveRenderSphere();
         actor.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(0, tmpBoneMatrix);
         const root = tmpCasterPos.setFromMatrixPosition(tmpBoneMatrix);
-        const scale = 32767.5 / Math.PI;
-        const pitch = Math.trunc(Math.atan2(lightDirection.z, Math.hypot(lightDirection.x, lightDirection.y)) * scale), yaw = Math.trunc(Math.atan2(lightDirection.y, lightDirection.x) * scale);
+        const pitch = Math.trunc(Math.atan2(lightDirection.z, Math.hypot(lightDirection.x, lightDirection.y)) * VECTOR_ROTATION_SCALE);
+        const yaw = Math.trunc(Math.atan2(lightDirection.y, lightDirection.x) * VECTOR_ROTATION_SCALE);
         const sp = sinRotator(pitch), cp = sinRotator(pitch + 16384), sy = sinRotator(yaw), cy = sinRotator(yaw + 16384);
         tmpDirection.set(Math.fround(cp * cy), Math.fround(cp * sy), sp);
         tmpUp.set(Math.fround(-sp * cy), Math.fround(-sp * sy), cp);
         tmpLeft.set(sy, -cy, 0);
 
         projector.fov = Math.trunc(Math.atan2(sphere.radius * 2 + 160, LIGHT_DISTANCE) * 180 / Math.PI + 5);
-        const halfAngle = projector.fov * Math.PI / 360, tangent = Math.fround(Math.tan(halfAngle)), halfSize = LIGHT_DISTANCE * tangent, factor = Math.fround(0.5 / tangent);
+        const halfAngle = projector.fov * Math.PI / 360;
+        const tangent = Math.fround(Math.tan(halfAngle));
+        const halfSize = LIGHT_DISTANCE * tangent;
+        const factor = Math.fround(0.5 / tangent);
         const origin = projector.origin.copy(root).addScaledVector(tmpDirection, -LIGHT_DISTANCE);
-        const u = tmpCorner.copy(tmpLeft).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5), v = tmpRay.copy(tmpUp).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5), d = tmpDirection;
+        const u = tmpCorner.copy(tmpLeft).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5);
+        const v = tmpRay.copy(tmpUp).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5);
+        const d = tmpDirection;
         projector.matrix.set(u.x, u.y, u.z, -u.dot(origin), v.x, v.y, v.z, -v.dot(origin), d.x, d.y, d.z, -d.dot(origin), 0, 0, 0, 1);
         projector.normals.set(u.x / u.length(), u.y / u.length(), u.z / u.length(), v.x / v.length(), v.y / v.length(), v.z / v.length(), -d.x, -d.y, -d.z);
         // FCameraSceneNode::UpdateMatrices uses inverse angles before SinTab quantization (Engine10615900).
         const cameraSp = sinRotator(-pitch), cameraCp = sinRotator(16384 - pitch), cameraSy = sinRotator(-yaw), cameraCy = sinRotator(16384 - yaw);
-        const xx = Math.fround(cameraCy * cameraCp), xz = Math.fround(cameraCy * cameraSp), yx = Math.fround(-cameraSy * cameraCp), yz = Math.fround(-cameraSy * cameraSp);
+        const xx = Math.fround(cameraCy * cameraCp);
+        const xz = Math.fround(cameraCy * cameraSp);
+        const yx = Math.fround(-cameraSy * cameraCp);
+        const yz = Math.fround(-cameraSy * cameraSp);
         const ox = Math.fround(origin.x), oy = Math.fround(origin.y), oz = Math.fround(origin.z);
-        projector.view.set(cameraSy, cameraCy, 0, Math.fround(-ox * cameraSy - oy * cameraCy), xz, yz, cameraCp, Math.fround(-ox * xz - oy * yz - oz * cameraCp), -xx, -yx, cameraSp, Math.fround(ox * xx + oy * yx - oz * cameraSp), 0, 0, 0, 1);
-        const near = 10, far = 65536, f = Math.fround(1 / Math.tan(Math.fround(halfAngle))), zScale = Math.fround(far / (far - near)), zOffset = Math.fround(-near * far / (far - near));
+        projector.view.set(
+            cameraSy,
+            cameraCy,
+            0,
+            Math.fround(-ox * cameraSy - oy * cameraCy),
+            xz,
+            yz,
+            cameraCp,
+            Math.fround(-ox * xz - oy * yz - oz * cameraCp),
+            -xx,
+            -yx,
+            cameraSp,
+            Math.fround(ox * xx + oy * yx - oz * cameraSp),
+            0,
+            0,
+            0,
+            1
+        );
+        const f = Math.fround(1 / Math.tan(Math.fround(halfAngle)));
         projector.projection.set(f, 0, -1 / SHADOW_SIZE, 0, 0, f, 1 / SHADOW_SIZE, 0, 0, 0, 1 - 2 * zScale, 2 * zOffset, 0, 0, -1, 0);
         const farOffset = LIGHT_DISTANCE / (Math.cos(halfAngle) * Math.sqrt(1 + 2 * tangent * tangent));
         projector.depth.set(LIGHT_DISTANCE, LIGHT_DISTANCE + farOffset);
@@ -233,11 +284,28 @@ export class ShadowProjector {
         const bounds = group && !("USE_SWAY" in source.defines) && !(mesh as any).isSkinnedMesh && !mesh.morphTargetInfluences ? this.getReceiverBounds(mesh.geometry, group) : mesh.geometry.boundingBox;
         tmpReceiverBounds.copy(bounds).applyMatrix4(mesh.matrixWorld);
         let material: ShaderMaterial = null;
+        let drawInstances = false, count = 0, projectorCount = 0;
         for (let i = 0; i < this.projectors.length; i++) {
-            const projector = this.projectors[i];
-            if (!projector.bounds.intersectsBox(tmpReceiverBounds)) continue;
+            if (this.projectors[i].bounds.intersectsBox(tmpReceiverBounds)) arrReceiverProjectors[projectorCount++] = i;
+        }
+        const instanced = projectorCount > 1 && !(mesh as any).isInstancedMesh && !(mesh as any).isBatchedMesh && !(mesh.geometry as InstancedBufferGeometry).isInstancedBufferGeometry;
+        for (let j = 0; j < projectorCount; j++) {
+            const i = arrReceiverProjectors[j], projector = this.projectors[i];
             const texture = this.getShadowTexture(renderer, projector, i);
-            if (!material) material = this.getReceiverMaterial(source);
+            if (!material) {
+                material = this.getReceiverMaterial(source, instanced ? renderer : null);
+                drawInstances = "NUM_PROJECTOR_INSTANCES" in material.defines;
+            }
+            if (drawInstances) {
+                const uniforms = material.uniforms;
+                uniforms.shadowMaps.value[count] = texture;
+                projector.matrix.toArray(uniforms.shadowMatrices.value, count * 16);
+                tmpNormalMatrix.setFromMatrix4(camera.matrixWorld);
+                tmpNormalMatrix.multiplyMatrices(projector.normals, tmpNormalMatrix).toArray(uniforms.shadowNormalMatrices.value, count * 9);
+                projector.depth.toArray(uniforms.shadowDepthRanges.value, count * 2);
+                if (++count === 4) { this.drawInstances(renderer, scene, camera, mesh, material, group, count); count = 0; }
+                continue;
+            }
             material.uniforms.shadowMap.value = texture;
             material.uniforms.shadowMatrix.value = projector.matrix;
             material.uniforms.shadowDepthRange.value = projector.depth;
@@ -246,6 +314,19 @@ export class ShadowProjector {
             material.uniformsNeedUpdate = true;
             renderer.renderBufferDirect(camera, scene, mesh.geometry, material, mesh, group);
         }
+        if (count) this.drawInstances(renderer, scene, camera, mesh, material, group, count);
+    }
+
+    protected drawInstances(renderer: THREE.WebGLRenderer, scene: Scene, camera: Camera, mesh: Mesh, material: ShaderMaterial, group: THREE.BufferGeometry["groups"][number], count: number): void {
+        // Keep receiver VAOs under the source geometry's disposal.
+        const maps = material.uniforms.shadowMaps.value as Texture[], geometry = mesh.geometry as InstancedBufferGeometry;
+        const instanced = geometry.isInstancedBufferGeometry, previousCount = geometry.instanceCount;
+        for (let i = count; i < 4; i++) maps[i] = maps[count - 1];
+        (geometry as any).isInstancedBufferGeometry = true;
+        geometry.instanceCount = count;
+        material.uniformsNeedUpdate = true;
+        try { renderer.renderBufferDirect(camera, scene, geometry, material, mesh, group); }
+        finally { (geometry as any).isInstancedBufferGeometry = instanced; geometry.instanceCount = previousCount; }
     }
 
     public getReceiverBounds(geometry: THREE.BufferGeometry, group: THREE.BufferGeometry["groups"][number]): Box3 {
@@ -267,9 +348,13 @@ export class ShadowProjector {
         return bounds;
     }
 
-    protected getReceiverMaterial(source: ShaderMaterial): ShaderMaterial {
+    protected getReceiverMaterial(source: ShaderMaterial, renderer: THREE.WebGLRenderer = null): ShaderMaterial {
         const cached = this.cacheReceivers.get(source);
-        if (cached && cached.version === source.version) return cached.material;
+        if (cached && cached.version === source.version) {
+            if (!renderer) return cached.material;
+            if (cached.instanced === undefined) cached.instanced = this.createInstancedReceiver(cached.material, renderer.capabilities.maxTextures);
+            return cached.instanced || cached.material;
+        }
         if (cached) cached.material.dispose();
         // Trace7334112 presents X8R8G8B8; preserve canvas coverage while blending shadow RGB.
         const material = new ShaderMaterial({ vertexShader: source.vertexShader, fragmentShader: source.fragmentShader, defines: { ...source.defines, USE_PROJECTOR_RECEIVER: "" }, uniforms: { ...source.uniforms, shadowMatrix: new Uniform(new Matrix4()), shadowMap: new Uniform(null), shadowNormalMatrix: new Uniform(new Matrix3()), shadowDepthRange: new Uniform(new Vector2()), shadowAttenuation: new Uniform(this.attenuation) }, side: FrontSide, transparent: true, depthWrite: false, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendSrcAlpha: ZeroFactor, blendDst: OneMinusSrcAlphaFactor, blendDstAlpha: OneFactor });
@@ -280,19 +365,46 @@ export class ShadowProjector {
         delete material.defines.USE_LIT_ATTRIBUTES;
         material.vertexColors = source.vertexColors;
         const dispose = () => material.dispose();
+        const entry: ReceiverMaterial_T = { material, version: source.version };
         source.addEventListener("dispose", dispose);
-        material.addEventListener("dispose", () => { source.removeEventListener("dispose", dispose); this.receiverMaterials.delete(material); this.cacheReceivers.delete(source); });
+        material.addEventListener("dispose", () => {
+            source.removeEventListener("dispose", dispose);
+            this.receiverMaterials.delete(material);
+            this.cacheReceivers.delete(source);
+            if (entry.instanced) entry.instanced.dispose();
+        });
         this.receiverMaterials.add(material);
-        this.cacheReceivers.set(source, { material, version: source.version });
+        this.cacheReceivers.set(source, entry);
+        return this.getReceiverMaterial(source, renderer);
+    }
+
+    protected createInstancedReceiver(source: ShaderMaterial, maxTextures: number): ShaderMaterial {
+        let textures = 4;
+        for (const uniform of Object.values(source.uniforms)) {
+            const value = uniform.value;
+            if (value && value.isTexture) textures++;
+            else if (Array.isArray(value)) for (const texture of value) if (texture && texture.isTexture) textures++;
+        }
+        if (textures > maxTextures) return null;
+        const material = new ShaderMaterial({ vertexShader: source.vertexShader, fragmentShader: source.fragmentShader, defines: { ...source.defines, NUM_PROJECTOR_INSTANCES: 4 } });
+        Material.prototype.copy.call(material, source);
+        material.uniforms = { ...source.uniforms, shadowMatrices: new Uniform(new Float32Array(64)), shadowNormalMatrices: new Uniform(new Float32Array(36)), shadowDepthRanges: new Uniform(new Float32Array(8)), shadowMaps: new Uniform(new Array(4)) };
+        delete material.uniforms.shadowMatrix; delete material.uniforms.shadowNormalMatrix; delete material.uniforms.shadowDepthRange; delete material.uniforms.shadowMap;
         return material;
     }
 
     protected renderShadow(renderer: THREE.WebGLRenderer, caster: Object3D, camera: Camera, target: WebGLRenderTarget, reusePose: boolean = false): void {
         arrSwappedObjects.length = arrSwappedMaterials.length = arrHiddenAttachments.length = arrPawnMeshes.length = 0;
-        const previousTarget = renderer.getRenderTarget(), autoClear = renderer.autoClear, alpha = renderer.getClearAlpha(), visible = caster.visible;
+        const previousTarget = renderer.getRenderTarget();
+        const autoClear = renderer.autoClear;
+        const alpha = renderer.getClearAlpha();
+        const visible = caster.visible;
+        const depth = renderer.state.buffers.depth, reversedDepth = depth.getReversed();
         renderer.getClearColor(tmpClearColor);
         this.renderingShadow = true;
         try {
+            depth.setReversed(camera.reversedDepth);
+            depth.setClear(1);
             caster.visible = true;
             swapMaterials(caster, this.silhouette, this.cacheSilhouetteMaterials, reusePose);
             renderer.setRenderTarget(this.blurTarget);
@@ -302,6 +414,8 @@ export class ShadowProjector {
             renderer.render(caster, camera);
             this.blur(renderer, target);
         } finally {
+            depth.setReversed(reversedDepth);
+            depth.setClear(1);
             renderer.autoClear = autoClear;
             renderer.setRenderTarget(previousTarget);
             renderer.setClearColor(tmpClearColor, alpha);
@@ -344,12 +458,16 @@ export class ShadowProjector {
 }
 
 function createAttenuationCube(): CubeTexture {
-    const bases = [[1, 1, 1], [-1, 1, -1], [-1, 1, -1], [-1, -1, 1], [-1, 1, 1], [1, 1, -1]], xs = [[0, 0, -2], [0, 0, 2], [2, 0, 0], [2, 0, 0], [2, 0, 0], [-2, 0, 0]], ys = [[0, -2, 0], [0, -2, 0], [0, 0, 2], [0, 0, -2], [0, -2, 0], [0, -2, 0]];
+    const bases = [[1, 1, 1], [-1, 1, -1], [-1, 1, -1], [-1, -1, 1], [-1, 1, 1], [1, 1, -1]];
+    const xs = [[0, 0, -2], [0, 0, 2], [2, 0, 0], [2, 0, 0], [2, 0, 0], [-2, 0, 0]];
+    const ys = [[0, -2, 0], [0, -2, 0], [0, 0, 2], [0, 0, -2], [0, -2, 0], [0, -2, 0]];
     const mips: CubeTexture[] = [];
     for (const size of [32, 16]) {
         const faces: DataTexture[] = [];
         for (let face = 0; face < 6; face++) {
-            const bytes = new Uint8Array(size * size * 4), dx = xs[face].map(value => Math.fround(value / (size - 1))), dy = ys[face].map(value => Math.fround(value / (size - 1)));
+            const bytes = new Uint8Array(size * size * 4);
+            const dx = xs[face].map(value => Math.fround(value / (size - 1)));
+            const dy = ys[face].map(value => Math.fround(value / (size - 1)));
             for (let y = 0; y < size; y++) {
                 const v = bases[face].map((value, index) => Math.fround(Math.fround(value + Math.fround(dy[index] * (y + 0.5))) + Math.fround(dx[index] * 0.5)));
                 for (let x = 0; x < size; x++) {

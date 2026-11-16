@@ -2,22 +2,24 @@ import type RAPIER from "@dimforge/rapier3d";
 import { Box3, Vector3 } from "three";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../objects/objects";
 import { pointPrimitive, queryPrimitive, sweptBounds, sweptIntersectsBox, type PrimitiveHit_T } from "./collision-primitive";
-import buildCollisionModel from "./collision-model";
+import buildCollisionModel, { findCoplanarSurface } from "./collision-model";
 import CollisionOctree from "./collision-octree";
 import type { DecodeLibrary } from "@l2js/engine";
 import type PhysicsVolume from "../objects/physics-volume";
 import type MusicVolume from "../objects/music-volume";
-import type { ScriptHost_T, default as UnScriptVM } from "../ue-script/vm";
+import { getProperty, getScriptVM, type ScriptHost_T, type ScriptValue_T, type UnScriptVM } from "../ue-script/vm";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
 import type BaseActor from "../base-actor";
 import type CollidingMesh from "../objects/colliding-mesh";
 import type StaticMeshActor from "../objects/static-mesh-actor";
 import type Volume from "../objects/volume";
+import type Terrain from "../objects/terrain";
 import type { ScriptComponent } from "../game/script-component";
 import { beginTouch, endTouch, releaseTouching } from "../objects/components/transform-component";
 import VolumeCollisionComponent from "./components/volume-collision-component";
 
 const tmpVolumeBounds = new Box3();
+const tmpMaterialLocation = new Vector3();
 const tmpBodyPosition = new Vector3();
 const tmpTestDelta = new Vector3();
 const tmpRayDelta = new Vector3();
@@ -40,7 +42,7 @@ const CELL_SIZE = 1024;
 const PAWN_CELL_SIZE = 64;
 const MAX_QUERY_CELLS = 4096;
 const MAX_ENTRY_CELLS = 16384;
-const ACTORBOX_EPSILON = Math.fround(4.2);
+// const ACTORBOX_EPSILON = Math.fround(4.2);
 const DYNAMIC_CELL_MARGIN = 256; // Non-pawn movers retain a margin between dynamic re-grids.
 // ULevel::MoveActor (0x85b3b0) extends the test by 2 units and subtracts them back off the result
 const MOVE_ACTOR_EXTENSION = 2;
@@ -67,6 +69,9 @@ export type CollisionQuery_T = {
     onlyWorldGeometry?: boolean;
     zeroExtent?: boolean;
     traceWorld?: boolean;
+    traceActors?: boolean;
+    traceMovers?: boolean;
+    traceMaterial?: boolean;
 };
 
 export type CollisionOverlapQuery_T = {
@@ -86,6 +91,7 @@ export type CheckResult_T = {
     normal: Vector3;
     collider: RAPIER.Collider;
     actor: ICollidable | null;
+    material?: ScriptValue_T;
 };
 
 export type RayCheckResult_T = {
@@ -101,7 +107,7 @@ export type PhysicsVolumeHit_T = { time: number, location: Vector3, normal: Vect
 export type ActorLineHit_T = { time: number, actor: ScriptHost_T };
 type PhysicsVolumeEntry_T = VolumeCollisionComponent & { readonly actor: PhysicsVolume };
 type VolumeEntry_T = VolumeCollisionComponent;
-type PhysicsVolumeTree_T = { tree: CollisionOctree, entries: Map<string, PhysicsVolumeEntry_T> };
+type PhysicsVolumeTree_T = { tree: CollisionOctree, entries: Map<string, PhysicsVolumeEntry_T>, pawnMark: number, dirtyPawns: Set<CollisionActor_T> };
 
 export type CollisionStats_T = {
     queries: number;
@@ -175,6 +181,7 @@ export class CollisionWorld {
     protected analyticalBestTime = Infinity;
     protected analyticalBestOrder = Infinity;
     protected analyticalBestItem = -1;
+    protected analyticalBestMaterial: ScriptValue_T = undefined;
     protected analyticalBestActor: ICollidable = null;
     protected analyticalBestCollider: RAPIER.Collider = null;
     protected analyticalQuery: CollisionQuery_T = null;
@@ -247,7 +254,20 @@ export class CollisionWorld {
         }
 
         const pawn = primitive.kind === "cylinder" && object.getCollisionProfile().isPawn;
-        const entry: AnalyticalEntry_T = { actor: object, primitive, bounds, order: this.nextOrder++, queryMark: 0, dynamic, active: !(object as Volume).isVolume || object.getCollisionProfile().collideActors, cells: [], cellRange: [], grid: pawn ? this.pawnCells : this.cells, cellSize: pawn ? PAWN_CELL_SIZE : CELL_SIZE, margin: pawn ? 0 : dynamic ? DYNAMIC_CELL_MARGIN : 0 };
+        const entry: AnalyticalEntry_T = {
+            actor: object,
+            primitive,
+            bounds,
+            order: this.nextOrder++,
+            queryMark: 0,
+            dynamic,
+            active: !(object as Volume).isVolume || object.getCollisionProfile().collideActors,
+            cells: [],
+            cellRange: [],
+            grid: pawn ? this.pawnCells : this.cells,
+            cellSize: pawn ? PAWN_CELL_SIZE : CELL_SIZE,
+            margin: pawn ? 0 : dynamic ? DYNAMIC_CELL_MARGIN : 0
+        };
 
         this.entriesByActor.set(object, entry);
         this.analyticalEntries.push(entry);
@@ -291,8 +311,6 @@ export class CollisionWorld {
         if (mark === this.dynamicMark) return;
 
         this.dynamicMark = mark;
-
-        for (const [pawn, level] of this.pawnLevels) this.updateLevelPawn(pawn, level);
 
         for (const entry of this.dynamicEntries) {
             if (!entry.active) continue;
@@ -483,12 +501,21 @@ export class CollisionWorld {
             let primitive: CollisionPrimitive_T;
 
             if (actor.bsp) {
-                const nodes = actor.bsp.nodes.map(node => ({ plane: node.plane, children: [node.iFront, node.iBack], isCsg: node.isCsg, collision: node.collision }));
+                const nodes = actor.bsp.nodes.map(node => ({ plane: node.plane, children: [node.iFront, node.iBack], isCsg: node.isCsg, collision: node.collision, surface: node.surface }));
                 const model = buildCollisionModel(nodes as any, actor.bsp.isRootOutside);
                 const bounds = new Box3(new Vector3().fromArray(actor.bsp.bounds.min), new Vector3().fromArray(actor.bsp.bounds.max));
                 primitive = { kind: "bsp", model, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
             } else {
-                primitive = { kind: "cylinder", center: new Vector3().fromArray(getTraceProperty(actor, "Location") as number[]), radius: getTraceProperty(actor, "CollisionRadius") as number, halfHeight: getTraceProperty(actor, "CollisionHeight") as number, bounds: new Box3(), supportsZeroExtent: true, supportsNonZeroExtent: false, supportsPointCheck: false };
+                primitive = {
+                    kind: "cylinder",
+                    center: new Vector3().fromArray(getTraceProperty(actor, "Location") as number[]),
+                    radius: getTraceProperty(actor, "CollisionRadius") as number,
+                    halfHeight: getTraceProperty(actor, "CollisionHeight") as number,
+                    bounds: new Box3(),
+                    supportsZeroExtent: true,
+                    supportsNonZeroExtent: false,
+                    supportsPointCheck: false
+                };
             }
 
             const entry = actor.addComponent(new VolumeCollisionComponent(this, tree, actor, primitive));
@@ -508,7 +535,7 @@ export class CollisionWorld {
             if (!entry.active) entry.removeCollision();
         if (arrPhysicsVolumes !== volumes) entries[volumes.length].updateCollision();
         const physicsEntries = entries.slice(0, arrPhysicsVolumes.length) as PhysicsVolumeEntry_T[];
-        this.physicsVolumeTrees.set(volumes, { tree, entries: new Map(physicsEntries.map(entry => [entry.actor.actorUuid, entry])) });
+        this.physicsVolumeTrees.set(volumes, { tree, entries: new Map(physicsEntries.map(entry => [entry.actor.actorUuid, entry])), pawnMark: -2, dirtyPawns: new Set() });
         this.physicsVolumes.set(volumes, physicsEntries);
         this.volumeActors.set(volumes, entries);
     }
@@ -529,7 +556,10 @@ export class CollisionWorld {
     public setPawnLevel(pawn: CollisionActor_T, volumes: PhysicsVolume[] | null): void {
         const previous = this.pawnLevels.get(pawn), level = volumes ? this.physicsVolumeTrees.get(volumes) : null;
         if (volumes && !level) throw new Error(`Pawn '${pawn.name}' has no registered owning level.`);
-        if (previous && previous !== level) previous.tree.removeActor(pawn.uuid);
+        if (previous && previous !== level) {
+            previous.tree.removeActor(pawn.uuid);
+            previous.dirtyPawns.delete(pawn);
+        }
         if (!level) {
             this.pawnLevels.delete(pawn);
             return;
@@ -573,7 +603,7 @@ export class CollisionWorld {
             else this.removeActor(pawn);
         }
         const level = this.pawnLevels.get(pawn);
-        if (level) this.updateLevelPawn(pawn, level);
+        if (level) level.dirtyPawns.add(pawn); // the level octree is only read by physicsVolumePointCheck
 
         if (!entry || !entry.active || entry.grid !== this.pawnCells) return;
 
@@ -590,7 +620,10 @@ export class CollisionWorld {
         const entry = this.entriesByActor.get(pawn);
         if (entry || (pawn as StaticMeshActor).collisionOwner) this.removeActor(pawn);
         const level = this.pawnLevels.get(pawn);
-        if (level) level.tree.removeActor(pawn.uuid);
+        if (level) {
+            level.tree.removeActor(pawn.uuid);
+            level.dirtyPawns.delete(pawn);
+        }
     }
 
     public setCollision(pawn: CollisionSource_T, collideActors: boolean = pawn.getUnrealScriptProperty("bCollideActors") as boolean, blockActors: boolean = pawn.getUnrealScriptProperty("bBlockActors") as boolean, blockPlayers: boolean = pawn.getUnrealScriptProperty("bBlockPlayers") as boolean): void {
@@ -642,8 +675,15 @@ export class CollisionWorld {
         const actors: PhysicsVolume[] = [], group = this.physicsVolumeTrees.get(volumes);
         if (!group) throw new Error(`Physics volume point query has no registered level.`);
 
-        for (const [pawn, level] of this.pawnLevels)
-            if (level === group) this.updateLevelPawn(pawn, level);
+        if (group.pawnMark !== this.dynamicMark) { // a full pass per query is quadratic in pawns
+            group.pawnMark = this.dynamicMark;
+            for (const [pawn, level] of this.pawnLevels)
+                if (level === group) this.updateLevelPawn(pawn, level);
+        } else {
+            for (const pawn of group.dirtyPawns)
+                if (this.pawnLevels.get(pawn) === group) this.updateLevelPawn(pawn, group);
+        }
+        group.dirtyPawns.clear();
 
         for (const entry of this.physicsVolumes.get(volumes)) {
             const actor = entry.actor, primitive = entry.primitive;
@@ -706,7 +746,9 @@ export class CollisionWorld {
         if (getTraceProperty(target, "bOnlyAffectPawns") && !isActorClass(source, "Pawn", vm)) return false;
         if (!getTraceProperty(source, "bBlockNonZeroExtentTraces") || !getTraceProperty(target, "bBlockNonZeroExtentTraces")) return false;
 
-        const actualLocation = getTraceProperty(source, "Location") as number[], location = position || tmpOverlapOffset.fromArray(actualLocation), otherLocation = getTraceProperty(target, "Location") as number[];
+        const actualLocation = getTraceProperty(source, "Location") as number[],
+            location = position || tmpOverlapOffset.fromArray(actualLocation),
+            otherLocation = getTraceProperty(target, "Location") as number[];
         const radius = getTraceProperty(source, "CollisionRadius") as number, height = getTraceProperty(source, "CollisionHeight") as number;
         let primitiveActor: ScriptHost_T = null;
 
@@ -792,17 +834,21 @@ export class CollisionWorld {
             tmpEncroachmentBounds.copy(primitive.bounds).translate(tmpEncroachmentCenter);
         }
 
-        for (const entry of this.analyticalEntries) {
+        for (const entry of this.getOverlapEntries(tmpEncroachmentBounds)) {
             if (!entry.active || entry.primitive.kind === "terrain") continue;
+            if (!entry.dynamic && !tmpEncroachmentBounds.intersectsBox(entry.bounds)) continue;
             const actor = ((entry.actor as any).scriptActor || entry.actor) as ICollidable & ScriptHost_T;
             if (entry.primitive.kind === "bsp" && !(actor as any).isVolume) continue;
 
             const records = (actor as any).collisionActors;
             if (records && records.length) {
-                for (const record of records) {
-                    if (vm && !tmpEncroachmentBounds.intersectsBox(record.primitive.bounds)) continue;
+                const candidates = (actor as CollidingMesh).getCollisionActorCandidates(tmpEncroachmentBounds);
+                for (let i = 0; i < candidates.length; i++) {
+                    const record = records[candidates[i]];
+                    if (!tmpEncroachmentBounds.intersectsBox(record.primitive.bounds)) continue;
 
-                    const target = record.object || (vm ? (actor as CollidingMesh).getCollisionActor(record.firstTriangle) : record.actor), targetProfile = record.object ? record.object.getCollisionProfile() : record.actor.collision;
+                    const target = record.object || (vm ? (actor as CollidingMesh).getCollisionActor(record.firstTriangle) : record.actor),
+                        targetProfile = record.object ? record.object.getCollisionProfile() : record.actor.collision;
                     const targetPhysics = getTraceProperty(target, "Physics");
                     if (record.object) record.object.getWorldPosition(tmpEncroachmentCenter);
                     else tmpEncroachmentCenter.fromArray(record.actor.position);
@@ -812,7 +858,10 @@ export class CollisionWorld {
                 continue;
             }
 
-            const targetProfile = actor.getCollisionProfile(), targetPrimitive = actor.getCollisionPrimitive();
+            const targetPrimitive = actor.getCollisionPrimitive();
+            if (!tmpEncroachmentBounds.intersectsBox(targetPrimitive.bounds)) continue;
+
+            const targetProfile = actor.getCollisionProfile();
             if (targetPrimitive.kind === "cylinder") tmpEncroachmentCenter.copy(targetPrimitive.center);
             else actor.getWorldPosition(tmpEncroachmentCenter);
 
@@ -823,9 +872,9 @@ export class CollisionWorld {
 
         for (const entries of this.volumeActors.values()) {
             for (const entry of entries) {
-                if (getTraceProperty(source, "bOnlyAffectPawns")) continue;
-
                 const actor = entry.actor, primitive = entry.primitive;
+                if (primitive.kind === "bsp" && primitive.model.rootOutside && !tmpEncroachmentBounds.intersectsBox(primitive.bounds)) continue;
+                if (getTraceProperty(source, "bOnlyAffectPawns")) continue;
                 if (!entry.active || getTraceProperty(actor, "bDeleteMe") || !getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockNonZeroExtentTraces")) continue;
                 if (isJoinedTo(actor, source) || isJoinedTo(source, actor)) continue;
                 if (getTraceProperty(actor, "bOnlyAffectPawns") && !profile.isPawn) continue;
@@ -861,7 +910,8 @@ export class CollisionWorld {
         for (const entries of this.physicsVolumes.values()) {
             for (const entry of entries) {
                 const actor = entry.actor, primitive = entry.primitive;
-                if (!entry.active || !getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockZeroExtentTraces") || getTraceProperty(actor, "bDeleteMe") || getTraceProperty(actor, "bPendingDelete")) continue;
+                if (!entry.active || !getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockZeroExtentTraces") || getTraceProperty(actor, "bDeleteMe") || getTraceProperty(actor, "bPendingDelete"))
+                    continue;
                 if (getTraceProperty(actor, "bOnlyAffectPawns") && source && !sourceIsPawn) continue;
 
                 if (isOwnedBy(source, actor)) continue;
@@ -973,8 +1023,9 @@ export class CollisionWorld {
         bounds.min.copy(query.location).sub(query.extent);
         bounds.max.copy(query.location).add(query.extent);
 
-        for (const entry of this.analyticalEntries) {
-            if (!entry.active || this.shouldIgnoreActor(entry.actor, query)) continue;
+        for (const entry of this.getOverlapEntries(bounds)) {
+            if (!entry.active || !entry.dynamic && !bounds.intersectsBox(entry.bounds)) continue;
+            if (this.shouldIgnoreActor(entry.actor, query)) continue;
             const records = (entry.actor as any).collisionActors;
             const individual = records && records.length && this.hasIgnoredCollisionActors(entry.actor, query);
 
@@ -1021,6 +1072,35 @@ export class CollisionWorld {
         return null;
     }
 
+    protected getOverlapEntries(bounds: Box3): AnalyticalEntry_T[] {
+        const minX = Math.floor(bounds.min.x / CELL_SIZE), minY = Math.floor(bounds.min.y / CELL_SIZE), minZ = Math.floor(bounds.min.z / CELL_SIZE);
+        const maxX = Math.floor(bounds.max.x / CELL_SIZE), maxY = Math.floor(bounds.max.y / CELL_SIZE), maxZ = Math.floor(bounds.max.z / CELL_SIZE);
+        const cellCount = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        if (!Number.isFinite(cellCount) || cellCount > MAX_QUERY_CELLS) return this.analyticalEntries;
+
+        const entries = new Set<AnalyticalEntry_T>(this.dynamicEntries);
+
+        for (let x = minX; x <= maxX; x++) {
+            const cellsY = this.cells.get(x);
+            if (!cellsY) continue;
+
+            for (let y = minY; y <= maxY; y++) {
+                const cellsZ = cellsY.get(y);
+                if (!cellsZ) continue;
+
+                for (let z = minZ; z <= maxZ; z++) {
+                    const cell = cellsZ.get(z);
+                    if (!cell) continue;
+
+                    for (const entry of cell) if (!entry.dynamic) entries.add(entry);
+                }
+            }
+        }
+        for (const entry of this.largeEntries) if (!entry.dynamic) entries.add(entry);
+
+        return [...entries].sort((a, b) => a.order - b.order);
+    }
+
     protected analyticalLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
         const end = tmpEnd.copy(query.location).add(testDelta);
         const extent = zeroExtent ? zeroExtentVector : query.extent;
@@ -1057,6 +1137,33 @@ export class CollisionWorld {
         }
         for (const entry of this.largeEntries) this.testAnalyticalEntry(entry);
 
+        if (query.traceActors !== undefined) {
+            for (const entries of this.volumeActors.values()) {
+                for (const entry of entries) {
+                    if (!this.shouldTraceVolume(entry, query, zeroExtent)) continue;
+                    const primitive = entry.getCollisionPrimitive();
+
+                    if (primitive.kind === "bsp" && primitive.model.planes.length === 0) continue;
+                    if (!sweptIntersectsBox(query.location, end, extent, primitive.bounds)) continue;
+                    this.stats.analyticalCandidates++;
+                    this.stats.analyticalPrimitiveTests++;
+                    const hit = queryPrimitive(primitive, query.location, end, extent);
+
+                    if (!hit) continue;
+                    const time = Math.max(0, hit.time - getTraceBackoff(primitive, testDistance, zeroExtent) / testDistance);
+
+                    if (time >= this.analyticalBestTime) continue;
+                    this.analyticalBestTime = time;
+                    this.analyticalBestOrder = Infinity;
+                    this.analyticalBestItem = hit.item;
+                    this.setAnalyticalMaterial(primitive, hit, entry.actor, time);
+                    this.analyticalBestNormal.copy(hit.normal);
+                    this.analyticalBestActor = entry.actor as unknown as ICollidable;
+                    this.analyticalBestCollider = null;
+                }
+            }
+        }
+
         if (this.analyticalMoveHits && (query.sourceProfile || defaultProfile).collideActors) {
             for (const entries of this.volumeActors.values()) {
                 for (const entry of entries) {
@@ -1080,7 +1187,15 @@ export class CollisionWorld {
 
         if (requestedTime > 1) return null;
 
-        return this.makeCheckResult(requestedTime, tmpBodyPosition.copy(query.location).addScaledVector(query.delta, requestedTime), this.analyticalBestNormal, this.analyticalBestCollider, this.analyticalBestActor, this.analyticalBestItem);
+        return this.makeCheckResult(
+            requestedTime,
+            tmpBodyPosition.copy(query.location).addScaledVector(query.delta, requestedTime),
+            this.analyticalBestNormal,
+            this.analyticalBestCollider,
+            this.analyticalBestActor,
+            this.analyticalBestItem,
+            this.analyticalBestMaterial
+        );
     }
 
     protected beginAnalyticalQuery(query: CollisionQuery_T, start: Vector3, end: Vector3, extent: Vector3, testDistance: number, zeroExtent: boolean) {
@@ -1101,6 +1216,7 @@ export class CollisionWorld {
         this.analyticalBestTime = Infinity;
         this.analyticalBestOrder = Infinity;
         this.analyticalBestItem = -1;
+        this.analyticalBestMaterial = undefined;
         this.analyticalBestActor = null;
         this.analyticalBestCollider = null;
         this.analyticalUnsupported = false;
@@ -1121,7 +1237,8 @@ export class CollisionWorld {
         const records = (entry.actor as any).collisionActors;
         const individual = records && records.length && (this.analyticalMoveHits || this.hasIgnoredCollisionActors(entry.actor));
 
-        if (!individual && !(this.analyticalMoveHits ? this.shouldTraceActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent))) return;
+        if (!individual &&
+            !(this.analyticalMoveHits ? this.shouldTraceActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent))) return;
 
         this.stats.analyticalCandidates++;
 
@@ -1139,11 +1256,17 @@ export class CollisionWorld {
                 const actor = record.object || entry.actor;
 
                 if (!sweptIntersectsBox(this.analyticalStart, this.analyticalEnd, this.analyticalExtent, record.primitive.bounds)) continue;
-                if (this.shouldIgnoreActor(actor, this.analyticalQuery) || !(this.analyticalMoveHits ? this.shouldTraceActor(actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent))) continue;
+                if (this.shouldIgnoreActor(actor, this.analyticalQuery) ||
+                    !(this.analyticalMoveHits ? this.shouldTraceActor(actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent))) continue;
 
                 this.stats.analyticalPrimitiveTests++;
                 const hit = queryPrimitive(record.primitive, this.analyticalStart, this.analyticalEnd, this.analyticalExtent);
-                if (hit) this.setAnalyticalHit(entry, record.primitive, hit, record.firstTriangle + hit.item);
+                if (hit) {
+                    const primitive = record.primitive;
+                    const isModel = primitive.collisionModel && (this.analyticalZeroExtent ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision);
+
+                    this.setAnalyticalHit(entry, primitive, hit, isModel ? hit.item : record.firstTriangle + hit.item, record.firstTriangle);
+                }
             }
             return;
         }
@@ -1170,11 +1293,11 @@ export class CollisionWorld {
         return false;
     }
 
-    protected setAnalyticalHit(entry: AnalyticalEntry_T, primitive: CollisionPrimitive_T, hit: PrimitiveHit_T, item: number): void {
+    protected setAnalyticalHit(entry: AnalyticalEntry_T, primitive: CollisionPrimitive_T, hit: PrimitiveHit_T, item: number, actorItem = item): void {
         const time = Math.max(0, hit.time - getTraceBackoff(primitive, this.analyticalTestDistance, this.analyticalZeroExtent) / this.analyticalTestDistance);
         if (!this.analyticalMoveHits && (time > this.analyticalBestTime || time === this.analyticalBestTime && entry.order >= this.analyticalBestOrder)) return;
         const records = (entry.actor as any).collisionActors;
-        const actor = records && records.length ? (entry.actor as any).getCollisionActor(item) : (entry.actor as any).scriptActor || entry.actor;
+        const actor = records && records.length ? (entry.actor as any).getCollisionActor(actorItem) : (entry.actor as any).scriptActor || entry.actor;
         if (this.analyticalMoveHits) {
             if (!(actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile).worldGeometry) this.analyticalMoveHits.push({ actor, time });
             if (!this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent)) return;
@@ -1185,9 +1308,32 @@ export class CollisionWorld {
         this.analyticalBestTime = time;
         this.analyticalBestOrder = entry.order;
         this.analyticalBestItem = item;
+        this.setAnalyticalMaterial(primitive, hit, actor as ScriptHost_T, time);
         this.analyticalBestNormal.copy(hit.normal);
         this.analyticalBestActor = actor;
         this.analyticalBestCollider = entry.actor.getCollider();
+    }
+
+    protected setAnalyticalMaterial(primitive: CollisionPrimitive_T, hit: PrimitiveHit_T, actor: ScriptHost_T, time: number): void {
+        this.analyticalBestMaterial = undefined;
+        if (!this.analyticalQuery.traceMaterial) return;
+        const model = primitive.kind === "bsp" ? primitive.model : primitive.kind === "staticMesh" && primitive.useSimpleLineCollision ? primitive.collisionModel : null;
+
+        if (model && this.analyticalZeroExtent) { // UModel::LineCheck 0x9cea49..0x9ceab4: owned models test the world location too
+            this.analyticalBestMaterial = null;
+            if (!model.surfaces) return; // decoded only for models with a surface material
+            const location = tmpMaterialLocation.copy(this.analyticalStart).lerp(this.analyticalEnd, time);
+            location.x = Math.fround(location.x);
+            location.y = Math.fround(location.y);
+            location.z = Math.fround(location.z);
+            const index = findCoplanarSurface(model.surfaces, hit.item, location);
+
+            this.analyticalBestItem = index;
+            if (index !== -1) this.analyticalBestMaterial = model.surfaces[index].material;
+            return;
+        }
+
+        this.analyticalBestMaterial = getTraceMaterial(primitive, hit, actor, this.analyticalZeroExtent);
     }
 
     protected removeFromCells(entry: AnalyticalEntry_T) {
@@ -1218,8 +1364,12 @@ export class CollisionWorld {
 
     protected insertEntry(entry: AnalyticalEntry_T, margin: number) {
         const bounds = entry.bounds, cellSize = entry.cellSize, grid = entry.grid;
-        const minX = Math.floor((bounds.min.x - margin) / cellSize), minY = Math.floor((bounds.min.y - margin) / cellSize), minZ = Math.floor((bounds.min.z - margin) / cellSize);
-        const maxX = Math.floor((bounds.max.x + margin) / cellSize), maxY = Math.floor((bounds.max.y + margin) / cellSize), maxZ = Math.floor((bounds.max.z + margin) / cellSize);
+        const minX = Math.floor((bounds.min.x - margin) / cellSize),
+            minY = Math.floor((bounds.min.y - margin) / cellSize),
+            minZ = Math.floor((bounds.min.z - margin) / cellSize);
+        const maxX = Math.floor((bounds.max.x + margin) / cellSize),
+            maxY = Math.floor((bounds.max.y + margin) / cellSize),
+            maxZ = Math.floor((bounds.max.z + margin) / cellSize);
 
         entry.cellRange.length = 0;
         entry.cellRange.push(minX, minY, minZ, maxX, maxY, maxZ);
@@ -1262,7 +1412,7 @@ export class CollisionWorld {
         }
     }
 
-    protected makeCheckResult(time: number, location: Vector3, normal: Vector3, collider: RAPIER.Collider, actor: ICollidable | null, item = -1): CheckResult_T {
+    protected makeCheckResult(time: number, location: Vector3, normal: Vector3, collider: RAPIER.Collider, actor: ICollidable | null, item = -1, material?: ScriptValue_T): CheckResult_T {
         const result = this.arrCheckResults[this.checkResultIndex++];
 
         if (this.checkResultIndex === this.arrCheckResults.length) this.checkResultIndex = 0;
@@ -1273,6 +1423,7 @@ export class CollisionWorld {
         result.normal.copy(normal);
         result.collider = collider;
         result.actor = actor;
+        result.material = material;
 
         return result;
     }
@@ -1292,6 +1443,21 @@ export class CollisionWorld {
         return result;
     }
 
+    protected shouldTraceVolume(entry: VolumeEntry_T, query: CollisionQuery_T, zeroExtent: boolean): boolean {
+        const actor = entry.actor, profile = entry.getCollisionProfile();
+
+        if (!entry.active || !profile.collideActors || getTraceProperty(actor, "bDeleteMe") || getTraceProperty(actor, "bPendingDelete")) return false;
+        if (zeroExtent ? !profile.blockZeroExtent : !profile.blockNonZeroExtent) return false;
+        if (query.ignoredActors && query.ignoredActors.has(actor as unknown as ICollidable)) return false;
+        const source = query.sourceActor;
+
+        if (isOwnedBy(source, actor) || source && getTraceProperty(source as ScriptHost_T, "bOnlyAffectPawns")) return false;
+        if (source && getTraceProperty(actor, "bOnlyAffectPawns") && !(query.sourceProfile || defaultProfile).isPawn) return false;
+
+        // AVolume::ShouldTrace 0x7cdc80..0x7cdce7; both Actor.Trace flag combinations include TRACE_LevelGeometry.
+        return profile.worldGeometry || !!query.traceActors && (!!getTraceProperty(actor, "bProjTarget") || profile.blockActors && profile.blockPlayers);
+    }
+
     protected shouldTraceActor(actor: ICollidable, query: CollisionQuery_T, zeroExtent: boolean): boolean {
         const target = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile, source = query.sourceProfile || defaultProfile;
         if (zeroExtent ? !target.blockZeroExtent : !target.blockNonZeroExtent) return false;
@@ -1305,6 +1471,14 @@ export class CollisionWorld {
         if ((actor as any).isStaticMeshActor && !target.collideActors) return false;
         if (zeroExtent ? !target.blockZeroExtent : !target.blockNonZeroExtent) return false;
 
+        if (query.traceActors !== undefined) {
+            // AActor 0x7cf0f1..0x7cf139, APawn 0x8afb34..0x8afb47, AMover 0x60ddc0.
+            if (target.isPawn) return query.traceActors || !!getTraceProperty(actor as ScriptHost_T, "bAsTreatWorld");
+            if ((actor as any).isMovableObject) return true;
+            if (target.worldGeometry) return true;
+            return query.traceActors && (!!getTraceProperty(actor as ScriptHost_T, "bProjTarget") || target.blockActors && target.blockPlayers);
+        }
+
         if (query.traceWorld) {
             // TRACE_World: AActor 0x7cf0f1, APawn 0x8afb34, AMover 0x60ddc0.
             if (target.isPawn) return !!getTraceProperty(actor as ScriptHost_T, "bAsTreatWorld");
@@ -1316,6 +1490,7 @@ export class CollisionWorld {
 
         const source = query.sourceProfile || defaultProfile;
 
+        if (source.isPawn && target.isPawn && (actor as BaseActor).isEnterRising()) return false;
         if (target.worldGeometry) return source.collideWorld;
         if (!target.collideActors || !source.collideActors) return false;
         if (!(source.isPawn ? target.blockPlayers : target.blockActors)) return false;
@@ -1353,7 +1528,7 @@ export class CollisionWorld {
 
             // AMover::ShouldTrace 0x60ddc0 rejects DamageGrade6 before inspecting trace flags.
             if (!Number.isInteger(grade)) throw new Error(`Invalid mover DamageGrade '${grade}'.`);
-            if (grade === 6) return true;
+            if (grade === 6 || query.traceMovers === false) return true;
         }
 
         if (profile.isPawn) {
@@ -1376,7 +1551,7 @@ export class CollisionWorld {
             }
         }
 
-        if (query.ignorePawns && profile.isPawn && !getTraceProperty(actor, "bAsTreatWorld")) return true;
+        if (query.ignorePawns && profile.isPawn && !getTraceProperty(actor as ScriptHost_T, "bAsTreatWorld")) return true;
         if (!query.ignoreBases || !source) return false;
 
         if (profile.worldGeometry) return false;
@@ -1429,6 +1604,38 @@ function isOwnedBy(actor: any, owner: any): boolean {
     }
 
     return false;
+}
+
+function getTraceMaterial(primitive: CollisionPrimitive_T, hit: PrimitiveHit_T, actor: ScriptHost_T, zeroExtent: boolean): ScriptValue_T {
+    if (primitive.kind === "terrain") return (actor as unknown as Terrain).getTraceMaterial(hit.item);
+    if (primitive.kind === "bsp") return null;
+    if (primitive.kind === "staticMesh") {
+        // UStaticMesh triangle material selection 0x98ae75..0x98aee8 and 0x98db27..0x98db9f.
+        if (primitive.collisionModel && !zeroExtent && primitive.useSimpleBoxCollision) return null;
+        if (!primitive.materialIndices || !primitive.materials || primitive.defaultMaterial === undefined) throw new Error(`Static mesh primitive has no material data.`);
+        const index = primitive.materialIndices[hit.item];
+        if (!Number.isInteger(index) || index < 0 || index >= primitive.materials.length) throw new Error(`Static mesh hit '${hit.item}' has invalid material index '${index}'.`);
+        const skins = getTraceProperty(actor, "Skins") as ScriptValue_T[];
+        const modify = getTraceProperty(actor, "TexModifyInfo");
+
+        if (!Array.isArray(skins)) throw new Error(`Actor '${actor.scriptClassId}' has no Skins array.`);
+        if (!modify) throw new Error(`Actor '${actor.scriptClassId}' has no TexModifyInfo.`);
+        const vm = getScriptVM(actor);
+        let material: ScriptValue_T = (index < skins.length ? skins[index] : null) || primitive.materials[index];
+
+        if (!material) material = vm ? getProperty(vm.getDefaultObject("engine.Material"), "DefaultMaterial") : primitive.defaultMaterial;
+        if (!material || !modify.bUseModify) return material;
+        if (!vm) throw new Error(`Actor '${actor.scriptClassId}' has no script VM.`);
+
+        return vm.getModifiedTextureMaterial(modify, material);
+    }
+    if (hit.skinIndex !== 0) return null;
+    // UPrimitive::LineCheck 0x8db020..0x8db048 reads Skins[0] for inward hits from inside.
+    const skins = getTraceProperty(actor, "Skins") as ScriptValue_T[];
+
+    if (!Array.isArray(skins)) throw new Error(`Actor '${actor.scriptClassId}' has no Skins array.`);
+
+    return skins.length ? skins[0] : null;
 }
 
 function getTraceProperty(actor: ScriptHost_T, name: string): any {

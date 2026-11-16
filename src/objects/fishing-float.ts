@@ -1,6 +1,7 @@
 import { AnimationAction, Sphere, Vector3 } from "three";
 import { GameObject } from "../game/components";
-import { findScriptPropertyKey, getScriptPropertyName } from "../game/script-component";
+import { ScriptComponent } from "../game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import ActorOwnershipComponent from "./components/actor-ownership-component";
 import AnimationComponent from "./components/animation-component";
@@ -11,6 +12,8 @@ import { EPhysics_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
 import type RenderManager from "../rendering/render-manager";
 import type LocalSpaceSkeleton from "./local-space-skeleton";
+
+const waterEffectInterval = Math.fround(0.05);
 
 type WaterTrace_T = (start: Vector3, end: Vector3, hit: Vector3) => void;
 
@@ -59,7 +62,9 @@ export class FishingFloat extends GameObject {
         this.nativeRotation.toQuaternion(this.quaternion);
         this.position.copy(location);
         this.originalLocation.copy(location);
-        new UnScriptVM(library).initializeHost(this);
+        const vm = new UnScriptVM(library);
+
+        this.addComponent(new ScriptComponent(vm, classId => renderManager.getParent().getComponent("asset").createScriptObject(renderManager, library, classId, vm), this.scriptClassId));
 
         const rate = this.scriptProperties.get("RotationRate");
         if (!Array.isArray(rate) || rate.some(value => value !== 0)) throw new Error(`L2Float has unsupported RotationRate ${rate}`);
@@ -166,7 +171,7 @@ export class FishingFloat extends GameObject {
             }
             this.renderManager.addTransientEffect(effect, this);
             this.oldEffectLocation.copy(tmpWaterPosition);
-            this.waterEffectTimer = this.state === TagState_T.L2TAG_WAIT ? 1 : Math.fround(0.05);
+            this.waterEffectTimer = this.state === TagState_T.L2TAG_WAIT ? 1 : waterEffectInterval;
         }
 
         this.waterEffectTimer = Math.fround(this.waterEffectTimer - dt);

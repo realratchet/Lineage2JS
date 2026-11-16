@@ -1,8 +1,22 @@
 import "./un-object-mixin";
-import { ANativePackage, APackage, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
+import getPrebuiltClass from "@generated/classes";
+import { ANativePackage, APackage, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
 import UObject from "./un-object";
+import UAActor from "./un-aactor";
+import AInfo from "./un-info";
+import UPrimitive from "./un-primitive";
+import UMesh from "./un-mesh";
+import ULodMesh from "./un-lod-mesh";
+import UMeshInstance from "./un-mesh-instance";
+import UClient from "./un-client";
+import UPlayer from "./un-player";
+import UViewport from "./un-viewport";
+import UController from "./un-controller";
+import UInventory from "./un-inventory";
+import UWeapon from "./un-weapon";
+import UVolume from "./un-volume";
 import UModel from "./model/un-model";
-import ULevel from "./un-level";
+import ULevel, { ULevelBase } from "./un-level";
 import FScale from "./un-scale";
 import FVector from "./un-vector";
 import UBrush from "./un-brush";
@@ -32,7 +46,11 @@ import UCamera from "./un-camera";
 import UPointRegion from "./un-point-region";
 import UL2Event from "./un-l2-event";
 import UNMagicInfo from "./un-nmagic-info";
+import UNSilhouetteParam from "./un-nsilhouette-param";
+import UNPrimeActionParam from "./un-nprime-action-param";
+import UNAtkConsumeItemParam from "./un-natk-consume-item-param";
 import UTextureModifyInfo from "./un-texture-modify-info";
+import UWhenExtinctionCreate from "./un-when-extinction-create";
 import UTexture from "./un-texture";
 import UPlatte from "./un-palette";
 import FBox from "./un-box";
@@ -76,6 +94,9 @@ import USceneManager, { UMatAction, UActionMoveCamera, UInterpolationPoint } fro
 
 export type NativeClientTypes_T =
     | NativeTypes_T
+    | "Controller"
+    | "Volume"
+    | "ParticleEmitter"
     | "VertMesh"
     | "WaterHitEmitter"
     | "VertMeshEmitter"
@@ -114,7 +135,18 @@ export type NativeClientTypes_T =
     | "AnimNotify_AttackItem"
     | "AnimNotify_ScreenFade"
     | "AnimNotify_ViewShake"
-    | "AnimNotify_BoneScale";
+    | "AnimNotify_BoneScale"
+    | "ReachSpec"
+    | "NCubics"
+    | "RibbonEmitter"
+    | "TexOscillatorTriggered"
+    | "ConstantColor"
+    | "MatObject"
+    | "MatSubAction"
+    | "MatAction"
+    | "ActionWarp"
+    | "ActionPause"
+    | "ActionMoveCamera";
 
 export type CoreStructs_T =
     | "Vector"
@@ -134,6 +166,55 @@ export type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : never;
 
 export class UPackage extends APackage {
+    public cachedResolver: any = null;
+    protected restoringResolver: Promise<this> = null;
+    public rawOnly = false;
+    public keepRawSource = false;
+    public requiresRawDependencies = false;
+
+    public async decode(): Promise<this> {
+        if (this.isDecoded()) return this;
+        if (this.restoringResolver) return this.restoringResolver;
+        this.restoringResolver = this.decodePackage();
+        try {
+            return await this.restoringResolver;
+        } finally {
+            this.restoringResolver = null;
+        }
+    }
+
+    protected async decodePackage(): Promise<this> {
+        const settings = (this.loader as any).packageCacheSettings;
+        if (!this.rawOnly && settings && globalThis.isSecureContext && /\.(usx|utx|uax)$/i.test(this.path)) {
+            const { restorePackageResolver } = await import("./package-resolver");
+            const restored = await restorePackageResolver(this, settings);
+            if (restored) {
+                this.cachedResolver = restored;
+                this.source = restored.source;
+                this.buffer = new ArrayBuffer(0);
+                this.contentOffset = 0;
+                return this;
+            }
+        }
+        this.cachedResolver = null;
+        return super.decode();
+    }
+
+    public free(): void {
+        super.free();
+        this.cachedResolver = null;
+    }
+
+    public resetRawPackage(): void {
+        this.free();
+        this.rawOnly = true;
+        this.cachedResolver = null;
+        this.header = null;
+        this.exports = null;
+        this.imports = null;
+        this.nameTable = null;
+    }
+
     protected async readArrayBuffer() {
         const source = await fetchPackageSource(this.path);
 
@@ -309,6 +390,8 @@ export class UEnginePackage extends UPackage implements EnginePackage_T {
 
 export class UNativePackage extends ANativePackage {
 
+    public getPrebuiltClass(struct: UStruct) { return getPrebuiltClass(struct, this); }
+
     public getStructConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: string): new () => T {
         let Constructor: any;
 
@@ -320,7 +403,11 @@ export class UNativePackage extends ANativePackage {
             case "PointRegion": Constructor = UPointRegion; break;
             case "L2Event": Constructor = UL2Event; break;
             case "NMagicInfo": Constructor = UNMagicInfo; break;
+            case "NSilhouetteParam": Constructor = UNSilhouetteParam; break;
+            case "NPrimeActionParam": Constructor = UNPrimeActionParam; break;
+            case "NAtkConsumeItemParam": Constructor = UNAtkConsumeItemParam; break;
             case "TextureModifyinfo": Constructor = UTextureModifyInfo; break;
+            case "WhenExtinctionCreate": Constructor = UWhenExtinctionCreate; break;
             case "Box": Constructor = FBox; break;
             case "Plane": Constructor = FPlane; break;
             case "Matrix": Constructor = FMatrix; break;
@@ -373,6 +460,8 @@ export class UNativePackage extends ANativePackage {
             case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
             case "ParticleVelocityScale": Constructor = PEmitter.UParticleVelocityScale; break;
             case "ParticleRevolutionScale": Constructor = PEmitter.UParticleRevolutionScale; break;
+            case "ParticleSound": Constructor = PEmitter.UParticleSound; break;
+            case "Particle": Constructor = PEmitter.UParticle; break;
 
             default:
                 debugger;
@@ -386,6 +475,19 @@ export class UNativePackage extends ANativePackage {
         let Constructor: any;
 
         switch (constructorName) {
+            case "Actor": Constructor = UAActor; break;
+            case "Info": Constructor = AInfo; break;
+            case "Primitive": Constructor = UPrimitive; break;
+            case "Mesh": Constructor = UMesh; break;
+            case "LodMesh": Constructor = ULodMesh; break;
+            case "MeshInstance": Constructor = UMeshInstance; break;
+            case "Client": Constructor = UClient; break;
+            case "Player": Constructor = UPlayer; break;
+            case "Viewport": Constructor = UViewport; break;
+            case "Controller": Constructor = UController; break;
+            case "Inventory": Constructor = UInventory; break;
+            case "Weapon": Constructor = UWeapon; break;
+            case "LevelBase": Constructor = ULevelBase; break;
             case "Level": Constructor = ULevel; break;
             case "L2Float": Constructor = UL2Float; break;
             case "Model": Constructor = UModel; break;
@@ -411,6 +513,7 @@ export class UNativePackage extends ANativePackage {
             case "Camera": Constructor = UCamera; break;
             case "Pawn": Constructor = UPawn; break;
 
+            case "Volume": Constructor = UVolume; break;
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
             case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
             case "BlockingVolume": Constructor = UBlockingVolume; break;
@@ -439,6 +542,7 @@ export class UNativePackage extends ANativePackage {
             case "WetTexture": Constructor = UWetTexture; break;
             case "Palette": Constructor = UPlatte; break;
 
+            case "ParticleEmitter": Constructor = PEmitter.UParticleEmitter; break;
             case "Emitter": Constructor = UEmitter; break;
             case "NCubics": Constructor = UEmitter; break;
             case "NProjectile": Constructor = UEmitter; break;
@@ -455,11 +559,14 @@ export class UNativePackage extends ANativePackage {
             case "LevelSummary": Constructor = ULevelSummary; break;
 
 
+            case "Material": Constructor = UnMaterials.UMaterial; break;
+            case "Modifier": Constructor = UnMaterials.UBaseModifier; break;
             case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
             case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
             case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
             case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
             case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
+            case "TexOscillatorTriggered": Constructor = UnMaterials.UTexOscillatorTriggered; break;
             case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
             case "ConstantColor": Constructor = UnMaterials.UConstantColor; break;
             case "Shader": Constructor = UnMaterials.UShader; break;

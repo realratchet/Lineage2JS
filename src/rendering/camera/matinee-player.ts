@@ -4,6 +4,8 @@ import type { Vector3Arr } from "@l2js/engine";
 import { sinRotator } from "@l2js/engine/utils/rotator";
 import sampleMatineePath, { interpolateMatineePath } from "./matinee-path";
 
+const minActionPercent = Math.fround(0.0001);
+
 const tmpLookAt = new Vector3();
 
 type Pose_T = { location: Vector3Arr, rotation: Vector3Arr };
@@ -104,7 +106,7 @@ export class MatineePlayer {
             return true;
         }
 
-        pct = Math.max(Math.fround(0.0001), pct);
+        pct = Math.max(minActionPercent, pct);
 
         if (this.isReverse) pct = Math.fround(1 - pct);
 
@@ -113,7 +115,7 @@ export class MatineePlayer {
         while (this.queue[index].pctEnd < pct) index++;
 
         const action = this.queue[index], previous = this.queue[(index + this.queue.length - 1) % this.queue.length];
-        const alpha = Math.max(Math.fround(0.0001), Math.min(100, Math.fround((pct - action.pctStart) / (action.pctDuration || 1))));
+        const alpha = Math.max(minActionPercent, Math.min(100, Math.fround((pct - action.pctStart) / (action.pctDuration || 1))));
 
         interpolateMatineePath(action.samples, alpha, this.pose.location);
 

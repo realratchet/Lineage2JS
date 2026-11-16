@@ -61,7 +61,16 @@ export class NCMacroWnd {
         [this.element, this.editor, this.info].forEach((element, index) => {
             element.hidden = true;
             layer.tile(element, 0, 20, 256, index === 2 ? 141 : 381, 0, 0, 256, index === 2 ? 141 : 381, arrBack[index]);
-            NCFrameCtrl.createDOM(layer, element, 256, manager.getSysString(index === 2 ? SysString_T.MoreInfo : SysString_T.Macro), index !== 2, index === 1 ? () => this.setEditorVisible(false) : index === 0 ? () => this.setVisible(false) : null, null, index === 0 ? () => this.minimized.minimize() : index === 1 ? () => { this.setEditorVisible(false); this.editorMinimized.minimize(); } : null);
+            NCFrameCtrl.createDOM(
+                layer,
+                element,
+                256,
+                manager.getSysString(index === 2 ? SysString_T.MoreInfo : SysString_T.Macro),
+                index !== 2,
+                index === 1 ? () => this.setEditorVisible(false) : index === 0 ? () => this.setVisible(false) : null,
+                null,
+                index === 0 ? () => this.minimized.minimize() : index === 1 ? () => { this.setEditorVisible(false); this.editorMinimized.minimize(); } : null
+            );
         });
         layer.text(this.element, manager.getSysString(SysString_T.MacroList), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.count = layer.text(this.element, "(00/24)", 0xffdcdcdc, FontType_T.SMALL, 200, 32);
@@ -122,7 +131,7 @@ export class NCMacroWnd {
         layer.button(this.info, 131, 132, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Cancel), () => { this.setInfoVisible(false); }).setAttribute("aria-label", manager.getSysString(SysString_T.Cancel));
     }
 
-    public placeOnScreen(width: number, height: number) {
+    public placeOnScreen(_width: number, height: number) {
         this.minimized.place(0, Math.trunc(height * .5 - 252));
         this.editorMinimized.place(0, Math.trunc(height * .5 - 252));
         this.layer.place(this.info, 21, Math.trunc(height * .5 - 173));

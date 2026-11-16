@@ -1,5 +1,8 @@
 import NDomLayer from "./ndom";
 
+const caretBlinkPeriod = 500 * Math.fround(0.001);
+const keyRepeatPeriod = 200 * Math.fround(0.001);
+
 const arrFrameTextures = Array.from({ length: 18 }, (_, index) => `L2UI_CH3.multiedit.M_inputbox0${index % 9 + 1}${index >= 9 ? "_disable" : ""}`);
 const arrScrollTextures = ["ScrollBarUpBtn", "ScrollBarUpOnBtn", "ScrollBarDownBtn", "ScrollBarDownOnBtn", "SliderBarTop", "SliderBarCenter", "SliderBarBottom"].map(name => `L2UI_CH3.ScrollBar.${name}`);
 type MultiEditRow_T = { start: number, end: number, text: string };
@@ -80,7 +83,11 @@ export class CHtmlMultiEdit {
         this.input.addEventListener("input", event => this.updateValue(event as InputEvent));
         this.input.addEventListener("select", () => { if (document.activeElement === this.input) this.revealCaret(); this.paint(); });
         this.input.addEventListener("keydown", event => { this.caretDirection = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0; });
-        this.input.addEventListener("keyup", () => { if (document.activeElement === this.input) this.revealCaret(); this.paint(); this.caretDirection = 0; });
+        this.input.addEventListener("keyup", () => {
+            if (document.activeElement === this.input) this.revealCaret();
+            this.paint();
+            this.caretDirection = 0;
+        });
         this.input.addEventListener("mousedown", () => { this.caretDirection = 0; });
         this.input.addEventListener("click", () => this.paint());
         this.input.addEventListener("scroll", () => { this.input.scrollTop = 0; this.input.scrollLeft = 0; });
@@ -245,7 +252,8 @@ export class CHtmlMultiEdit {
     }
 
     protected createArrow(y: number, direction: number) {
-        const index = direction < 0 ? 0 : 2, button = this.layer.tile(this.element, this.width - 15, y, 15, 15, 0, 0, 15, 15, arrScrollTextures[index]);
+        const index = direction < 0 ? 0 : 2;
+        const button = this.layer.tile(this.element, this.width - 15, y, 15, 15, 0, 0, 15, 15, arrScrollTextures[index]);
         const paint = () => this.layer.setTile(button, 15, 15, 0, 0, 15, 15, arrScrollTextures[index + (this.repeatDirection === direction && this.isRepeatPressed ? 1 : 0)]);
 
         button.style.pointerEvents = "auto";
@@ -298,7 +306,7 @@ export class CHtmlMultiEdit {
     }
 
     public tick(deltaSeconds: number) {
-        const delta = Math.fround(deltaSeconds), blinkPeriod = 500 * Math.fround(0.001), blinkElapsed = this.blinkElapsed + delta;
+        const delta = Math.fround(deltaSeconds), blinkPeriod = caretBlinkPeriod, blinkElapsed = this.blinkElapsed + delta;
 
         this.blinkElapsed = Math.fround(blinkElapsed);
         if (blinkElapsed > blinkPeriod) {
@@ -308,7 +316,7 @@ export class CHtmlMultiEdit {
         }
         if (!this.repeatDirection) return;
 
-        const repeatPeriod = 200 * Math.fround(0.001), repeatElapsed = this.repeatElapsed + delta;
+        const repeatPeriod = keyRepeatPeriod, repeatElapsed = this.repeatElapsed + delta;
 
         this.repeatElapsed = Math.fround(repeatElapsed);
         if (repeatElapsed > repeatPeriod) {

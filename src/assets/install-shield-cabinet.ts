@@ -1,4 +1,5 @@
-import { inflateRaw } from "pako";
+import inflateCabinetBlock from "./cabinet-inflate";
+import CabinetFileReader, { storeCabinetIndex } from "./cabinet-file-reader";
 
 // layout from unshield (libunshield), InstallShield 6+ cabinets
 const COMMON_HEADER_SIZE = 20;
@@ -194,7 +195,38 @@ export class InstallShieldCabinet {
         return stored;
     }
 
-    public async extract(file: CabinetFile_T): Promise<Uint8Array> {
+    public async openFile(file: CabinetFile_T, key: string): Promise<CabinetFileReader> {
+        const parts: Blob[] = [];
+        const size = file.flags & FILE_COMPRESSED ? file.compressedSize : file.expandedSize;
+        let volume = file.volume, offset = file.dataOffset, written = 0;
+
+        while (written < size) {
+            let available = size - written;
+
+            if (file.flags & FILE_SPLIT) {
+                const header = await this.getVolumeHeader(volume);
+
+                if (file.index === header.lastFileIndex && header.lastFileOffset !== 0x7FFFFFFF) available = header.lastFileSizeCompressed;
+                if (written > 0 && file.index === header.firstFileIndex) {
+                    offset = header.firstFileOffset;
+                    available = header.firstFileSizeCompressed;
+                }
+            }
+
+            const length = Math.min(available, size - written);
+            const blob = this.volumes.get(volume);
+
+            if (length <= 0 || !blob || offset + length > blob.size) throw new Error(`Incomplete cabinet segment for '${file.path}'.`);
+
+            parts.push(blob.slice(offset, offset + length));
+            written += length;
+            volume++;
+        }
+
+        return new CabinetFileReader(new Blob(parts), file.expandedSize, !!(file.flags & FILE_COMPRESSED), !!(file.flags & FILE_OBFUSCATED)).loadIndex(key);
+    }
+
+    public async extract(file: CabinetFile_T, indexKey: string = null, offsets: number[] = null): Promise<Uint8Array> {
         const stored = await this.readStored(file);
 
         if (file.flags & FILE_OBFUSCATED) deobfuscate(stored, 0);
@@ -202,18 +234,22 @@ export class InstallShieldCabinet {
 
         const view = new DataView(stored.buffer);
         const output = new Uint8Array(file.expandedSize);
+        if (indexKey && !offsets) offsets = [];
         let offset = 0, written = 0;
 
         while (offset < stored.length) {
             const length = view.getUint16(offset, true);
-            const chunk = inflateRaw(stored.subarray(offset + 2, offset + 2 + length));
-
-            output.set(chunk, written);
-            written += chunk.length;
+            if (offsets) offsets.push(offset, written);
+            written += inflateCabinetBlock(stored.subarray(offset + 2, offset + 2 + length), output, written);
             offset += 2 + length;
         }
 
         if (written !== file.expandedSize) throw new Error(`Cabinet file '${file.path}' inflated to ${written}/${file.expandedSize} bytes.`);
+
+        if (offsets) {
+            offsets.push(offset, written);
+            if (indexKey) await storeCabinetIndex(indexKey, new Float64Array(offsets));
+        }
 
         return output;
     }

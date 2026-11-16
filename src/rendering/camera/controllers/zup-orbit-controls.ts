@@ -2,11 +2,11 @@ import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3,
 
 // Forked from three OrbitControls for the mirrored horizontal projection.
 
-const _changeEvent = { type: "change" };
-const _startEvent = { type: "start" };
-const _endEvent = { type: "end" };
+const _changeEvent = { type: "change" as const };
+const _startEvent = { type: "start" as const };
+const _endEvent = { type: "end" as const };
 
-export class ZUpOrbitControls extends EventDispatcher {
+export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, end: {} }> {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;

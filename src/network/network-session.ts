@@ -1,5 +1,4 @@
 import { characterCreationRaces } from "../build-settings";
-import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 import type NetworkManager from "./network-manager";
 import { Vector3 } from "three";
 import BaseActor from "../base-actor";
@@ -7,13 +6,14 @@ import LoginClient, { type SessionKey_T } from "./login-client";
 import GameClient, { type CharacterCreate_T } from "./game-client";
 import L2Lobby from "./l2-lobby";
 import L2ReplayFile from "./l2-replay-file";
+import { isReplayCameraInput } from "./l2-replay-input";
 import { saveReplayFile } from "./replay-files";
 import * as GamePackets from "./game-packets";
 import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import { setVector } from "./network-location";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
 
 export enum GMTransferPhase_T { Idle, Queued, Restart, Reconnect, Login, SelectServer, SelectCharacter, Complete }
 
@@ -48,32 +48,36 @@ export class NetworkSession {
         const asset = this.network.getParent().getComponent("asset"), render = this.network.getParent().getComponent("render");
 
         asset.setStreaming(render, false);
-        setLoadingProgress(0.1, "Loading interface and game text…", true);
+        setLoadingProgress(0.1, loadingTexts.loginInterface(), true);
 
-        if (!this.network.ui) {
-            this.network.ui = this.network.getParent().getComponent("gui");
-            this.network.ui.create();
+        if (!this.lobby) {
+            if (!this.network.ui) {
+                this.network.ui = this.network.getParent().getComponent("gui");
+                this.network.ui.create();
+                await this.network.ui.setStrings(await asset.getGameStrings());
+            }
             this.lobby = new L2Lobby(this.network.getParent(), (appearance, actor) => this.network.actors.loadAppearance(appearance, actor));
-
-            await this.network.ui.setStrings(await asset.getGameStrings());
 
             void this.network.actors.loadNpcNames();
             void this.network.community.loadRadar();
 
-            const arrPending = ["interface textures", "login scene", "character assets"];
+            const arrPending = ["interface textures", "login scene"];
 
-            setLoadingProgress(0.2, `Loading ${arrPending.join(", ")}…`, true);
-            await Promise.all([this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots), asset.precacheCharacters()].map(async (task, i) => {
+            setLoadingProgress(0.2, loadingTexts.loginScreens(0, arrPending.length, arrPending), true);
+            const arrTasks = [this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots)];
+
+            void asset.precacheCharacters();
+            await Promise.all(arrTasks.map(async (task, i) => {
                 await task;
                 arrPending[i] = null;
                 const remaining = arrPending.filter(Boolean);
 
-                setLoadingProgress(0.2 + (3 - remaining.length) * 0.2, remaining.length ? `Loading ${remaining.join(", ")}…` : "Preparing login scene…", true);
+                setLoadingProgress(0.2 + (arrPending.length - remaining.length) * 0.3, loadingTexts.loginScreens(arrPending.length - remaining.length, arrPending.length, remaining), true);
             }));
         } else await this.lobby.enter(this.network.ui.getStrings().logonSpots);
 
         this.lobby.showLogin();
-        setLoadingProgress(0.9, "Preparing login textures and lighting…", true);
+        setLoadingProgress(0.9, loadingTexts.loginLighting(), true);
         while (!render.isSectorWarm(render.getLevel())) await new Promise(resolve => setTimeout(resolve, 50));
         this.network.ui.showLogin();
     }
@@ -94,6 +98,7 @@ export class NetworkSession {
 
             if (this.login !== login) return;
             this.network.ui.showServers(servers, login.lastServerId);
+            void login.pingServers((serverId, ping) => this.network.ui.setServerPing(serverId, ping));
         } catch (e) {
             if (this.login !== login) return;
             this.network.ui.showLogin();
@@ -131,7 +136,7 @@ export class NetworkSession {
             game.onClose = (code, reason) => { if (this.game === game) void this.onDisconnected(`Game server closed the connection (${code}${reason ? ` ${reason}` : ""}).`); };
 
             this.gameServerUrl = login.getGameServerUrl(server);
-            await game.connect(this.gameServerUrl);
+            await game.connect(this.gameServerUrl, login.takeSelectedServerSocket());
         } catch (e) {
             if (this.login !== login || this.gmTransfer !== transfer) return;
             if (transfer) transfer.error = (e as Error).message;
@@ -301,24 +306,18 @@ export class NetworkSession {
         const properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
 
         file.setScene(scene);
-        // shortcut: follow-camera presets; extend after free-camera initialization is traced.
-        if (scene.cameraMode) throw new Error(`Replay camera mode is not implemented.`);
         const presetCount = properties.get("FixedDefaultViewNum") as number;
 
         if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
         if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo) throw new Error(`Replay requires an initial UserInfo snapshot.`);
         if (lockCamera) {
-            for (const { key, action, amount } of file.arrCameraInstructions) {
-                if ((key === EInputKey_T.IK_MouseX || key === EInputKey_T.IK_MouseY) && action === EInputAction_T.IST_Axis) {
-                    if (Math.abs(Math.trunc(amount * 3600 * Math.fround(0.01))) > 0x7fffffff) throw new Error(`Replay camera axis exceeds the implemented input range.`);
-                    continue;
-                }
-                if ((key === EInputKey_T.IK_RightMouse || key === EInputKey_T.IK_MouseWheelUp || key === EInputKey_T.IK_MouseWheelDown) && (action === EInputAction_T.IST_Press || action === EInputAction_T.IST_Release)) continue;
-                if ((key === EInputKey_T.IK_PageUp || key === EInputKey_T.IK_PageDown || key === EInputKey_T.IK_Home) && (action === EInputAction_T.IST_Press || action === EInputAction_T.IST_Hold || action === EInputAction_T.IST_Release)) continue;
-                throw new Error(`Replay camera key/action '${key}/${action}' is not implemented.`);
+            for (const { key, action } of file.arrCameraInstructions) {
+                if (!isReplayCameraInput(key, action, true)) throw new Error(`Replay camera key/action '${key}/${action}' is not implemented.`);
             }
         }
-        const info = GamePackets.readUserInfo(new PacketReader(first.payload)), render = this.network.getParent().getComponent("render"), input = this.network.getParent().getComponent("input");
+        const info = GamePackets.readUserInfo(new PacketReader(first.payload)),
+            render = this.network.getParent().getComponent("render"),
+            input = this.network.getParent().getComponent("input");
         const game = new GameClient();
 
         game.onPacket = (opcode, packet) => { if (this.game === game) this.network.onPacket(opcode, packet); };
@@ -353,6 +352,7 @@ export class NetworkSession {
             render.player.setUnrealScriptProperty("DesiredRotation", [0, yaw, 0]);
             render.player.setRotationYaw(yaw);
             input.startReplayCamera(scene);
+            this.network.movement.cameraMode = scene.cameraMode;
             game.tickReplayPlayback(0);
             this.replayLoading = false;
         } catch (error) {
@@ -389,11 +389,26 @@ export class NetworkSession {
         if (!this.network.actors.inWorld || this.game.isRecording()) return;
         const render = this.network.getParent().getComponent("render"), properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
         const file = new L2ReplayFile(), direction = render.camera.getWorldDirection(new Vector3());
-        const time = (render.environment.getTimeSeconds() % (24 * 60 * 60) + (24 * 60 * 60)) % (24 * 60 * 60);
+        const time = (render.getEnvironment().getTimeSeconds() % (24 * 60 * 60) + (24 * 60 * 60)) % (24 * 60 * 60);
         const zoom = properties.get("CurZoomingDist") as number;
         const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
 
-        file.setScene({ position: render.camera.position.toArray(), yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI), pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI), zoom, desiredZoom: properties.get("DesiredZoomingDist") as number, hour: Math.floor(time / 3600), minute: Math.floor(time / 60) % 60, second: time % 60, duration: 0, cameraMode: properties.get("bCameraWalking") ? 1 : 0, firstPerson: fixedCamera === 1 ? 1 : 0, observerMode: this.network.movement.observation ? 1 : 0, actorYaw: render.player.getRotationYaw(), fixedCamera });
+        file.setScene({
+            position: render.camera.position.toArray(),
+            yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI),
+            pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI),
+            zoom,
+            desiredZoom: properties.get("DesiredZoomingDist") as number,
+            hour: Math.floor(time / 3600),
+            minute: Math.floor(time / 60) % 60,
+            second: time % 60,
+            duration: 0,
+            cameraMode: properties.get("bCameraWalking") ? 1 : 0,
+            firstPerson: fixedCamera === 1 ? 1 : 0,
+            observerMode: this.network.movement.observation ? 1 : 0,
+            actorYaw: render.player.getRotationYaw(),
+            fixedCamera
+        });
         file.arrUserIds = [...this.network.actors.objects.keys()];
         this.game.startRecording(file);
         this.network.ui.setReplayRecording(true);
@@ -404,17 +419,7 @@ export class NetworkSession {
         if (!this.game || !this.game.isRecording()) return;
         const file = this.game.stopRecording(), bytes = file.toBytes();
         this.network.ui.setReplayRecording(false);
-        let name = "Replay.l2r";
-
-        try { name = await saveReplayFile(bytes); }
-        finally {
-            const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" })), link = document.createElement("a");
-
-            link.href = url;
-            link.download = name;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
+        const name = await saveReplayFile(bytes);
         this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(1653).replace("$s1", name), this.network.ui.getStrings().systemMessageColors[1653]);
     }
 
@@ -435,7 +440,7 @@ export class NetworkSession {
             characters.slice(0, 7).forEach((character, index) => { if (character.isLastUsed && (character.deleteSeconds <= 0 || character.isDeletionMarked)) lastUsed = index; });
             transfer.selectedSlot = lastUsed;
         }
-        const asset = this.network.getParent().getComponent("asset");
+        // const asset = this.network.getParent().getComponent("asset");
 
         await this.lobby.showSelect(characters);
         if (this.game !== game || this.characters !== characters) return;

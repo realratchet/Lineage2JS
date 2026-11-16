@@ -30,7 +30,7 @@ export type AquireSkillEntry_T = { id: number, nextLevel: number, maxLevel: numb
 export type AquireSkillRequirement_T = { type: number, itemId: number, count: number, unknown: number };
 export type AquireSkillInfo_T = { id: number, level: number, spCost: number, mode: number, requirements: AquireSkillRequirement_T[] };
 export type TradeItem_T = { tradeType: number, type1: number, objectId: number, itemId: number, count: number, initialCount: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number };
-export type ShopItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number, price: number };
+export type ShopItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, bodyPart: number, enchantLevel: number, customType2?: number, price: number };
 export type StorageMaxCount_T = { inventory: number, warehouse: number, freight: number, privateSell: number, privateBuy: number, recipeDwarf: number, recipe: number };
 
 export enum AttackFlags_T {
@@ -195,6 +195,7 @@ export enum GameServerPacket_T {
     NicknameChanged = 0xcc,
     PledgeStatusChanged = 0xcd,
     RelationChanged = 0xce,
+    EventTrigger = 0xcf,
     MultiSellList = 0xd0,
     SetSummonRemainTime = 0xd1,
     Dice = 0xd4,
@@ -611,7 +612,7 @@ export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: n
 export type CharInfo_T = CreatureInfo_T & Appearance_T & { isHero: boolean, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, cubics: number[], team: number };
 
 export type NpcInfo_T = CreatureInfo_T & { npcId: number, isAttackable: boolean, rightHand: number, chest: number, leftHand: number, spawnType: number, isSummon: boolean };
-export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number };
+export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number, objectType: number, state: number };
 
 export type CharTemplate_T = { race: Race_T, classId: number, STR: number, DEX: number, CON: number, INT: number, WIT: number, MEN: number };
 
@@ -879,13 +880,20 @@ export function readServerObjectInfo(packet: PacketReader): ServerObjectInfo_T {
     const moveMultiplier = packet.f(), attackSpeedMultiplier = packet.f(), collisionRadius = packet.f(), collisionHeight = packet.f();
     const curHp = packet.d(), maxHp = packet.d();
 
-    packet.d();
-    packet.d();
+    const objectType = packet.d(), state = packet.d();
 
-    if (objectId <= 0 || npcId <= 0 || !Number.isFinite(moveMultiplier) || moveMultiplier <= 0 || !Number.isFinite(attackSpeedMultiplier) || attackSpeedMultiplier <= 0 || !Number.isFinite(collisionRadius) || collisionRadius <= 0 || !Number.isFinite(collisionHeight) || collisionHeight <= 0 || curHp < 0 || maxHp < 0 || curHp > maxHp || packet.getRemaining())
+    if (objectId <= 0 || npcId <= 0 || !Number.isFinite(moveMultiplier) || moveMultiplier <= 0 || !Number.isFinite(attackSpeedMultiplier) || attackSpeedMultiplier <= 0 ||
+        !Number.isFinite(collisionRadius) ||
+        collisionRadius <= 0 ||
+        !Number.isFinite(collisionHeight) ||
+        collisionHeight <= 0 ||
+        curHp < 0 ||
+        maxHp < 0 ||
+        curHp > maxHp ||
+        packet.getRemaining())
         throw new Error("Invalid ServerObjectInfo payload.");
 
-    return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, abnormalState: 0, curHp, maxHp };
+    return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, abnormalState: 0, curHp, maxHp, objectType, state };
 }
 
 export type PetStatus_T = { objectId: number, npcId: number, name: string, x: number, y: number, z: number, statusType: number, curFood: number, maxFood: number, curHp: number, maxHp: number, curMp: number, maxMp: number, field42: number, level: number, exp: number, minExp: number, nextExp: number, weight: number, maxWeight: number, pAtk: number, pDef: number, mAtk: number, mDef: number, accuracy: number, evasion: number, critical: number, speed: number, attackSpeed: number, castSpeed: number, field60: number, isMountable: boolean, soulshotsUsed: number, spiritshotsUsed: number };
@@ -904,7 +912,16 @@ export function readPetInfo(packet: PacketReader): PetInfo_T { // Engine 0x1041c
 
     const level = packet.d(), exp = packet.d(), minExp = packet.d(), nextExp = packet.d();
     const weight = packet.d(), maxWeight = packet.d();
-    const pAtk = packet.d(), pDef = packet.d(), mAtk = packet.d(), mDef = packet.d(), accuracy = packet.d(), evasion = packet.d(), critical = packet.d(), speed = packet.d(), attackSpeed = packet.d(), castSpeed = packet.d();
+    const pAtk = packet.d(),
+        pDef = packet.d(),
+        mAtk = packet.d(),
+        mDef = packet.d(),
+        accuracy = packet.d(),
+        evasion = packet.d(),
+        critical = packet.d(),
+        speed = packet.d(),
+        attackSpeed = packet.d(),
+        castSpeed = packet.d();
 
     info.abnormalState = packet.d();
 
@@ -1009,7 +1026,14 @@ export type PrivateStoreBuyOffer_T = { itemId: number, enchantLevel: number, typ
 export type PrivateStoreSellOffer_T = { objectId: number, itemId: number, enchantLevel: number, type2: number, count: number, price: number };
 
 function readStorageItem(packet: PacketReader): StorageItem_T { // WareHouseDepositList/WareHouseWithdrawalList/PackageSendableList: trailing d repeats objectId.
-    const type1 = packet.h(), objectId = packet.d(), itemId = packet.d(), count = packet.d(), type2 = packet.h(), customType1 = packet.h(), bodyPart = packet.d(), enchantLevel = packet.h();
+    const type1 = packet.h(),
+        objectId = packet.d(),
+        itemId = packet.d(),
+        count = packet.d(),
+        type2 = packet.h(),
+        customType1 = packet.h(),
+        bodyPart = packet.d(),
+        enchantLevel = packet.h();
 
     packet.h();
 
@@ -1104,7 +1128,9 @@ export function readPrivateStoreListSell(packet: PacketReader): PrivateStoreSell
 function readPrivateStoreBuyItem(packet: PacketReader, isStoreList: boolean, hasPrice: boolean): PrivateStoreBuyItem_T {
     const objectId = isStoreList ? packet.d() : 0, itemId = packet.d(), enchantLevel = packet.h(), count = packet.d(), firstPrice = packet.d();
     const category = packet.h(), bodyPart = packet.d(), type1 = packet.h(), finalPrice = hasPrice ? packet.d() : 0, maxCount = hasPrice ? packet.d() : 0;
-    const type2 = isStoreList ? type1 : category, price = isStoreList ? finalPrice : hasPrice ? firstPrice : 0, referencePrice = !isStoreList && hasPrice ? finalPrice : firstPrice;
+    const type2 = isStoreList ? type1 : category,
+        price = isStoreList ? finalPrice : hasPrice ? firstPrice : 0,
+        referencePrice = !isStoreList && hasPrice ? finalPrice : firstPrice;
     if (isStoreList && objectId <= 0 || itemId <= 0 || count < 0 || price < 0) throw new Error(`Invalid private store buy item '${itemId}'.`);
 
     return { objectId, itemId, enchantLevel, count, referencePrice, bodyPart, type2, price, maxCount };
@@ -1407,13 +1433,30 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
 
 export function readClanHallDecoration(packet: PacketReader): ClanHallDecoration_T {
     const clanHallId = packet.d(), status = packet.b(20), fields = new PacketReader(status);
-    return { clanHallId, status, restoreHp: fields.c(), restoreMp: [fields.c(), fields.c()], restoreExp: fields.c(), teleport: fields.c(), unknown: fields.c(), curtains: fields.c(), itemCreate: fields.c(), support: [fields.c(), fields.c()], frontPlatform: fields.c(), itemCreate2: fields.c(), trailer: [fields.d(), fields.d()] };
+    return {
+        clanHallId,
+        status,
+        restoreHp: fields.c(),
+        restoreMp: [fields.c(), fields.c()],
+        restoreExp: fields.c(),
+        teleport: fields.c(),
+        unknown: fields.c(),
+        curtains: fields.c(),
+        itemCreate: fields.c(),
+        support: [fields.c(), fields.c()],
+        frontPlatform: fields.c(),
+        itemCreate2: fields.c(),
+        trailer: [fields.d(), fields.d()]
+    };
 }
 
 export function readSiegeInfo(packet: PacketReader): SiegeInfo_T {
     const castleId = packet.d(), ownerPrivileges = packet.d(), ownerId = packet.d();
     const hasOwner = packet.getRemaining() > 12; // SiegeInfo.java writes no owner block when the owner clan is missing from ClanTable.
-    const ownerName = hasOwner ? packet.S() : null, ownerLeaderName = hasOwner ? packet.S() : null, ownerAllyId = hasOwner ? packet.d() : 0, ownerAllyName = hasOwner ? packet.S() : null;
+    const ownerName = hasOwner ? packet.S() : null,
+        ownerLeaderName = hasOwner ? packet.S() : null,
+        ownerAllyId = hasOwner ? packet.d() : 0,
+        ownerAllyName = hasOwner ? packet.S() : null;
     const serverTime = packet.d(), siegeTime = packet.d(), choices = packet.d();
 
     if (packet.getRemaining()) throw new Error("Invalid SiegeInfo trailing data.");
@@ -1594,7 +1637,8 @@ export function readPartyMatchDetail(packet: PacketReader): PartyMatchDetail_T {
 export function readPartySpelled(packet: PacketReader): PartySpelled_T {
     const type = packet.d() as PartySpelledType_T, objectId = packet.d(), count = packet.d();
 
-    if (type < PartySpelledType_T.PLAYER || type > PartySpelledType_T.SUMMON || count < 0 || count !== packet.getRemaining() / 10) throw new Error(`Invalid PartySpelled payload (type ${type}, count ${count}).`);
+    if (type < PartySpelledType_T.PLAYER || type > PartySpelledType_T.SUMMON || count < 0 || count !== packet.getRemaining() / 10)
+        throw new Error(`Invalid PartySpelled payload (type ${type}, count ${count}).`);
 
     return { type, objectId, effects: Array.from({ length: count }, () => ({ id: packet.d(), level: packet.h(), duration: packet.d() })) };
 }

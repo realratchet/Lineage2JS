@@ -1,10 +1,12 @@
 import { cyrb53 } from "./unreal/utils/hash-cyrb";
 import InstallShieldCabinet from "./install-shield-cabinet";
+import type CabinetFileReader from "./cabinet-file-reader";
+import { startLoadingStep } from "../loading-profile";
 
 export type AssetFiles_T = [string, File][];
 export type ServedAssets_T = { files: Record<string, string>; version: string; };
 
-type AssetEntry_T = { path: string; read(): Promise<Blob | Uint8Array>; };
+type AssetEntry_T = { path: string; file?: File; read(): Promise<Blob | Uint8Array>; open?(): Promise<CabinetFileReader>; };
 
 const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
@@ -25,7 +27,11 @@ async function openCabinet(files: AssetFiles_T, header: [string, File]) {
 
     const cabinet = await InstallShieldCabinet.open(header[1], volumes);
 
-    return cabinet.files.map(file => ({ path: file.path, read: () => cabinet.extract(file) }));
+    return cabinet.files.map(file => ({
+        path: file.path,
+        read: () => cabinet.extract(file, /\.(u|unr|utx|usx|uax|ukx|usk)$/i.test(file.path) ? `${assetSourceId}/v1-${file.index}` : null),
+        open: () => cabinet.openFile(file, `${assetSourceId}/v1-${file.index}`)
+    }));
 }
 
 function indexInstall(files: AssetFiles_T) {
@@ -37,7 +43,7 @@ function indexInstall(files: AssetFiles_T) {
 
     return files
         .filter(([path]) => path.slice(0, root) === marker[0].slice(0, root))
-        .map(([path, file]) => ({ path: path.slice(root), read: async () => file }));
+        .map(([path, file]) => ({ path: path.slice(root), file, read: async () => file }));
 }
 
 async function buildIndex(files: AssetFiles_T) {
@@ -65,6 +71,9 @@ function createAssetList(index: Map<string, AssetEntry_T>) {
 }
 
 export function getAssetFiles() { return assetFiles; }
+export function getAssetFile(path: string) { return isServedAsset(path) ? null : assetIndex?.get(path.replace(/^\/?assets\//, "").toLowerCase())?.file ?? null; }
+export async function openAssetReader(path: string) { return isServedAsset(path) ? null : assetIndex?.get(path.replace(/^\/?assets\//, "").toLowerCase())?.open?.() ?? null; }
+export function getRawAssetSourceId() { return assetFiles ? assetSourceId : getAssetSourceId(); }
 export function getAssetSourceId() { return servedAssets.version ? `${assetSourceId}-${servedAssets.version}` : assetSourceId; }
 export function getServedAssets() { return servedAssets; }
 export function setServedAssets(assets: ServedAssets_T) {
@@ -116,12 +125,26 @@ export async function fetchAsset(path: string): Promise<Response> {
     if (!entry) return new Response(null, { status: 404, statusText: "Not Found" });
 
     const startTime = performance.now();
-    const data = await entry.read();
+    const finish = startLoadingStep("read", entry.path);
+    let data: Blob | Uint8Array;
+
+    try {
+        data = await entry.read();
+    } finally {
+        finish();
+    }
     const size = data instanceof Blob ? data.size : data.byteLength;
 
     console.log(`[asset-source] ${entry.path} (${(size / 1024).toFixed(1)} kB, ${(performance.now() - startTime).toFixed(0)} ms)`);
 
-    return new Response(data);
+    if (data instanceof Blob) return new Response(data);
+
+    return new Response(new ReadableStream({
+        start(controller) {
+            controller.enqueue(data);
+            controller.close();
+        }
+    }));
 }
 
 export default fetchAsset;

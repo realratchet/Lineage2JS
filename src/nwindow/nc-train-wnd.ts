@@ -1,6 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, NDomScrollPane_T } from "./ndom";
-import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
+import EXPERIENCE_TABLE from "../game/experience";
 import { FontType_T } from "./nwindow-canvas";
 import type { EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -99,7 +99,7 @@ export class NCTrainWnd {
         layer.button(this.infoView, 131, 352, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.SkillListButton), () => this.showList());
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public getItems() { return this.rows; }
     public getInfo() { return this.info; }
@@ -111,7 +111,9 @@ export class NCTrainWnd {
     public setStatus(status: TrainStatus_T) {
         this.status = status;
         this.infoSpLabel.hidden = this.isEnchantInfo || !status;
-        const layer = this.layer, sp = status ? String(status.sp) : "", exp = status && status.level >= 1 && status.level <= 78 ? String(status.exp - EXPERIENCE_TABLE[status.level]) : "";
+        const layer = this.layer;
+        const sp = status ? String(status.sp) : "";
+        const exp = status && status.level >= 1 && status.level <= 78 ? String(status.exp - EXPERIENCE_TABLE[status.level]) : "";
 
         [[this.listSp, sp, 326], [this.infoSp, sp, 326], [this.infoExp, exp, 306]].forEach(([element, value, y]) => {
             layer.renderText(element as HTMLDivElement, value as string, 0xffdcdcdc);
@@ -161,7 +163,8 @@ export class NCTrainWnd {
     }
     protected async showInfo(info: EnchantSkillInfo_T | AquireSkillInfo_T) {
         const generation = ++this.generation, strings = this.layer.getManager().strings;
-        const skill = strings.skillInfos[`${info.id}:${info.level}`], icon = skill?.icon || (this.isEnchantInfo ? strings.skillIcons[info.id] : null);
+        const skill = strings.skillInfos[`${info.id}:${info.level}`];
+        const icon = skill?.icon || (this.isEnchantInfo ? strings.skillIcons[info.id] : null);
 
         this.info = info;
         this.layer.setTile(this.infoBack, 256, 381, 0, 0, 256, 381, this.isEnchantInfo ? TEX_INFO : TEX_AQUIRE_INFO);
@@ -185,7 +188,8 @@ export class NCTrainWnd {
         this.list.content.replaceChildren();
         this.rows.forEach((row, index) => {
             const y = 1 + index * 40, skill = strings.skillInfos[`${row.id}:${row.nextLevel}`];
-            const requestedIcon = skill?.icon || (this.isEnchantList ? strings.skillIcons[row.id] : null), icon = requestedIcon && layer.hasTexture(requestedIcon) ? requestedIcon : TEX_DEFAULT_ICON;
+            const requestedIcon = skill?.icon || (this.isEnchantList ? strings.skillIcons[row.id] : null);
+            const icon = requestedIcon && layer.hasTexture(requestedIcon) ? requestedIcon : TEX_DEFAULT_ICON;
             const element = layer.createWindow(0, y, 215, 40, this.list.content);
 
             element.dataset.skillId = String(row.id);
@@ -214,7 +218,8 @@ export class NCTrainWnd {
 
         if (!info) return;
         const layer = this.layer, manager = layer.getManager(), strings = manager.strings, skill = strings.skillInfos[`${info.id}:${info.level}`];
-        const requestedIcon = skill?.icon || (this.isEnchantInfo ? strings.skillIcons[info.id] : null), icon = requestedIcon && layer.hasTexture(requestedIcon) ? requestedIcon : TEX_DEFAULT_ICON;
+        const requestedIcon = skill?.icon || (this.isEnchantInfo ? strings.skillIcons[info.id] : null);
+        const icon = requestedIcon && layer.hasTexture(requestedIcon) ? requestedIcon : TEX_DEFAULT_ICON;
 
         this.details.replaceChildren();
         layer.tile(this.details, 13, 29, 34, 34, 0, 0, 34, 34, TEX_OUTLINE_DOWN);
@@ -243,7 +248,9 @@ export class NCTrainWnd {
             this.drawCost(this.details, SysString_T.RequiredSP, info.spCost, 13, 220);
         }
         this.getRequirements().forEach((row, index) => {
-            const y = (this.isEnchantInfo ? 213 : 242) + index * 34, requested = strings.itemIcons[row.itemId], texture = requested && layer.hasTexture(requested) ? requested : TEX_DEFAULT_ICON;
+            const y = (this.isEnchantInfo ? 213 : 242) + index * 34;
+            const requested = strings.itemIcons[row.itemId];
+            const texture = requested && layer.hasTexture(requested) ? requested : TEX_DEFAULT_ICON;
 
             layer.tile(this.details, 13, y, 32, 32, 0, 0, 32, 32, texture);
             this.drawWrapped(`${strings.itemNames[row.itemId] || ""} X ${row.count}`, 49, y, 140, 0xffdcdcdc);

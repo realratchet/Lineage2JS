@@ -5,6 +5,10 @@ export class FStaticMeshUVStream implements Constructable_T {
     declare private f10: number;
     declare private f1C: number; // most likely revision as it's always the last one in stream
 
+    public copyTo(uvs: Float32Array): void {
+        for (let i = 0; i < uvs.length; i++) uvs[i] = this.data.getFloat32(i * 4, true);
+    }
+
     public getUV(index: number): [number, number] {
         const off = index << 3;
 

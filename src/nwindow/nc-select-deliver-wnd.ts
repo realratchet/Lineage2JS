@@ -1,6 +1,6 @@
 import type NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
 import type { PackageTarget_T } from "../network/game-packets";
 import SystemMessage_T from "./system-message";
@@ -9,7 +9,7 @@ import SysString_T from "./sys-string";
 const TEX_BACK = "L2UI_ch3.DeliverWnd.Warehouse_back";
 
 export class NCSelectDeliverWnd {
-    public static getTextures() { return [TEX_BACK]; }
+    public static getTextures() { return [...NCComboBox.getTextures(), TEX_BACK]; }
     public readonly element: HTMLDivElement;
     public onConfirm: (objectId: number) => void = null;
     protected readonly combo: NCComboBox;
@@ -36,7 +36,7 @@ export class NCSelectDeliverWnd {
         layer.button(this.element, 131, 172, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, manager.getSysString(SysString_T.Cancel), () => this.setVisible(false));
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;

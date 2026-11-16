@@ -1,10 +1,11 @@
-import { Box3, Matrix4, Vector3 } from "three";
+import { Box3, Matrix4, Sphere, Vector3 } from "three";
 import ShadowProjector from "../objects/shadow-projector";
 
 type Sway_T = { position: any, sway: any, positionVersion: number, swayVersion: number, margin: Vector3, bounds: Box3, bounded: boolean };
 type Instances_T = { matrix: any, version: number, count: number, sway: Sway_T, bounds: Box3 };
 
 const tmpInstanceBox = new Box3();
+const tmpBox = new Box3();
 const tmpInstanceMatrix = new Matrix4();
 const tmpVertex = new Vector3();
 
@@ -26,17 +27,103 @@ export class MeshBounds {
         let cached = this.cacheSway.get(geometry);
         if (cached && cached.position === position && cached.sway === sway && cached.positionVersion === positionVersion && cached.swayVersion === swayVersion) return cached;
         cached = { position, sway, positionVersion, swayVersion, margin: new Vector3(), bounds: new Box3(), bounded: true };
+        let lastAngle = NaN, lastPhase = NaN, tangent = 0, x = 0, y = 0;
         for (let i = 0; i < position.count; i++) {
             tmpVertex.fromBufferAttribute(position, i);
             cached.bounds.expandByPoint(tmpVertex);
-            if (!sway || sway.getY(i) <= 0 || sway.getZ(i) === 0) continue;
-            if (Math.abs(sway.getZ(i)) >= 90) { cached.bounded = false; continue; }
-            const distance = Math.abs(Math.tan(sway.getZ(i) * Math.PI / 180)) * Math.max(tmpVertex.z - sway.getX(i), 0);
-            cached.margin.x = Math.max(cached.margin.x, Math.abs(Math.cos(sway.getW(i))) * distance);
-            cached.margin.y = Math.max(cached.margin.y, Math.abs(Math.sin(sway.getW(i))) * distance);
+            if (!sway || sway.getY(i) <= 0) continue;
+            const angle = sway.getZ(i), phase = sway.getW(i);
+            if (angle === 0) continue;
+            if (Math.abs(angle) >= 90) {
+                cached.bounded = false;
+                continue;
+            }
+            if (angle !== lastAngle) {
+                tangent = Math.abs(Math.tan(angle * Math.PI / 180));
+                lastAngle = angle;
+            }
+            if (phase !== lastPhase) {
+                x = Math.abs(Math.cos(phase));
+                y = Math.abs(Math.sin(phase));
+                lastPhase = phase;
+            }
+            const distance = tangent * Math.max(tmpVertex.z - sway.getX(i), 0);
+            cached.margin.x = Math.max(cached.margin.x, x * distance);
+            cached.margin.y = Math.max(cached.margin.y, y * distance);
         }
         this.cacheSway.set(geometry, cached);
         return cached;
+    }
+
+    public *prepare(root: THREE.Object3D): Generator<void, void, unknown> {
+        const geometries = new Set<THREE.BufferGeometry>(), instanced: THREE.InstancedMesh[] = [];
+        root.traverse(object => {
+            const geometry = (object as THREE.Mesh).geometry;
+            if (geometry?.attributes.position) geometries.add(geometry);
+            if ((object as THREE.InstancedMesh).isInstancedMesh) instanced.push(object as THREE.InstancedMesh);
+        });
+        for (const geometry of geometries) {
+            const position = geometry.attributes.position, sway = geometry.attributes.sway, positionVersion = version(position), swayVersion = version(sway);
+            const existing = this.cacheSway.get(geometry);
+            if (existing &&
+                existing.position === position &&
+                existing.sway === sway &&
+                existing.positionVersion === positionVersion &&
+                existing.swayVersion === swayVersion && (
+                geometry.boundingSphere || geometry.morphAttributes.position?.length)) continue;
+            const cached: Sway_T = { position, sway, positionVersion, swayVersion, margin: new Vector3(), bounds: new Box3(), bounded: true };
+            let lastAngle = NaN, lastPhase = NaN, tangent = 0, x = 0, y = 0;
+            for (let start = 0; start < position.count; start += 8192) {
+                for (let i = start, end = Math.min(start + 8192, position.count); i < end; i++) {
+                    tmpVertex.fromBufferAttribute(position, i);
+                    cached.bounds.expandByPoint(tmpVertex);
+                    if (!sway || sway.getY(i) <= 0) continue;
+                    const angle = sway.getZ(i), phase = sway.getW(i);
+                    if (angle === 0) continue;
+                    if (Math.abs(angle) >= 90) {
+                        cached.bounded = false;
+                        continue;
+                    }
+                    if (angle !== lastAngle) {
+                        tangent = Math.abs(Math.tan(angle * Math.PI / 180));
+                        lastAngle = angle;
+                    }
+                    if (phase !== lastPhase) {
+                        x = Math.abs(Math.cos(phase));
+                        y = Math.abs(Math.sin(phase));
+                        lastPhase = phase;
+                    }
+                    const distance = tangent * Math.max(tmpVertex.z - sway.getX(i), 0);
+                    cached.margin.x = Math.max(cached.margin.x, x * distance);
+                    cached.margin.y = Math.max(cached.margin.y, y * distance);
+                }
+                yield;
+            }
+            this.cacheSway.set(geometry, cached);
+            if (!geometry.boundingBox && !geometry.morphAttributes.position?.length && geometry.attributes.position === position && version(position) === positionVersion)
+                geometry.boundingBox = cached.bounds.clone();
+            if (!geometry.boundingSphere && !geometry.morphAttributes.position?.length && geometry.attributes.position === position && version(position) === positionVersion) {
+                const sphere = new Sphere();
+                cached.bounds.getCenter(sphere.center);
+                let radiusSq = 0;
+                for (let start = 0; start < position.count; start += 8192) {
+                    for (let i = start, end = Math.min(start + 8192, position.count); i < end; i++) {
+                        tmpVertex.fromBufferAttribute(position, i);
+                        radiusSq = Math.max(radiusSq, sphere.center.distanceToSquared(tmpVertex));
+                    }
+                    yield;
+                }
+                if (!geometry.boundingSphere && !geometry.morphAttributes.position?.length && geometry.attributes.position === position && version(position) === positionVersion) {
+                    sphere.radius = Math.sqrt(radiusSq);
+                    geometry.boundingSphere = sphere;
+                }
+            }
+        }
+        for (const object of instanced) {
+            if (!object.boundingBox) object.computeBoundingBox();
+            yield;
+            if ((object as any).isTerrainDecoration && this.getBounds({ object, geometry: object.geometry }, tmpBox, true)) yield;
+        }
     }
 
     public getBounds(item: any, target: Box3, whole = false): boolean {

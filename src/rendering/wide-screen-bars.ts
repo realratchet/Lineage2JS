@@ -1,6 +1,9 @@
 import { MeshBasicMaterial, Vector4, type Vector2, type WebGLRenderer } from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 
+const TOP_BAR_FRACTION = Math.fround(0.1);
+const BOTTOM_BAR_START = Math.fround(0.9);
+
 const tmpScissor = new Vector4();
 
 export class WideScreenBars { // FPlayerSceneNode::Render 0x1062611a: bRenderWide draws FSolidColorTexture(0,0,0,0xc0) through FinalBlend FB_AlphaBlend as tiles (0,0,X,Y*0.1) and (0,Y*0.9,X,Y)
@@ -8,7 +11,7 @@ export class WideScreenBars { // FPlayerSceneNode::Render 0x1062611a: bRenderWid
 
     public render(renderer: WebGLRenderer, size: Vector2) {
         const target = renderer.getRenderTarget(), scale = target ? target.width / size.x : 1, height = size.y * scale;
-        const top = Math.ceil(height * Math.fround(0.1) - 0.5), bottom = height - Math.ceil(height * Math.fround(0.9) - 0.5);
+        const top = Math.ceil(height * TOP_BAR_FRACTION - 0.5), bottom = height - Math.ceil(height * BOTTOM_BAR_START - 0.5);
         const isScissorTest = target ? target.scissorTest : renderer.getScissorTest();
 
         if (target) tmpScissor.copy(target.scissor);

@@ -1,6 +1,9 @@
 import { Box3, Matrix3, Matrix4, Vector3 } from "three";
 import type { CollisionModel_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "../objects/objects";
 
+const CYLINDER_TANGENT_TOLERANCE = Math.fround(-0.1);
+const CYLINDER_HIT_TIME_BIAS = Math.fround(0.001);
+
 const tmpA = new Vector3();
 const tmpB = new Vector3();
 const tmpC = new Vector3();
@@ -19,19 +22,21 @@ const tmpLocalStart = new Vector3();
 const tmpLocalEnd = new Vector3();
 const tmpLocalExtent = new Vector3();
 const tmpIndexBounds = new Box3();
-const cacheTriangleBounds = new WeakMap<CollisionTriangleIndex_T, Float32Array>();
 const tmpMatrix = new Matrix4();
 const tmpNormalMatrix = new Matrix3();
 const tmpModelNormalMatrix = new Matrix3();
 const tmpPlanePoint = new Vector3();
 const tmpPlaneNormal = new Vector3();
 const tmpTriangleHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
-const tmpHullHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
-const tmpBestHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
+// const tmpHullHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
+const tmpBestHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1, skinIndex: -1 };
 const tmpPointHit: PrimitiveHit_T = { time: 0, normal: new Vector3(), item: -1 };
 const clipState: ClipState_T = { t0: -1, t1: 1, normal: new Vector3(), item: -1, hit: false };
+const arrPointTriangles: number[] = [];
 const arrHullPlanes: HullPlane_T[] = [];
 const arrHullBoxPlanes: HullPlane_T[] = [];
+const arrHullEdgePlanes: number[] = [];
+const cacheHullEdgePlanes = new WeakMap<HullPlane_T[], number[]>();
 let pointBestDistance = Infinity;
 let staticPrimitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }> = null;
 let staticStart: Vector3 = null;
@@ -42,7 +47,6 @@ let staticWorldEnd: Vector3 = null;
 let staticWorldExtent: Vector3 = null;
 let staticBestTime = 1;
 let staticBestItem = -1;
-let staticTriangleBounds: Float32Array = null;
 let bspModel: CollisionModel_T = null;
 let bspMatrix: Matrix4 = null;
 let bspPlaneX = 0;
@@ -64,7 +68,7 @@ let terrainBestItem = -1;
 let gridClipT0 = 0;
 let gridClipT1 = 1;
 
-export type PrimitiveHit_T = { time: number, normal: Vector3, item: number };
+export type PrimitiveHit_T = { time: number, normal: Vector3, item: number, skinIndex?: number };
 type ClipState_T = { t0: number, t1: number, normal: Vector3, item: number, hit: boolean };
 type GridCellVisitor_T = (x: number, y: number) => number; // returns the best hit time so far
 type HullPlane_T = [number, number, number, number, number];
@@ -360,22 +364,21 @@ function walkGridCells(startX: number, startY: number, endX: number, endY: numbe
 }
 
 function walkIndexCells(index: CollisionTriangleIndex_T, visit: GridCellVisitor_T) {
-    walkGridCells(
-        (tmpLocalStart.x - index.minX) / index.cellSizeX,
-        (tmpLocalStart.y - index.minY) / index.cellSizeY,
-        (tmpLocalEnd.x - index.minX) / index.cellSizeX,
-        (tmpLocalEnd.y - index.minY) / index.cellSizeY,
-        Math.ceil(tmpLocalExtent.x / index.cellSizeX),
-        Math.ceil(tmpLocalExtent.y / index.cellSizeY),
-        0, 0, index.sizeX - 1, index.sizeY - 1,
-        visit
-    );
+    const startX = (tmpLocalStart.x - index.minX) / index.cellSizeX, startY = (tmpLocalStart.y - index.minY) / index.cellSizeY;
+    const endX = (tmpLocalEnd.x - index.minX) / index.cellSizeX, endY = (tmpLocalEnd.y - index.minY) / index.cellSizeY;
+    const extentX = tmpLocalExtent.x / index.cellSizeX, extentY = tmpLocalExtent.y / index.cellSizeY;
+    const minCellX = Math.max(0, Math.floor(Math.min(startX, endX) - extentX)), maxCellX = Math.min(index.sizeX - 1, Math.floor(Math.max(startX, endX) + extentX));
+    const minCellY = Math.max(0, Math.floor(Math.min(startY, endY) - extentY)), maxCellY = Math.min(index.sizeY - 1, Math.floor(Math.max(startY, endY) + extentY));
+
+    if (minCellX > maxCellX || minCellY > maxCellY) return;
+
+    walkGridCells(startX, startY, endX, endY, Math.ceil(extentX), Math.ceil(extentY), minCellX, minCellY, maxCellX, maxCellY, visit); // cells outside the swept box only hold triangles the box cells hold too
 }
 
 function beginIndexQuery(index: CollisionTriangleIndex_T) {
     index.queryTag++;
 
-    if (index.queryTag === 0xffffffff) {
+    if (index.queryTag === 0xffff) {
         index.queryTag = 1;
         index.marks.fill(0);
     }
@@ -515,6 +518,7 @@ function queryStaticTree(primitive: Extract<CollisionPrimitive_T, { kind: "stati
     staticBestTime = maxTime;
     staticBestItem = -1;
     queryStaticNode(0);
+    staticPrimitive = null;
 
     if (staticBestItem < 0) return null;
 
@@ -529,7 +533,7 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     tmpLocalStart.copy(start).applyMatrix4(tmpMatrix);
     tmpLocalEnd.copy(end).applyMatrix4(tmpMatrix);
 
-    const elements = tmpMatrix.elements;
+    const elements = tmpMatrix.elements, index = primitive.index;
 
     tmpLocalExtent.set(
         Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z,
@@ -537,7 +541,7 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
         Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z
     );
 
-    beginIndexQuery(primitive.index);
+    beginIndexQuery(index);
 
     staticPrimitive = primitive;
     staticStart = tmpLocalStart;
@@ -548,27 +552,27 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     staticWorldExtent = extent;
     staticBestTime = maxTime;
     staticBestItem = -1;
-    staticTriangleBounds = cacheTriangleBounds.get(primitive.index);
 
-    if (!staticTriangleBounds) {
+    if (!index.triangleBounds) {
         const vertices = primitive.vertices, indices = primitive.indices;
-        staticTriangleBounds = new Float32Array(indices.length * 2);
+        const triangleBounds = new Float32Array(indices.length * 2);
 
         for (let i = 0; i < indices.length; i += 3) {
             const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
 
             for (let axis = 0; axis < 3; axis++) {
-                staticTriangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
-                staticTriangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                triangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                triangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
             }
         }
 
-        cacheTriangleBounds.set(primitive.index, staticTriangleBounds);
+        index.triangleBounds = triangleBounds;
     }
 
     sweptBounds(staticStart, staticEnd, staticExtent, tmpIndexBounds);
 
-    walkIndexCells(primitive.index, visitStaticIndexCell);
+    walkIndexCells(index, visitStaticIndexCell);
+    staticPrimitive = null;
 
     if (staticBestItem < 0) return null;
 
@@ -579,7 +583,7 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
 }
 
 function visitStaticIndexCell(x: number, y: number) {
-    const index = staticPrimitive.index;
+    const index = staticPrimitive.index, bounds = index.triangleBounds;
     const cell = y * index.sizeX + x;
 
     for (let i = index.offsets[cell]; i < index.offsets[cell + 1]; i++) {
@@ -589,7 +593,7 @@ function visitStaticIndexCell(x: number, y: number) {
 
         index.marks[triangle] = index.queryTag;
 
-        const offset = triangle * 6, bounds = staticTriangleBounds;
+        const offset = triangle * 6;
         if (bounds[offset] > tmpIndexBounds.max.x || bounds[offset + 3] < tmpIndexBounds.min.x
             || bounds[offset + 1] > tmpIndexBounds.max.y || bounds[offset + 4] < tmpIndexBounds.min.y
             || bounds[offset + 2] > tmpIndexBounds.max.z || bounds[offset + 5] < tmpIndexBounds.min.z) continue;
@@ -751,7 +755,7 @@ function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinde
     let discriminant = Math.fround(b * b - 4 * a * c);
 
     if (c < 1 && startZ > bottom && startZ < top) {
-        if (Math.fround(dx) * x + Math.fround(dy) * y >= Math.fround(-0.1)) return null;
+        if (Math.fround(dx) * x + Math.fround(dy) * y >= CYLINDER_TANGENT_TOLERANCE) return null;
 
         const nx = Math.fround(x), ny = Math.fround(y);
         const lengthSq = nx * nx + ny * ny;
@@ -764,6 +768,7 @@ function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinde
         }
         tmpBestHit.time = 0;
         tmpBestHit.item = 0;
+        tmpBestHit.skinIndex = 0;
 
         return tmpBestHit;
     }
@@ -793,7 +798,7 @@ function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinde
         if (t0 >= t1) return null;
     }
 
-    const time = Math.max(0, Math.min(1, Math.fround(t0 - Math.fround(0.001))));
+    const time = Math.max(0, Math.min(1, Math.fround(t0 - CYLINDER_HIT_TIME_BIAS)));
 
     if (time > maxTime) return null;
 
@@ -868,14 +873,8 @@ function pointTriangle(location: Vector3, extent: Vector3, a: Vector3, b: Vector
     return tmpPointHit;
 }
 
-function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Vector3, extent: Vector3): PrimitiveHit_T | null {
-    pointBestDistance = Infinity;
-
-    for (const plane of planes)
-        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
-
-    for (const plane of boxPlanes)
-        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+function loadHullEdgePlanes(planes: HullPlane_T[], edges: number[]): number[] {
+    edges.length = 0;
 
     for (let i = 0, len = planes.length; i < len; i++) {
         const a = planes[i];
@@ -889,20 +888,39 @@ function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Ve
             if ((flags & 3) === 3 && a[1] * b[1] + a[2] * b[2] > 1e-3) {
                 tmpN.set(0, -tmpD.z, tmpD.y).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+                edges.push(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection));
             }
             if ((flags & 12) === 12 && a[0] * b[0] + a[2] * b[2] > 1e-3) {
                 tmpN.set(tmpD.z, 0, -tmpD.x).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+                edges.push(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection));
             }
             if ((flags & 48) === 48 && a[0] * b[0] + a[1] * b[1] > 1e-3) {
                 tmpN.set(-tmpD.y, tmpD.x, 0).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+                edges.push(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection));
             }
         }
     }
+
+    return edges;
+}
+
+function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+    pointBestDistance = Infinity;
+
+    for (const plane of planes)
+        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+
+    for (const plane of boxPlanes)
+        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+
+    let edges = planes === arrHullPlanes ? loadHullEdgePlanes(planes, arrHullEdgePlanes) : cacheHullEdgePlanes.get(planes); // untransformed hulls keep their convolved edge planes
+
+    if (!edges) cacheHullEdgePlanes.set(planes, edges = loadHullEdgePlanes(planes, []));
+
+    for (let i = 0, len = edges.length; i < len; i += 4)
+        if (!pointClip(edges[i], edges[i + 1], edges[i + 2], edges[i + 3], location, extent)) return null;
 
     tmpPointHit.item = -1;
 
@@ -1071,6 +1089,7 @@ function queryBsp(model: CollisionModel_T, matrix: Matrix4, start: Vector3, end:
     if (!bspHit) return null;
 
     tmpBestHit.time = bspBestTime;
+    tmpBestHit.item = -1;
 
     return tmpBestHit;
 }
@@ -1136,6 +1155,47 @@ function pointBsp(model: CollisionModel_T, matrix: Matrix4, location: Vector3, e
     return tmpPointHit;
 }
 
+function pointStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }>, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+    tmpMatrix.copy(primitive.matrixWorld).invert();
+    tmpLocalStart.copy(location).applyMatrix4(tmpMatrix);
+
+    const elements = tmpMatrix.elements, index = primitive.index;
+    const extentX = Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z;
+    const extentY = Math.abs(elements[1]) * extent.x + Math.abs(elements[5]) * extent.y + Math.abs(elements[9]) * extent.z;
+    const x0 = Math.max(0, Math.floor((tmpLocalStart.x - extentX - index.minX) / index.cellSizeX) - 1);
+    const y0 = Math.max(0, Math.floor((tmpLocalStart.y - extentY - index.minY) / index.cellSizeY) - 1);
+    const x1 = Math.min(index.sizeX - 1, Math.floor((tmpLocalStart.x + extentX - index.minX) / index.cellSizeX) + 1);
+    const y1 = Math.min(index.sizeY - 1, Math.floor((tmpLocalStart.y + extentY - index.minY) / index.cellSizeY) + 1);
+
+    beginIndexQuery(index);
+    arrPointTriangles.length = 0;
+    for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) {
+            const cell = y * index.sizeX + x;
+
+            for (let i = index.offsets[cell]; i < index.offsets[cell + 1]; i++) {
+                const triangle = index.triangleIndices[i];
+                if (index.marks[triangle] === index.queryTag) continue;
+
+                index.marks[triangle] = index.queryTag;
+                arrPointTriangles.push(triangle);
+            }
+        }
+
+    arrPointTriangles.sort((a, b) => a - b);
+    for (let i = 0; i < arrPointTriangles.length; i++) {
+        const triangle = arrPointTriangles[i], offset = triangle * 3;
+        transformVertex(primitive, primitive.indices[offset], tmpA);
+        transformVertex(primitive, primitive.indices[offset + 1], tmpB);
+        transformVertex(primitive, primitive.indices[offset + 2], tmpC);
+
+        const hit = pointTriangle(location, extent, tmpA, tmpB, tmpC, triangle);
+        if (hit) return hit;
+    }
+
+    return null;
+}
+
 export function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
     if (primitive.kind === "cylinder") {
         const dz = primitive.center.z - location.z;
@@ -1163,6 +1223,8 @@ export function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector
 
         return queryTriangles(primitive, tmpPointStart, tmpPointEnd, tmpPointExtent, 1);
     }
+
+    if (primitive.kind === "staticMesh" && primitive.index) return pointStaticIndex(primitive, location, extent);
 
     for (let i = 0, len = primitive.indices.length; i < len; i += 3) {
         transformVertex(primitive, primitive.indices[i], tmpA);
@@ -1246,6 +1308,7 @@ function clipBspHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], start: Vec
 }
 
 export function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number = 1): PrimitiveHit_T | null {
+    tmpBestHit.skinIndex = -1;
     if (primitive.kind === "cylinder") return queryCylinder(primitive, start, end, extent, maxTime);
     if (primitive.kind === "staticMesh" && primitive.collisionModel && (extent.lengthSq() === 0 ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
         return queryBsp(primitive.collisionModel, primitive.matrixWorld, start, end, extent);

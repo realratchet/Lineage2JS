@@ -28,7 +28,7 @@ export class NWindowManager {
     public readonly ready: Promise<void>;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillRecords: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
+    public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillRecords: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} } as GameStrings_T;
 
     public constructor(protected readonly asset: AssetManager, skin: SkinTextures) {
         this.canvas = new NWindowCanvas(asset, skin);
@@ -177,7 +177,8 @@ export class NWindowManager {
             if (peer === owner || !peer.getClientRects().length) continue;
 
             const [otherX, otherY, otherWidth, otherHeight] = getWindowRect(peer);
-            const overlapX = Math.max(oldX, otherX) <= Math.min(oldX + width, otherX + otherWidth), overlapY = Math.max(oldY, otherY) <= Math.min(oldY + height, otherY + otherHeight);
+            const overlapX = Math.max(oldX, otherX) <= Math.min(oldX + width, otherX + otherWidth);
+            const overlapY = Math.max(oldY, otherY) <= Math.min(oldY + height, otherY + otherHeight);
             let released = false;
 
             for (const edge of [1, 0, 2, 3]) {

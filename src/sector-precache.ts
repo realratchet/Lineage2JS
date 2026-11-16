@@ -1,5 +1,5 @@
 import { preloadSectors } from "./build-settings";
-import { setLoadingProgress, hideLoadingProgress } from "./loading-progress";
+import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "./loading-progress";
 import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
@@ -154,7 +154,6 @@ export async function preloadStartupSectors(loadSettings: LoadSettings_T): Promi
 
     const assetList = await (await fetchAsset("asset-list.json")).json();
     const sectors = preloadSectors.filter(sector => `maps/${sector.toLowerCase()}.unr` in assetList.supported);
-    const startTime = performance.now();
     const missing = preloadSectors.filter(sector => !sectors.includes(sector));
 
     if (missing.length) console.log(`[preload] Maps absent from selected client: ${missing.join(", ")}`);
@@ -163,11 +162,11 @@ export async function preloadStartupSectors(loadSettings: LoadSettings_T): Promi
         const worker = new DecodeWorkerClient(1);
 
         try {
-            setLoadingProgress(i / sectors.length, `Preparing ${sectors[i]} · ${i} / ${sectors.length} · ${formatDuration(performance.now() - startTime)}`, true);
+            setLoadingProgress(i / sectors.length, loadingTexts.sector(sectors[i], "preparing", i, sectors.length), true);
             await worker.ready;
             const result = await worker.precacheSector(sectors[i], loadSettings);
 
-            setLoadingProgress((i + 1) / sectors.length, `${result.cached ? "Loaded" : "Built"} ${sectors[i]} · ${i + 1} / ${sectors.length} · ${formatDuration(performance.now() - startTime)}`, true);
+            setLoadingProgress((i + 1) / sectors.length, loadingTexts.sector(sectors[i], result.cached ? "loaded" : "built", i + 1, sectors.length), true);
         } finally {
             worker.terminate();
         }

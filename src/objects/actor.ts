@@ -1,13 +1,34 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
-import UnScriptVM, { unregisterLevelActor, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
-import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
+import UnScriptVM, { cloneScriptValue, getProperty, setProperty, unregisterLevelActor, type ScriptHost_T, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
+import { ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import type { ICollidable } from "./objects";
 import type BaseActor from "../base-actor";
-import { setActorOwner, setScriptObjectProperty, type OwnedActor_T } from "./components/actor-ownership-component";
+import { setActorOwner, type OwnedActor_T } from "./components/actor-ownership-component";
+import { setScriptObjectProperty } from "./actor-properties";
 import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./components/transform-component";
 import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
+import type { DecodeLibrary } from "@l2js/engine";
 
-type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T>; sharedScriptProperties?: Record<string, ScriptValue_T> };
+type ActorInfo_T = { uuid: string; name?: string; scriptClassId?: string; scriptProperties?: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
+export type L2GameEvent_T = { EventID: number, EventCmd: EL2EventCmd_T };
+export type StepSoundData_T = { sound: string, library: DecodeLibrary };
+type L2EventActor_T = ScriptHost_T & { l2EventShow?(value: number): void, l2EventPlay?(value: number): void };
+
+export function execL2GameEvent(actor: L2EventActor_T, command: EL2EventCmd_T, value: number): void {
+    switch (command) {
+        case EL2EventCmd_T.LEC_None: return;
+        case EL2EventCmd_T.LEC_Show:
+            if (actor.l2EventShow) actor.l2EventShow(value);
+            else setProperty(actor, "bHidden", value === 0);
+            return;
+        case EL2EventCmd_T.LEC_Play:
+            // AActor/AEmitter/AMover vtable +0xb4 -> 0x5f6190: retn 4.
+            if (actor.l2EventPlay) actor.l2EventPlay(value);
+            return;
+        default: throw new Error(`Unknown L2 event command '${command}'.`);
+    }
+}
 
 export class Actor extends GameObject {
     public readonly actorUuid: string;
@@ -24,9 +45,14 @@ export class Actor extends GameObject {
         this.actorUuid = info.uuid;
         this.scriptClassId = info.scriptClassId;
         this.isLevelActor = isLevelActor;
-        this.scriptProperties = new Map(Object.entries(structuredClone(info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties)));
-        // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
-        setScriptObjectProperty(this, "Touching", []);
+        this.scriptProperties = new Map();
+        if (info.scriptProperties !== null) {
+            const properties = info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties;
+
+            for (const [key, value] of Object.entries(properties)) this.scriptProperties.set(key, cloneScriptValue(value)); // structuredClone took 70 ms on TerrainInfo's TIntMap
+            // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
+            setScriptObjectProperty(this, "Touching", []);
+        }
     }
 
     public setScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, beginPlay: boolean = true): void {
@@ -58,13 +84,10 @@ export class Actor extends GameObject {
 
     public postBeginPlay(): void {
         for (let index = 0; ; index++) {
-            const arrEvents = this.getUnrealScriptProperty("L2GameEvent") as { EventID: number, EventCmd: number }[];
+            const arrEvents = getProperty(this, "L2GameEvent") as L2GameEvent_T[];
 
             if (index >= arrEvents.length) return;
-            switch (arrEvents[index].EventCmd) {
-                case EL2EventCmd_T.LEC_Show: this.l2EventShow(0); break;
-                case EL2EventCmd_T.LEC_Play: this.l2EventPlay(0); break;
-            }
+            execL2GameEvent(this, arrEvents[index].EventCmd, 0);
         }
     }
 
@@ -86,6 +109,25 @@ export class Actor extends GameObject {
         const key = findScriptPropertyKey(this.scriptProperties, getScriptPropertyName(id));
 
         return key === undefined ? null : this.scriptProperties.get(key);
+    }
+
+    public getStepSoundData(): StepSoundData_T | null {
+        const vm = this.scriptComponent.getVM();
+
+        if (!vm.isA(this, "StaticMeshActor")) return null;
+        const first = this.getUnrealScriptProperty("StepSound_1");
+        const second = this.getUnrealScriptProperty("StepSound_2");
+        let sound = this.getUnrealScriptProperty("StepSound_3");
+
+        // AStaticMeshActor::GetStepSoundData 0x97e3e0 returns StepSound_1 on both winning branches.
+        if (first && Math.floor(Math.random() * 32768) % 3 === 2) sound = first;
+        else if (second && Math.floor(Math.random() * 32768) % 2 === 1) sound = first;
+
+        if (!sound) return null;
+        const path = typeof sound === "string" ? sound : (sound as any).scriptObjectPath;
+
+        if (typeof path !== "string") throw new Error(`Actor '${this.name}' has an invalid stepping sound.`);
+        return { sound: path, library: vm.getLibrary() };
     }
 
     public getBaseActor(): ICollidable | null {

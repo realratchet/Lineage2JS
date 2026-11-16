@@ -1,3 +1,4 @@
+import getCrystalGradeSymbol from "./item-symbol";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
@@ -31,12 +32,26 @@ const TEX_TRASH = "L2UI_CH3.InventoryWnd.Inventory_trash";
 const TEX_CRYSTAL = "L2UI_CH3.InventoryWnd.Inventory_recipe";
 const arrWeightBars = [1, 2, 3, 4, 5].map(index => `L2UI_CH3.PlayerStatusWnd.PS_weightbar${index}`);
 const arrTooltipSlices = Array.from({ length: 9 }, (_, i) => `L2UI_ch3.Tooltip.Tooltip${i + 1}`);
-const arrGradeSymbols = ["", "graded", "gradec", "gradeb", "gradea", "grades"]; // 0x1006b440, table 0x10242504.
 const arrWeaponPAtk = [[0, 2, 3, 3, 4, 5], [0, 2, 4, 4, 5, 6], [0, 4, 6, 6, 8, 10]]; // 0x100741b0: one-handed 0x101af218, two-handed 0x101af248, bow 0x101af278.
 const arrWeaponMAtk = [0, 2, 3, 3, 3, 4]; // 0x10074250: 0x10242790, 0x102427c0 and 0x102427f0 are identical.
 const arrDefenceBonus = [0, 1, 1, 1, 1, 1]; // 0x100742f0: 0x101af2a8.
 
-const SLOT_UNDERWEAR = 0x1, SLOT_EARS = 0x6, SLOT_NECK = 0x8, SLOT_FINGERS = 0x30, SLOT_HEAD = 0x40, SLOT_R_HAND = 0x80, SLOT_L_HAND = 0x100, SLOT_GLOVES = 0x200, SLOT_CHEST = 0x400, SLOT_LEGS = 0x800, SLOT_FEET = 0x1000, SLOT_BACK = 0x2000, SLOT_LR_HAND = 0x4000, SLOT_FULL_ARMOR = 0x8000, SLOT_HAIR = 0x10000, SLOT_ALLDRESS = 0x20000;
+const SLOT_UNDERWEAR = 0x1;
+const SLOT_EARS = 0x6;
+const SLOT_NECK = 0x8;
+const SLOT_FINGERS = 0x30;
+const SLOT_HEAD = 0x40;
+const SLOT_R_HAND = 0x80;
+const SLOT_L_HAND = 0x100;
+const SLOT_GLOVES = 0x200;
+const SLOT_CHEST = 0x400;
+const SLOT_LEGS = 0x800;
+const SLOT_FEET = 0x1000;
+const SLOT_BACK = 0x2000;
+const SLOT_LR_HAND = 0x4000;
+const SLOT_FULL_ARMOR = 0x8000;
+const SLOT_HAIR = 0x10000;
+const SLOT_ALLDRESS = 0x20000;
 
 export type InventoryEntry_T = { objectId: number, itemId: number, name: string, icon: string, count: number, enchant: number, itemClass: number, bodyPart: number, slot: number, isQuest: boolean, isMoney: boolean, info: ItemInfo_T, customType1?: number, customType2?: number, maxCount?: number };
 type ItemLine_T = { label: string, value: string, color?: number };
@@ -272,7 +287,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         window.addEventListener("mouseup", event => {
             if (event.button !== 0 || this.element.hidden) return;
 
-            const source = this.arrInput.findIndex((input, index) => !this.getInputPane(index).hidden && document.activeElement === this.getInputPane(index));
+            const source = this.arrInput.findIndex((_input, index) => !this.getInputPane(index).hidden && document.activeElement === this.getInputPane(index));
 
             this.heldSource = -1;
             this.endDrag();
@@ -515,7 +530,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (isFull) this.restoreOrder();
         const symbols = this.layer.getManager().strings.symbols;
 
-        const textures = [...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[arrGradeSymbols[item.info.crystalType]]] : [])]).filter(path => path && path.toLowerCase() !== "none"))];
+        const textures = [...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[getCrystalGradeSymbol(item.info.crystalType)]] : [])]).filter(path => path && path.toLowerCase() !== "none"))];
 
         if (textures.some(path => !this.layer.hasTexture(path))) this.paintItems(!isFull);
         await this.layer.loadTextures(textures);
@@ -754,7 +769,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
     protected containsPoint(element: HTMLElement, event: MouseEvent) { // NWindow 0x10093f00 / 0x10093f60, inclusive bounds.
         const rect = this.element.getBoundingClientRect();
-        const x = this.layer.toUI(event.clientX - rect.left) - parseFloat(element.style.left), y = this.layer.toUI(event.clientY - rect.top) - parseFloat(element.style.top);
+        const x = this.layer.toUI(event.clientX - rect.left) - parseFloat(element.style.left);
+        const y = this.layer.toUI(event.clientY - rect.top) - parseFloat(element.style.top);
 
         return x >= 0 && x <= parseFloat(element.style.width) && y >= 0 && y <= parseFloat(element.style.height);
     }
@@ -832,7 +848,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         runs.push([item.name, 0xffdcdcdc]);
 
         if (item.info.addName) runs.push([` ${item.info.addName}`, 0xffffd969]);
-        if (item.info.crystalType > 0) runs.push([" ", 0xffdcdcdc], [`\`${arrGradeSymbols[item.info.crystalType]}`, 0]);
+        if (item.info.crystalType > 0) runs.push([" ", 0xffdcdcdc], [`\`${getCrystalGradeSymbol(item.info.crystalType)}`, 0]);
         if (!(context & 2) && item.info.consumeType >= 1 && item.info.consumeType <= 3) runs.push([` (${item.count.toLocaleString("en-US")})`, 0xffdcdcdc]); // 0x1002ea70
 
         return runs;
@@ -880,7 +896,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         if (context & 44) {
             const value = price.toLocaleString("en-US"), digits = value.replace(/,/g, "").length;
-            const text = `${value} ${manager.getSysString(SysString_T.AdenaUnit)}`, color = digits < 5 ? 0xffdcdcdc : [0xffff80ff, 0xffffff00, 0xff00ff00, 0xff00ffff][(digits - 2) % 4];
+            const text = `${value} ${manager.getSysString(SysString_T.AdenaUnit)}`;
+            const color = digits < 5 ? 0xffdcdcdc : [0xffff80ff, 0xffffff00, 0xff00ff00, 0xff00ffff][(digits - 2) % 4];
 
             if (context & 4) lines.push({ label: manager.getSysString(SysString_T.Price), value: text, color });
             if (context & 8) lines.push({ label: manager.getSysString(SysString_T.Price), value: `${manager.getSysString(SysString_T.ForEach)} ${text}`, color });
@@ -896,7 +913,9 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         switch (item.itemClass) {
             case ItemType2_T.TYPE2_WEAPON: {
-                const weaponTypes = [0, SysString_T.Sword, SysString_T.Blunt, SysString_T.Dagger, SysString_T.Pole, SysString_T.Fist, SysString_T.Bow, SysString_T.Etc, SysString_T.DoubleBlades], table = getWeaponTable(info.weaponType, item.bodyPart), enchant = getWeaponEnchant(item.enchant);
+                const weaponTypes = [0, SysString_T.Sword, SysString_T.Blunt, SysString_T.Dagger, SysString_T.Pole, SysString_T.Fist, SysString_T.Bow, SysString_T.Etc, SysString_T.DoubleBlades];
+                const table = getWeaponTable(info.weaponType, item.bodyPart);
+                const enchant = getWeaponEnchant(item.enchant);
                 const speed = info.speed < 260 ? SysString_T.VerySlow : info.speed < 309 ? SysString_T.Slow : info.speed < 352 ? SysString_T.AttackSpeedNormal : info.speed < 406 ? SysString_T.Fast : SysString_T.VeryFast; // 0x1006afc0
 
                 if (weaponTypes[info.weaponType]) lines.push({ label: null, value: `${manager.getSysString(weaponTypes[info.weaponType])} / ${this.getSlotName(item)}` }); // 0x1006abe0
@@ -986,7 +1005,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
     public showTooltip(item: InventoryEntry_T, button: HTMLElement, isDetailed = this.selection.get(button.parentElement) === item.objectId, context = 0, price = 0, flags = 2) { // NCItemWnd 0x10020370: simple box 0x10032860, detailed box 0x10032560 once the item is selected.
         const layer = this.layer, lineHeight = layer.getManager().canvas.getLineHeight();
-        const title = this.getItemTitle(item, context, isDetailed), titleWidth = this.measureRuns(isDetailed && context & 1 ? this.getItemTitle(item, context) : title);
+        const title = this.getItemTitle(item, context, isDetailed);
+        const titleWidth = this.measureRuns(isDetailed && context & 1 ? this.getItemTitle(item, context) : title);
         const lines = isDetailed ? this.getItemLines(item, context, price, false, flags) : [];
         const first = lines.length ? (lines[0].label ? `${lines[0].label} : ${lines[0].value}` : lines[0].value) : "";
         const baseWidth = isDetailed ? Math.max(144, titleWidth) : titleWidth;

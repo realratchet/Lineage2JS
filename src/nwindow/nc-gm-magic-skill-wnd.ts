@@ -98,7 +98,7 @@ export class NCGMMagicSkillWnd {
         this.skillWnd = new NCGMSkillWnd(layer, this.element);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 209, 100); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, width - 209, 100); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         if (!visible) this.skillWnd.clear();

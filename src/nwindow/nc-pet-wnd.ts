@@ -1,3 +1,4 @@
+import getCrystalGradeSymbol from "./item-symbol";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, NDomButton_T, NDomScrollPane_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCTooltip from "./nc-tooltip";
@@ -23,7 +24,6 @@ const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrBars = ["ps_HPbar", "ps_MPbar", "ps_ExPbar", "ps_foodbar"].map(name => `L2UI_CH3.PlayerStatusWnd.${name}`);
 const arrWeight = [1, 2, 3, 4].map(index => `L2UI_CH3.PlayerStatusWnd.ps_weightbar${index}`);
 const arrLabels = [SysString_T.PhysicalAttack, SysString_T.PhysicalDefense, SysString_T.Accuracy, SysString_T.Critical, SysString_T.AttackSpeed, SysString_T.SoulshotUsed, SysString_T.MagicAttack, SysString_T.MagicDefense, SysString_T.Evasion, SysString_T.Speed, SysString_T.CastingSpeed, SysString_T.SpiritshotUsed];
-const arrGrades = ["", "graded", "gradec", "gradeb", "gradea", "grades"];
 export type PetInventoryEntry_T = InventoryEntry_T & { isEquipped: boolean };
 type PetDrag_T = { item: InventoryEntry_T, isDragging: boolean };
 
@@ -108,7 +108,10 @@ export class NCPetWnd {
         this.folded.classList.add("ndom-opaque");
         this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.Pets));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
-        const captionText = manager.getSysString(SysString_T.Pets), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.Pets);
+        const width = layer.measureText(captionText);
+        const height = manager.canvas.getLineHeight();
+        const texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;
@@ -253,7 +256,9 @@ export class NCPetWnd {
             bar.hidden = width <= 0 || !Number.isFinite(width);
             if (bar.hidden) return;
 
-            const overflow = width > maximum, w = index === 4 ? width : Math.min(width, maximum), h = overflow && (index === 1 || index === 3) ? 10 : 12;
+            const overflow = width > maximum;
+            const w = index === 4 ? width : Math.min(width, maximum);
+            const h = overflow && (index === 1 || index === 3) ? 10 : 12;
             const sourceWidth = index === 2 && !overflow ? width : index === 1 && overflow ? 84 : 8;
 
             this.layer.place(bar, index === 4 ? 156 : 35, [51, 65, 79, 93, 51][index], w, h);
@@ -350,7 +355,7 @@ export class NCPetWnd {
         this.items = items;
         const symbols = this.layer.getManager().strings.symbols;
 
-        await this.layer.loadTextures([...new Set(items.flatMap(item => item.info.crystalType > 0 ? [item.icon, symbols[arrGrades[item.info.crystalType]]] : [item.icon]))]);
+        await this.layer.loadTextures([...new Set(items.flatMap(item => item.info.crystalType > 0 ? [item.icon, symbols[getCrystalGradeSymbol(item.info.crystalType)]] : [item.icon]))]);
         if (this.items !== items) return;
 
         this.paintItems(!isFull);

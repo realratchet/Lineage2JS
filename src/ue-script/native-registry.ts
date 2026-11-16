@@ -1,20 +1,8 @@
 import registerNativeFuncs from "./operators";
 
-const NATIVE: Record<string, any> = {
-};
-
 const NATIVE_FUNCS: Record<string, Function> = {};
 
 export const UNativeRegistry = new class UNativeRegistry {
-    public getClass(className: string) {
-        const clsName = className.toLowerCase();
-
-        if (!(clsName in NATIVE))
-            throw new Error(`Native class '${className}' not registered`);
-
-        return NATIVE[clsName];
-    }
-
     public hasNativeFunc(nativeIndex: number | string): boolean { return nativeIndex in NATIVE_FUNCS; }
     public registerNativeFunc(nativeIndex: number | string, func: Function) {
         if (this.hasNativeFunc(nativeIndex))

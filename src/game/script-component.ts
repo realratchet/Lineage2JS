@@ -8,36 +8,6 @@ export const SCRIPT_NATIVE_EVENT = "scriptNative";
 export type ScriptCallEvent_T = { name: string, args: ScriptValue_T[] };
 export type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
 
-const cachePropertyNames = new Map<string, string>();
-
-export function getScriptPropertyName(id: string): string {
-    let name = cachePropertyNames.get(id);
-
-    if (name === undefined) cachePropertyNames.set(id, name = id.slice(id.lastIndexOf(".") + 1).toLowerCase());
-
-    return name;
-}
-
-const cachePropertyKeys = new WeakMap<Map<string, unknown>, { size: number, keys: Map<string, string> }>();
-
-export function findScriptPropertyKey(properties: Map<string, unknown>, name: string): string | undefined {
-    let cache = cachePropertyKeys.get(properties);
-
-    if (!cache || cache.size !== properties.size) { // property keys are only ever added, so size tracks the key set
-        const keys = new Map<string, string>();
-
-        for (const key of properties.keys()) {
-            const short = key.slice(key.lastIndexOf(".") + 1).toLowerCase();
-            if (!keys.has(short)) keys.set(short, key);
-        }
-
-        cache = { size: properties.size, keys };
-        cachePropertyKeys.set(properties, cache);
-    }
-
-    return cache.keys.get(name);
-}
-
 export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptHost_T> extends ObjectComponent<TParent> {
     public readonly componentName = "script";
     public readonly updateOrder = -100;
@@ -96,6 +66,13 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
 
         if (this.vm.hasTickFunction(parent)) this.call("Tick", [deltaTime]);
         this.vm.processState(parent, deltaTime);
+        this.updateTimers(deltaTime);
+    }
+
+    public updateTimers(deltaTime: number): void {
+        if (!this.hasBegunPlay || this.isDestroyed) return;
+
+        const parent = this.getParent();
 
         const rate = Math.fround(getProperty(parent, "TimerRate") as number);
 
@@ -140,7 +117,7 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
             if (call.context !== parent) throw new Error(`SetOwner context does not match '${parent.scriptClassId}'.`);
             if (!(parent as any).isObject3D || !this.vm.invokeNative(parent, parent, 303, "IsA", ["Actor"])) throw new Error(`SetOwner requires an actor host.`);
             setActorOwner(parent as unknown as OwnedActor_T, (call.args[0] ?? null) as unknown as OwnedActor_T);
-            return;
+            return undefined;
         }
         return this.dispatchEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
     }

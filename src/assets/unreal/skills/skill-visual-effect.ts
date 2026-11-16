@@ -378,7 +378,12 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         if (targetMode === "targetExceptedAndPrimary" && cast.targetExcepted && associatedActors.some(actor => !actor)) throw new Error(`Native skill '${skill.name}' requires nonnull associated actors.`);
 
         // Engine.dll 0x7af128..0x7af1ec / 0x7b003f..0x7b03c6 retain effect order within each target.
-        const targets = targetMode === "primaryPerAssociated" ? associatedActors.filter(actor => actor).map(() => target) : targetMode === "all" ? associatedActors : targetMode === "primaryAndSecondary" ? [target, ...associatedActors.filter(actor => actor !== target)] : !cast.targetExcepted || !targetMode ? [target] : targetMode === "targetExceptedAndPrimary" ? [...associatedActors, target] : associatedActors;
+        const targets = targetMode === "primaryPerAssociated" ? associatedActors.filter(actor => actor).map(() => target)
+            : targetMode === "all" ? associatedActors
+            : targetMode === "primaryAndSecondary" ? [target, ...associatedActors.filter(actor => actor !== target)]
+            : !cast.targetExcepted || !targetMode ? [target]
+            : targetMode === "targetExceptedAndPrimary" ? [...associatedActors, target]
+            : associatedActors;
 
         for (const effectTarget of targets)
             for (let i = frame.first; i < frame.end; i++) {
@@ -489,12 +494,18 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             return;
         }
         // Engine.dll 0x7b0e26..0x7b0e33.
-        if (phase === "shot" && frame.targeted && !frame.effectSpawned && !frame.soundWithoutEffect) { frame.projectileExplosion = false; return; }
+        if (phase === "shot" && frame.targeted && !frame.effectSpawned && !frame.soundWithoutEffect) {
+            frame.projectileExplosion = false;
+            return;
+        }
 
         const soundPawn = phase === "explosion" ? source.scriptOwner : caster;
 
         // Engine.dll 0x791ade..0x791b03.
-        if (phase === "explosion" && (!frame.effectSpawned || !soundPawn?.isActor)) { frame.projectileExplosion = false; return; }
+        if (phase === "explosion" && (!frame.effectSpawned || !soundPawn?.isActor)) {
+            frame.projectileExplosion = false;
+            return;
+        }
         if (skill.visual.soundPhases.includes(phase))
             for (const sound of skill.sounds) {
                 if (sound.phase !== phase) continue;

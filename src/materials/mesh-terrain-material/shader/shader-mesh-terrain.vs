@@ -5,6 +5,11 @@
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
+varying float vRangeAlpha;
+uniform vec4 clippingSphere;
+uniform float clippingFade;
+attribute float sectorFade;
+varying float vSectorFade;
 #include <morphtarget_pars_vertex>
 #include <skinning_pars_vertex>
 #include <logdepthbuf_pars_vertex>
@@ -12,6 +17,11 @@
 
 #ifdef USE_PROJECTOR_RECEIVER
 uniform mat4 shadowMatrix;
+#ifdef NUM_PROJECTOR_INSTANCES
+uniform mat4 shadowMatrices[NUM_PROJECTOR_INSTANCES];
+flat varying int vShadowInstance;
+#define shadowMatrix shadowMatrices[gl_InstanceID]
+#endif
 varying vec4 vShadowCoord;
 #endif
 
@@ -69,7 +79,11 @@ varying vec4 vShadowCoord;
 
 #ifdef USE_UV_TEXTURE
     uniform vec2 uvsSize;
-    uniform sampler2D uvsMap;
+    #ifdef USE_UV_TEXTURE_ARRAY
+        uniform highp sampler2DArray uvsMap;
+    #else
+        uniform sampler2D uvsMap;
+    #endif
     uniform mat3 uvTransform;
     uniform sampler2D tex;
     
@@ -126,6 +140,9 @@ void main() {
     #include <morphtarget_vertex>
     #include <skinning_vertex>
     #ifdef USE_PROJECTOR_RECEIVER
+        #ifdef NUM_PROJECTOR_INSTANCES
+        vShadowInstance = gl_InstanceID;
+        #endif
         vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
         vProjectorNormal = normalize(normalMatrix * normal);
     #endif
@@ -135,15 +152,26 @@ void main() {
     #include <worldpos_vertex>
     #include <envmap_vertex>
     #include <fog_vertex>
+    vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+    vSectorFade = sectorFade;
 
     #ifdef USE_UV_TEXTURE
-        float u = (terrainIndex + 0.5) / uvsSize.x;
+        #ifdef USE_UV_TEXTURE_ARRAY
+            float segment = floor((terrainIndex + 0.5) / uvsSize.x);
+            float u = (terrainIndex - segment * uvsSize.x + 0.5) / uvsSize.x;
+        #else
+            float u = (terrainIndex + 0.5) / uvsSize.x;
+        #endif
 
         #pragma unroll_loop_start
         for(int i = 0; i < UV_COUNT; i++) {
             float v = (float(i) + 0.5) / float(uvsSize.y);
 
-            vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
+            #ifdef USE_UV_TEXTURE_ARRAY
+                vUv[i] = (uvTransform * vec3(texture(uvsMap, vec3(u, v, segment)).xy, 1.0)).xy;
+            #else
+                vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
+            #endif
         }
         #pragma unroll_loop_end
     #endif

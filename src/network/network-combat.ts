@@ -1,5 +1,6 @@
 import type NetworkManager from "./network-manager";
 import type AnimationComponent from "../objects/components/animation-component";
+import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import { LoopOnce, Vector3 } from "three";
 import BaseActor from "../base-actor";
 import { RACE_WINNER_EFFECT } from "../assets/asset-manager";
@@ -12,11 +13,13 @@ import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component
 import PawnAppendixComponent, { APPENDIX_TEAM_RED, APPENDIX_TEAM_BLUE } from "../objects/components/pawn-appendix-component";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import PacketReader from "./packet-reader";
+import NPawnLightComponent from "../rendering/components/pawn-light-component";
 import type { NetSkill_T, NetObject_T } from "./network-actors";
 
 const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
 
 const tmpEarthquakePosition = new Vector3();
+const tmpSpoilLightPosition = new Vector3();
 
 const tmpEarthquakeRotationAmplitude = new Vector3(0, 0.1, 0);
 
@@ -71,13 +74,13 @@ export class NetworkCombat {
     }
 
     protected readAttackHit(packet: PacketReader): NAttackActionParam_T {
-        const targetObjectId = packet.d(), target = this.network.actors.objects.get(targetObjectId);
+        const targetObjectId = packet.d(), target = this.network.actors.getActionTarget(targetObjectId);
         const damage = packet.d(), flags = packet.c();
 
-        return { targetObjectId, actionTarget: target ? target.actor : null, damage, isMiss: !!(flags & GamePackets.AttackFlags_T.MISS), isCritical: !!(flags & GamePackets.AttackFlags_T.CRITICAL), isShieldDefense: !!(flags & GamePackets.AttackFlags_T.SHIELD), isSpirit: !!(flags & GamePackets.AttackFlags_T.SOULSHOT), soulshotGrade: flags & GamePackets.AttackFlags_T.GRADE };
+        return { targetObjectId, actionTarget: target, damage, isMiss: !!(flags & GamePackets.AttackFlags_T.MISS), isCritical: !!(flags & GamePackets.AttackFlags_T.CRITICAL), isShieldDefense: !!(flags & GamePackets.AttackFlags_T.SHIELD), isSpirit: !!(flags & GamePackets.AttackFlags_T.SOULSHOT), soulshotGrade: flags & GamePackets.AttackFlags_T.GRADE };
     }
 
-    protected startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
+    public startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
         if (!attacker.actor || !hits[0].actionTarget || attacker.actor === hits[0].actionTarget || attacker.isDead) return;
 
         attacker.pendingAttack = null;
@@ -101,9 +104,7 @@ export class NetworkCombat {
             if (!pending || targetObjectId !== undefined && !pending.hits.some(hit => hit.targetObjectId === targetObjectId)) continue;
 
             const hits = pending.hits.map(hit => {
-                const target = this.network.actors.objects.get(hit.targetObjectId);
-
-                return { ...hit, actionTarget: target ? target.actor : null };
+                return { ...hit, actionTarget: this.network.actors.getActionTarget(hit.targetObjectId) };
             });
 
             if (!hits[0].actionTarget) continue;
@@ -114,7 +115,7 @@ export class NetworkCombat {
     public onMagicSkillUse(packet: PacketReader) {
         const receivedTime = this.network.getParent().getCurrentTime();
         const caster = this.network.actors.objects.get(packet.d());
-        const targetObjectId = packet.d(), target = this.network.actors.objects.get(targetObjectId);
+        const targetObjectId = packet.d(), target = this.network.actors.objects.get(targetObjectId), targetActor = this.network.actors.getActionTarget(targetObjectId);
         const id = packet.d(), level = packet.d(), hitTime = Math.max(0, packet.d());
 
         const reuseDelay = packet.d();
@@ -137,30 +138,30 @@ export class NetworkCombat {
             if (caster.actor) caster.actor.stopMoving();
         }
 
-        if (caster.actor === this.network.getParent().getComponent("render").player && !caster.isDead && (target ? target.actor : this.network.actors.doors.has(targetObjectId)) && this.network.ui.getStrings().skillInfos[`${id}:${level}`])
+        if (caster.actor === this.network.getParent().getComponent("render").player && !caster.isDead && targetActor && this.network.ui.getStrings().skillInfos[`${id}:${level}`])
             this.network.macroExecutor.notifySkill(id, hitTime);
 
-        if (!caster.actor || !target) {
+        if (!caster.actor || !target && !targetActor) {
             if (!isTransient) this.stopSkill(caster.objectId);
-            const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
+            const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] as number[] };
 
             if (isTransient) caster.pendingTransientSkills.push(pending);
             else caster.pendingSkill = pending;
             return;
         }
 
-        this.startServerSkill(caster, target, id, level, hitTime / 1000, position, isTransient, receivedTime);
+        this.startServerSkill(caster, targetObjectId, id, level, hitTime / 1000, position, isTransient, receivedTime);
     }
 
-    protected startServerSkill(caster: NetObject_T, target: NetObject_T, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
+    public startServerSkill(caster: NetObject_T, targetObjectId: number, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
         if (caster.isDead) return;
 
         const skill: NetSkill_T = { id, level, hitTime, receivedTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.
 
         for (const objectId of skill.associatedObjectIds) {
-            const object = this.network.actors.objects.get(objectId);
+            const actor = this.network.actors.getActionTarget(objectId);
 
-            if (object?.actor) skill.associatedActors.push(object.actor);
+            if (actor) skill.associatedActors.push(actor);
         }
 
         this.network.movement.adjustPawnLocation(caster, position);
@@ -174,36 +175,42 @@ export class NetworkCombat {
             caster.pendingSkill = null;
         }
 
-        void this.castSkill(caster, target, skill, isTransient);
+        void this.castSkill(caster, targetObjectId, skill, isTransient);
     }
 
-    protected async castSkill(caster: NetObject_T, target: NetObject_T, cast: NetSkill_T, isTransient: boolean) {
-        const actor = caster.actor;
+    protected async castSkill(caster: NetObject_T, targetObjectId: number, cast: NetSkill_T, isTransient: boolean) {
+        const actor = caster.actor, target = this.network.actors.objects.get(targetObjectId), targetActor = this.network.actors.getActionTarget(targetObjectId);
 
         const asset = this.network.getParent().getComponent("asset");
         const skill = asset.getPawnSkillRecord(actor, cast.id, cast.level);
         const attack = actor.getComponent<PawnAttackComponent>("pawnAttack");
         const visual = skill.visual, request = asset.getPawnSkillRequest(actor);
 
-        if (!target.actor) skill.visual = null;
+        if (!targetActor) skill.visual = null;
 
-        if (!isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved) return;
+        if (!isTransient && caster.skill !== cast || caster.isRemoved || target?.isRemoved) return;
 
-        attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
+        attack.castFromServer(targetActor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
         if (isTransient && visual?.transientRejected) this.stopSkill(caster.objectId);
 
         if (!skill.visual) {
-            const [loaded, targetActor] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), target.actor || target.actorReady]);
+            const [loaded, loadedTarget] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), targetActor || target?.actorReady]);
 
-            if (!loaded || !targetActor || !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) || caster.isRemoved || target.isRemoved || caster.actor !== actor || !attack.isAttached()) return;
+            if (!loaded || !loadedTarget || this.network.actors.getActionTarget(targetObjectId) !== loadedTarget ||
+                !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) ||
+                caster.isRemoved ||
+                target?.isRemoved ||
+                caster.actor !== actor ||
+                !attack.isAttached())
+                return;
 
             if (isTransient && loaded.visual.transientRejected && request === asset.getPawnSkillRequest(actor)) this.stopSkill(caster.objectId);
 
             Object.assign(skill, { visual: loaded.visual, flyingTime: loaded.flyingTime, sounds: loaded.sounds, assets: loaded.assets });
-            attack.setSkillTargets(cast.id, cast.associatedActors, target.actor);
-            attack.attachSkillVisual(skill, target.actor, cast.hitTime, cast.associatedActors, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
+            attack.setSkillTargets(cast.id, cast.associatedActors, loadedTarget);
+            attack.attachSkillVisual(skill, loadedTarget, cast.hitTime, cast.associatedActors, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
         }
-        if (target.actor) this.network.ui.notifyOlympiadSkill(caster.objectId, cast.id);
+        if (target?.actor) this.network.ui.notifyOlympiadSkill(caster.objectId, cast.id);
     }
 
     public onMagicSkillLaunched(packet: PacketReader) {
@@ -241,19 +248,19 @@ export class NetworkCombat {
             if (pending && (targetObjectId === undefined || pending.targetObjectId === targetObjectId)) {
                 const target = this.network.actors.objects.get(pending.targetObjectId);
 
-                if (target) {
+                if (target || this.network.actors.getActionTarget(pending.targetObjectId)) {
                     caster.pendingSkill = null;
-                    this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
+                    this.startServerSkill(caster, pending.targetObjectId, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
                 }
             }
 
             for (let i = 0; i < caster.pendingTransientSkills.length;) {
                 const pending = caster.pendingTransientSkills[i], target = this.network.actors.objects.get(pending.targetObjectId);
 
-                if (!target || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) { i++; continue; }
+                if (!target && !this.network.actors.getActionTarget(pending.targetObjectId) || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) { i++; continue; }
 
                 caster.pendingTransientSkills.splice(i, 1);
-                this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, true, pending.receivedTime, pending.associatedObjectIds);
+                this.startServerSkill(caster, pending.targetObjectId, pending.id, pending.level, pending.hitTime, pending.position, true, pending.receivedTime, pending.associatedObjectIds);
             }
         }
     }
@@ -273,9 +280,9 @@ export class NetworkCombat {
 
         skill.associatedActors.length = 0;
         for (const targetId of skill.associatedObjectIds) {
-            const target = this.network.actors.objects.get(targetId);
+            const target = this.network.actors.getActionTarget(targetId);
 
-            if (target?.actor) skill.associatedActors.push(target.actor);
+            if (target) skill.associatedActors.push(target);
         }
         caster.actor.getComponent<PawnAttackComponent>("pawnAttack").setSkillTargets(skill.id, skill.associatedActors);
         this.network.getParent().getComponent("render").setRetainedSkillTargets(caster.actor, skill.id, skill.associatedActors);
@@ -296,7 +303,7 @@ export class NetworkCombat {
         const objectId = packet.d();
         const options = [packet.d() !== 0, packet.d() !== 0, packet.d() !== 0, packet.d() !== 0];
 
-        packet.d();
+        const isSweepable = packet.d() !== 0;
         options.push(packet.d() !== 0);
 
         const object = this.network.actors.objects.get(objectId);
@@ -316,7 +323,18 @@ export class NetworkCombat {
         object.pendingTeam = null;
         this.updateAppendixState(object, 0);
 
-        if (object.actor) object.actor.playDeathAnimation(() => { });
+        if (object.actor) {
+            object.actor.playDeathAnimation(() => { });
+            if (isSweepable) {
+                const actor = object.actor;
+                const lights = actor.findComponent<NPawnLightComponent>("nPawnLight") || actor.addComponent(new NPawnLightComponent());
+
+                // UGameEngine::OnDie 0x744fd6..0x7450be: world-space blue pulse, period 25, phase 192.
+                tmpSpoilLightPosition.fromArray(actor.getUnrealScriptProperty("Location") as number[]);
+                tmpSpoilLightPosition.z += 2 * actor.getCollisionHeight();
+                lights.setPulse(lights.add(null, [0, 0, 1], 30, 10, tmpSpoilLightPosition), 25, 192);
+            }
+        }
         if (object.kind !== "user") return;
 
         this.updateTarget();
@@ -353,18 +371,18 @@ export class NetworkCombat {
     }
 
     public updateAbnormalState(object: NetObject_T, abnormalState: number = object.abnormalState) {
-        if (abnormalState & ~object.abnormalState & (GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2)) {
-            object.pendingAttack = null;
-            this.stopSkill(object.objectId);
-        }
-        object.abnormalState = abnormalState;
-
+        const isHeld = abnormalState & ~object.abnormalState & (GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2);
         const actor = object.actor;
 
-        if (!actor) return;
+        object.abnormalState = abnormalState;
+        if (actor) {
+            if (actor.ridePawn) this.setActorAbnormalState(actor.ridePawn, object.abnormalState & GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD); // FNAbnormalStat Init/Update/destructor select the flagged rider at APawn+660.
+            this.setActorAbnormalState(actor, actor.ridePawn ? object.abnormalState & ~GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD : object.abnormalState);
+        }
+        if (!isHeld) return;
 
-        if (actor.ridePawn) this.setActorAbnormalState(actor.ridePawn, object.abnormalState & GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD); // FNAbnormalStat Init/Update/destructor select the flagged rider at APawn+660.
-        this.setActorAbnormalState(actor, actor.ridePawn ? object.abnormalState & ~GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD : object.abnormalState);
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId); // after the actor is frozen, the stop replays the idle animation
     }
 
     protected setActorAbnormalState(actor: BaseActor, abnormalState: number): void {
@@ -463,7 +481,11 @@ export class NetworkCombat {
 
         switch (waitType) {
             case GamePackets.WaitType_T.WT_SITTING: field = object.chairStaticObjectId ? "ChairSitAnimName" : "SitAnimName"; rateField = "SitAnimRate"; break;
-            case GamePackets.WaitType_T.WT_STANDING: field = "StandAnimName"; rateField = "StandAnimRate"; object.chairStaticObjectId = 0; break;
+            case GamePackets.WaitType_T.WT_STANDING:
+                field = object.chairStaticObjectId ? "ChairStandAnimName" : "StandAnimName";
+                rateField = object.chairStaticObjectId ? "NonAttackSpeedRate" : "StandAnimRate";
+                object.chairStaticObjectId = 0;
+                break;
             case GamePackets.WaitType_T.WT_START_FAKEDEATH: field = "DeathAnimName"; break;
             case GamePackets.WaitType_T.WT_STOP_FAKEDEATH: field = "DeathStandAnimName"; object.chairStaticObjectId = 0; break;
             default: throw new Error(`Unknown wait type '${waitType}'.`);
@@ -490,7 +512,10 @@ export class NetworkCombat {
     }
 
     public playSocialAction(actor: BaseActor, actionId: number, isNpc = false) {
-        if (actionId === 15 || (actionId === 16 && !isNpc)) { void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004); return; } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
+        if (actionId === 15 || (actionId === 16 && !isNpc)) {
+            void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004);
+            return;
+        } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
         const prefix = isNpc ? "NpcSocial" : "PcSocial";
         const index = isNpc ? actionId - 1 : actionId;
         const names = actor.getUnrealScriptProperty(`${prefix}AnimName`) as string[];
@@ -502,7 +527,8 @@ export class NetworkCombat {
         actor.playAnimation(animation, isNpc ? 0.1 : 0.3, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnSocialAction 0x73dbbc / 0x73dc4a.
         const equipment = actor.findComponent<PawnEquipmentComponent>("pawnEquipment");
 
-        if (equipment) equipment.hideForAnimation(animation, !!(actor.getUnrealScriptProperty(`${prefix}HideRightWeapon`) as number[])[index], !!(actor.getUnrealScriptProperty(`${prefix}HideLeftWeapon`) as number[])[index]);
+        if (equipment)
+            equipment.hideForAnimation(animation, !!(actor.getUnrealScriptProperty(`${prefix}HideRightWeapon`) as number[])[index], !!(actor.getUnrealScriptProperty(`${prefix}HideLeftWeapon`) as number[])[index]);
     }
 
     protected async spawnSocialEffect(actor: BaseActor, path: string, skillId: number) {
@@ -518,7 +544,7 @@ export class NetworkCombat {
 
         const mesh = actor.getComponent<AnimationComponent>("animation").getMeshes()[0];
 
-        if (mesh) effect.scriptProperties.get("TrailerPrePivot")[2] = -mesh.meshOrigin.z;
+        if (mesh) effect.scriptProperties.get("TrailerPrePivot")[2] = -(mesh as LitSkinnedMesh).meshOrigin.z;
 
         // Engine.dll SpawnNTransientEffect 0x79a7e1..0x79a8ee: level1 spell sounds at Pawn.Location.
         for (const sound of this.network.ui.getStrings().socialSounds[skillId] || []) {
@@ -583,7 +609,7 @@ export class NetworkCombat {
         const name = duration <= 7 ? "MonSound3.antaras_earthquake" : "MonSound3.antaras_earthquake_2";
         const uri = await this.network.getParent().getComponent("asset").loadSound(name);
 
-        await this.network.getParent().getComponent("audio").playOneShotSound(uri, render.player.position, 1, 1, 80, 8000);
+        await this.network.getParent().getComponent("audio").playOneShotSound(uri, render.player.position, 1, 1, 80, 8000, true, undefined, true);
     }
 
     public setTarget(objectId: number, levelDifference: number = 0) {
@@ -619,7 +645,14 @@ export class NetworkCombat {
     }
 
     public updateTarget() {
-        const object = this.network.actors.objects.get(this.network.getTargetId());
+        const objectId = this.network.getTargetId(), object = this.network.actors.objects.get(objectId);
+
+        if (!object) {
+            const name = this.network.actors.getStaticObjectName(objectId), status = this.network.actors.doorStatuses.get(objectId);
+
+            this.network.ui.setTarget(name === null ? null : { npcId: 0, name, curHp: status ? status.curHp : 0, maxHp: status ? status.maxHp : 0, curMp: 0, maxMp: 0, showHp: status ? status.showHp : false, showMp: false, levelDifference: 0 });
+            return;
+        }
 
         this.network.ui.setTarget(object ? { npcId: object.npcId, name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp: object.isSummon ? object.objectId === this.network.actors.petInfo.objectId : object.maxHp > 0, showMp: object.kind !== "npc" && object.maxMp > 0, levelDifference: object.levelDifference } : null); // NCTargetStatusWnd paint 0x10113600: summons show HP + level colour only to their owner.
     }

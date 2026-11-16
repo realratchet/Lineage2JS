@@ -1,27 +1,36 @@
-import DynamicLight from "./dynamic-light";
+import type DynamicLight from "./dynamic-light";
+import type Terrain from "./terrain";
 import type { L2Environment } from "../rendering/l2-env";
-import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
-import type { Terrain } from "./terrain";
+import { Box3, Color, Fog, InstancedBufferAttribute, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
 import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
 import PhysicsVolume from "./physics-volume";
 import type MovableObject from "./movable-object";
 import { isPortalBlocked } from "../rendering/door-portals";
+import ZoneVisibility from "../rendering/zone-visibility";
 import MusicVolume from "./music-volume";
-import Actor from "./actor";
+import Actor, { execL2GameEvent, type L2GameEvent_T } from "./actor";
 import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
-import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import { usesAlphaCore } from "../materials/mesh-static-material/mesh-static-material";
+import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import UnScriptVM, { getProperty, setLevelActors, deleteLevelActors, registerLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, setLevelActors, deleteLevelActors, registerLevelActor, updateLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T, type ScriptTraceQuery_T, type ScriptTraceResult_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
 import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine/contracts/zone";
+import type PhysicsManager from "../physics/physics-manager";
+import type { CollisionQuery_T, CheckResult_T } from "../physics/collision-world";
+import { getScriptActor, type ICollidable } from "./objects";
 
 const tmpColor = new Color();
+const tmpTraceStart = new Vector3();
+const tmpTraceDelta = new Vector3();
+const tmpTraceExtent = new Vector3();
+const traceQuery: CollisionQuery_T = { location: tmpTraceStart, delta: tmpTraceDelta, extent: tmpTraceExtent, sourceIsPlayer: false };
 const tmpColorByte = new ColorByte();
 const tmpColorByte2 = new ColorByte();
 const tmpVec3 = new Vector3();
@@ -41,13 +50,99 @@ const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
+type BatchBoundsNode_T = { min: number[], max: number[], start: number, end: number, left: number, right: number };
+type TerrainVisibility_T = { key?: string, visible: number[] };
+type BatchVisibility_T = { version: number, visible: Uint8Array, centers: Float64Array, nodes: BatchBoundsNode_T[], order: number[], frustumVisible: Uint8Array };
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string; actorIndex: number };
 type TranslucentBSPSection_T = { mesh: THREE.Mesh; source: Uint8Array | Uint16Array | Uint32Array; nodes: Int32Array; starts: Uint32Array; counts: Uint32Array; order: Int32Array; previous: Int32Array };
-type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
+type TranslucentBSPNode_T = { index: number, plane: THREE.Vector4, front: number, back: number };
+type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number; ordinal: number };
 type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
+type BatchPacking_T = { source: BatchBounds_T["source"], index: THREE.BufferAttribute, indexVersion: number, stamp: number, ranges: Map<number, { offset: number, count: number, stamp: number, copied: boolean }> };
 const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
+const cacheBatchPacking = new WeakMap<BufferGeometry, BatchPacking_T>();
 
-function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["source"], group: BatchGroup_T): Box3 {
+function sortTerrainSectorKeys(keys: number[]) {
+    const stack = [0, keys.length - 1];
+
+    // Engine.dll 0x9a4a50..0x9a4bce, signed subtraction comparisons.
+    while (stack.length) {
+        let high = stack.pop(), low = stack.pop();
+
+        while (low < high) {
+            if (high - low < 8) {
+                while (low < high) {
+                    let largest = low;
+
+                    for (let i = low + 1; i <= high; i++)
+                        if (((keys[i] - keys[largest]) | 0) > 0) largest = i;
+                    const value = keys[high];
+                    keys[high--] = keys[largest];
+                    keys[largest] = value;
+                }
+                break;
+            }
+
+            const middle = low + Math.floor((high - low + 1) / 2);
+            const pivot = keys[middle];
+            keys[middle] = keys[low];
+            keys[low] = pivot;
+            let left = low, right = high + 1;
+
+            for (; ;) {
+                do { left++; } while (left <= high && ((keys[left] - keys[low]) | 0) <= 0);
+                do { right--; } while (right > low && ((keys[right] - keys[low]) | 0) >= 0);
+                if (left > right) break;
+                const value = keys[left];
+                keys[left] = keys[right];
+                keys[right] = value;
+            }
+
+            keys[low] = keys[right];
+            keys[right] = pivot;
+            if (right - low - 1 >= high - left) {
+                if (low + 1 < right) stack.push(low, right - 1);
+                low = left;
+            } else {
+                if (left < high) stack.push(left, high);
+                high = right - 1;
+            }
+        }
+    }
+}
+
+function buildTranslucentBSPTree(nodes: BSPNodeData[], sections: TranslucentBSPSection_T[]): TranslucentBSPNode_T[] {
+    const used = new Uint8Array(nodes.length);
+    const roots = new Int32Array(nodes.length).fill(-1);
+    const stack = nodes.length ? [0] : [];
+    const order: number[] = [];
+    const tree: TranslucentBSPNode_T[] = [];
+    for (const section of sections)
+        if (section.order.length > 1) for (const node of section.nodes) used[node] = 1;
+
+    while (stack.length) {
+        const index = stack.pop()!, node = nodes[index];
+        order.push(index);
+        if (node.front >= 0) stack.push(node.front);
+        if (node.back >= 0) stack.push(node.back);
+    }
+    for (let i = order.length - 1; i >= 0; i--) {
+        const index = order[i], node = nodes[index];
+        const front = node.front >= 0 ? roots[node.front] : -1, back = node.back >= 0 ? roots[node.back] : -1;
+        let relevant = false;
+        for (let coplanar = index; coplanar >= 0; coplanar = nodes[coplanar].iPlane)
+            if (used[coplanar]) { relevant = true; break; }
+
+        if (!relevant && (front < 0 || back < 0)) roots[index] = Math.max(front, back);
+        else {
+            roots[index] = tree.length;
+            tree.push({ index, plane: node.plane, front, back });
+        }
+    }
+    return tree;
+}
+
+export function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["source"], group: BatchGroup_T): Box3 {
     const position = geometry.getAttribute("position");
     const version = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
     let cache = cacheBatchBounds.get(geometry);
@@ -109,12 +204,13 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
 
     for (let i = 0, len = visibleGroups.length; i < len; i++) {
         const group = visibleGroups[i];
-        group.transparent = transparentLookup[group.materialIndex];
+        group.transparent = transparentLookup[group.materialIndex] && usesAlphaCore(Array.isArray(object.material) ? object.material[group.materialIndex] : object.material) ? 2 : transparentLookup[group.materialIndex];
     }
 
     visibleGroups.sort((a, b) => {
         if (a.transparent !== b.transparent) return a.transparent - b.transparent;
-        if (a.transparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex);
+        if (a.transparent === 2) return (a.materialIndex - b.materialIndex) || (b.distance - a.distance) || (a.ordinal - b.ordinal);
+        if (a.transparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex) || (a.ordinal - b.ordinal);
 
         return (a.materialIndex - b.materialIndex) || (a.start - b.start);
     });
@@ -143,19 +239,52 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
     const position = geometry.getAttribute("position");
     const positionVersion = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
     const groups: BatchRenderGroup_T[] = object.batchRenderGroups || (object.batchRenderGroups = []);
+    let packing = cacheBatchPacking.get(geometry);
+    if (!packing || packing.source !== source || packing.index !== index || packing.indexVersion !== index.version) {
+        packing = { source, index, indexVersion: index.version, stamp: 0, ranges: new Map() };
+        cacheBatchPacking.set(geometry, packing);
+    }
+    const stamp = packing.stamp + 1;
+    const ranges = index.updateRanges;
+    if (ranges.length > 1) {
+        let start = ranges[0].start, end = start + ranges[0].count;
+        for (let i = 1; i < ranges.length; i++) {
+            start = Math.min(start, ranges[i].start);
+            end = Math.max(end, ranges[i].start + ranges[i].count);
+        }
+        ranges[0].start = start; ranges[0].count = end - start;
+        ranges.length = 1;
+    }
     let offset = 0;
     let copyStart = 0, copyCount = 0;
+    let dirtyStart = 0, dirtyCount = 0, copied = false;
     let run: BatchRenderGroup_T = null;
     let groupCount = 0;
 
     for (const group of visibleGroups) {
-        if (copyCount && copyStart + copyCount !== group.start) {
+        const packed = packing.ranges.get(group.start);
+        const unchanged = packed && packed.stamp === packing.stamp && packed.offset === offset && packed.count === group.count;
+        if (copyCount && (unchanged || copyStart + copyCount !== group.start)) {
             target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+            copied = true;
             copyCount = 0;
         }
 
-        if (!copyCount) copyStart = group.start;
-        copyCount += group.count;
+        if (unchanged) {
+            if (dirtyCount) { index.addUpdateRange(dirtyStart, dirtyCount); dirtyCount = 0; }
+        } else {
+            if (!copyCount) copyStart = group.start;
+            if (!dirtyCount) dirtyStart = offset;
+            copyCount += group.count;
+            dirtyCount += group.count;
+        }
+        if (packed) {
+            packed.offset = offset;
+            packed.count = group.count;
+            packed.stamp = stamp;
+            packed.copied = !unchanged;
+        }
+        else packing.ranges.set(group.start, { offset, count: group.count, stamp, copied: true });
 
         if (run && run.materialIndex === group.materialIndex) {
             run.count += group.count;
@@ -168,7 +297,7 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
             run.position = position;
             run.index = index;
             run.positionVersion = positionVersion;
-            run.indexVersion = index.version + 1;
+            run.indexVersion = index.version;
             run.bounds.makeEmpty();
             geometry.groups.push(run);
             groupCount++;
@@ -181,11 +310,16 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
         offset += group.count;
     }
 
-    if (copyCount) target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+    if (copyCount) {
+        target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+        copied = true;
+    }
+    if (dirtyCount) index.addUpdateRange(dirtyStart, dirtyCount);
 
-    index.clearUpdateRanges();
-    index.addUpdateRange(0, offset);
-    index.needsUpdate = true;
+    if (copied) index.needsUpdate = true;
+    for (const group of geometry.groups) (group as BatchRenderGroup_T).indexVersion = index.version;
+    packing.indexVersion = index.version;
+    packing.stamp = stamp;
 }
 
 export class FogInfoObject extends Object3D {
@@ -200,6 +334,77 @@ export class FogInfoObject extends Object3D {
     public zoneMask: bigint = 0n;
 }
 
+
+function intersectsActorBounds(min: number[], max: number[], frustum: THREE.Frustum, ignoreRange = false): boolean {
+    for (let i = 0; i < 6; i++) {
+        if (ignoreRange && i === 4) continue;
+        const plane = frustum.planes[i], normal = plane.normal;
+        if (normal.x * (normal.x > 0 ? max[0] : min[0]) + normal.y * (normal.y > 0 ? max[1] : min[1]) + normal.z * (normal.z > 0 ? max[2] : min[2]) + plane.constant < 0) return false;
+    }
+    return true;
+}
+
+function intersectsBoxIgnoringRange(box: THREE.Box3, frustum: THREE.Frustum): boolean {
+    const min = box.min, max = box.max;
+    for (let i = 0; i < 6; i++) {
+        if (i === 4) continue;
+        const plane = frustum.planes[i], normal = plane.normal;
+        if (normal.x * (normal.x > 0 ? max.x : min.x) + normal.y * (normal.y > 0 ? max.y : min.y) + normal.z * (normal.z > 0 ? max.z : min.z) + plane.constant < 0) return false;
+    }
+    return true;
+}
+
+function isActorInRange(min: number[], max: number[], position: Vector3, rangeSq: number): boolean {
+    const x = Math.max(min[0] - position.x, 0, position.x - max[0]);
+    const y = Math.max(min[1] - position.y, 0, position.y - max[1]);
+    const z = Math.max(min[2] - position.z, 0, position.z - max[2]);
+    return x * x + y * y + z * z <= rangeSq;
+}
+
+function buildBatchBounds(elements: any[], centers: Float64Array, order: number[], nodes: BatchBoundsNode_T[], start: number, end: number): number {
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (let i = start; i < end; i++) {
+        const elem = elements[order[i]];
+        for (let axis = 0; axis < 3; axis++) {
+            min[axis] = Math.min(min[axis], elem.boundsMin[axis]);
+            max[axis] = Math.max(max[axis], elem.boundsMax[axis]);
+        }
+    }
+    const index = nodes.length, node = { min, max, start, end, left: -1, right: -1 };
+    nodes.push(node);
+    if (end - start > 8) {
+        let axis = 0;
+        if (max[1] - min[1] > max[axis] - min[axis]) axis = 1;
+        if (max[2] - min[2] > max[axis] - min[axis]) axis = 2;
+        const sorted = order.slice(start, end).sort((a, b) => centers[a * 3 + axis] - centers[b * 3 + axis]);
+        for (let i = 0; i < sorted.length; i++) order[start + i] = sorted[i];
+        const middle = (start + end) >>> 1;
+        node.left = buildBatchBounds(elements, centers, order, nodes, start, middle);
+        node.right = buildBatchBounds(elements, centers, order, nodes, middle, end);
+    }
+    return index;
+}
+
+function updateBatchFrustum(cache: BatchVisibility_T, elements: any[], frustum: THREE.Frustum, index: number, mask: number): void {
+    const node = cache.nodes[index], min = node.min, max = node.max;
+    for (let i = 0; i < 6; i++) {
+        if (!(mask & (1 << i))) continue;
+        const plane = frustum.planes[i], normal = plane.normal;
+        if (normal.x * (normal.x > 0 ? max[0] : min[0]) + normal.y * (normal.y > 0 ? max[1] : min[1]) + normal.z * (normal.z > 0 ? max[2] : min[2]) + plane.constant < 0) return;
+        if (normal.x * (normal.x > 0 ? min[0] : max[0]) + normal.y * (normal.y > 0 ? min[1] : max[1]) + normal.z * (normal.z > 0 ? min[2] : max[2]) + plane.constant >= 0) mask &= ~(1 << i);
+    }
+    if (!mask) {
+        for (let i = node.start; i < node.end; i++) cache.frustumVisible[cache.order[i]] = 1;
+    } else if (node.left >= 0) {
+        updateBatchFrustum(cache, elements, frustum, node.left, mask);
+        updateBatchFrustum(cache, elements, frustum, node.right, mask);
+    } else {
+        for (let i = node.start; i < node.end; i++) {
+            const ei = cache.order[i], elem = elements[ei];
+            cache.frustumVisible[ei] = intersectsActorBounds(elem.boundsMin, elem.boundsMax, frustum) ? 1 : 0;
+        }
+    }
+}
 
 type StaticMeshActorDecodeInfo_T = {
     uuid: string;
@@ -281,7 +486,14 @@ export class SectorObject extends GameObject {
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
     public isRetired = false;
+    public hasFinishedLoading = false;
+    public lastInRangeTime = 0;
+    public fade = 0;
+    public meshFade = 0;
+    protected readonly fadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1, false, 4); // shadow receivers draw 4 projector instances, three clamps to meshPerAttribute * count
+    protected readonly meshFadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1, false, 4);
     public scriptVM: UnScriptVM;
+    public physicsManager: PhysicsManager = null;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
     public readonly pawns = new Object3D(); // players/mobs - scene-graph home only, visibility resolved live (RenderManager.updatePawnVisibility)
@@ -296,6 +508,10 @@ export class SectorObject extends GameObject {
     protected readonly cacheLevelActorIndices = new Map<string, number>();
     protected readonly cacheLevelActorObjects = new Map<string, ScriptHost_T>();
     protected levelActorHostsReady = false;
+    protected readonly initializedL2GameEventActors = new WeakSet<ScriptHost_T>();
+    protected readonly arrPendingL2GameEvents: [number, number][] = [];
+    protected hasInitializedL2GameEvents = false;
+    protected readonly hiddenActorUuids = new Set<string>();
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
     public bspLeaves: BSPLeafData[];
@@ -325,9 +541,13 @@ export class SectorObject extends GameObject {
     public staticMeshGroup?: THREE.Group;
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     public visibleEmitterUuids: Set<string> = new Set();
+    protected readonly zoneVisibility = new ZoneVisibility();
     public visibleLeaves: Set<number> = new Set();
+    protected cachedLeafZoneMask: bigint = null;
+    protected readonly cacheLeafZoneVisibility = new Map<number, boolean>();
     protected arrTranslucentBSP: TranslucentBSPSection_T[] = null;
     protected arrBSPRanks: Int32Array = null;
+    protected arrTranslucentBSPNodes: TranslucentBSPNode_T[] = null;
     public readonly lights: Record<string, DynamicLight> = {};
     public readonly lightList: DynamicLight[] = [];
     protected readonly cacheLightIndicesByName = new Map<string, number[]>();
@@ -338,13 +558,20 @@ export class SectorObject extends GameObject {
 
     protected renderDeco = true;
     protected sortTransparent = true;
+    protected readonly cacheTerrainVisibility = new WeakMap<Mesh, TerrainVisibility_T>();
+    protected cacheTerrainSegments: Map<string, Terrain[]>;
+    protected readonly arrTerrainSectorKeys: number[] = [];
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
+    protected readonly cacheStaticVisibleLeaves = new Set<number>();
+    protected readonly cacheBatchVisibility = new WeakMap<object, BatchVisibility_T>();
+    protected staticLeafVisibilityVersion = 0;
     protected readonly arrBSPStack: number[] = [];
+    protected rangeIgnoredNodes?: Uint8Array;
+    protected rangeIgnoredBatches?: DecodeLibrary["staticMeshBatches"];
     protected staticActorCandidateStamps = new Uint32Array(256);
     protected staticActorVisibleStamps = new Uint32Array(256);
-    protected staticActorDistances = new Float64Array(256);
     protected staticVisibilityStamp = 0;
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
     protected visibilityCacheInitialized = false;
@@ -366,6 +593,84 @@ export class SectorObject extends GameObject {
     public getLevelActorCount(): number { return this.arrLevelActors.length; }
     public getFirstDynamicActor(): number { return this.firstDynamicActor; }
 
+    public setActorHidden(uuid: string, hidden: boolean): void {
+        if (this.hiddenActorUuids.has(uuid) === hidden) return;
+
+        if (hidden) this.hiddenActorUuids.add(uuid);
+        else this.hiddenActorUuids.delete(uuid);
+        this.visibilityCacheInitialized = false;
+    }
+
+    protected getLevelActorProperty(index: number, name: string): ScriptValue_T {
+        const actor = this.arrLevelActors[index];
+
+        if (actor) return getProperty(actor, name);
+        const info = this.arrLevelActorRecords[index];
+
+        if (!info) return null;
+        const value = getProperty(info as ScriptHost_T, name);
+
+        if (value !== null) return value;
+        const shared = info.sharedScriptProperties && getProperty({ scriptClassId: info.scriptClassId, scriptProperties: info.sharedScriptProperties }, name);
+
+        return shared ?? getProperty(this.scriptVM.getDefaultObject(info.scriptClassId), name);
+    }
+
+    public initializeL2GameEventActor(object: any): boolean {
+        if (!object.isEmitterActor || this.initializedL2GameEventActors.has(object)) return false;
+
+        this.scriptVM.initializeHost(object);
+        Actor.prototype.postBeginPlay.call(object);
+        this.initializedL2GameEventActors.add(object);
+        return true;
+    }
+
+    public initializeL2GameEvents(): void {
+        if (this.hasInitializedL2GameEvents) return;
+
+        this.traverse(object => { this.initializeL2GameEventActor(object); });
+        if (!this.staticMeshGroup) return;
+
+        // AActor::PostBeginPlay 0x8583f0..0x858424 runs independently of the script event.
+        for (let index = 0; index < this.arrLevelActors.length; index++) {
+            if (this.arrLevelActors[index] === null) continue;
+            const info = this.arrLevelActorRecords[index];
+
+            if (info && this.staticMeshMap.has(info.uuid)) this.setActorHidden(info.uuid, !!this.getLevelActorProperty(index, "bHidden"));
+            const arrEvents = this.getLevelActorProperty(index, "L2GameEvent") as L2GameEvent_T[];
+
+            if (!arrEvents.length) continue;
+            const actor = this.getLevelActor(index);
+
+            if (this.initializedL2GameEventActors.has(actor)) continue;
+            Actor.prototype.postBeginPlay.call(actor);
+            this.initializedL2GameEventActors.add(actor);
+        }
+
+        this.hasInitializedL2GameEvents = true;
+        for (const [id, value] of this.arrPendingL2GameEvents) this.l2EventTrigger(id, value);
+        this.arrPendingL2GameEvents.length = 0;
+    }
+
+    public l2EventTrigger(id: number, value: number): void {
+        if (!this.hasInitializedL2GameEvents) {
+            this.arrPendingL2GameEvents.push([id, value]);
+            return;
+        }
+
+        for (let index = 0; index < this.arrLevelActors.length; index++) {
+            if (this.arrLevelActors[index] === null) continue;
+            for (let eventIndex = 0; ; eventIndex++) {
+                const arrEvents = this.getLevelActorProperty(index, "L2GameEvent") as L2GameEvent_T[];
+
+                if (eventIndex >= arrEvents.length) break;
+                const event = arrEvents[eventIndex];
+
+                if (event.EventCmd && event.EventID === id) execL2GameEvent(this.getLevelActor(index), event.EventCmd, value);
+            }
+        }
+    }
+
     public rearrangeLevelActors(): void {
         if (this.hasRearrangedLevelActors) return;
 
@@ -373,7 +678,7 @@ export class SectorObject extends GameObject {
             const info = this.arrLevelActorRecords[index];
             const host = actor === undefined && info ? info : actor;
 
-            return { actor, info, exists: !!host, isStatic: host && !!getProperty(host, "bStatic"), isAlwaysRelevant: host && !!getProperty(host, "bAlwaysRelevant") };
+            return { actor, info, exists: !!host, isStatic: host && !!getProperty(host as ScriptHost_T, "bStatic"), isAlwaysRelevant: host && !!getProperty(host as ScriptHost_T, "bAlwaysRelevant") };
         });
         const ordered = entries.slice(0, 2);
 
@@ -430,6 +735,52 @@ export class SectorObject extends GameObject {
         this.arrLevelActors[index] = null;
     }
 
+    public getDecoLayerAlpha(location: THREE.Vector3, radius: number = 0): number {
+        let uuid: string = null;
+
+        for (let i = 0; i < this.bspZones.length; i++) {
+            const terrains = this.bspZones[i].zoneInfo.terrains;
+
+            if (!terrains || !terrains.length) continue;
+            uuid = terrains[0];
+            break;
+        }
+        if (!uuid) return 0;
+
+        if (!this.cacheTerrainSegments) {
+            const segments = new Map<string, Terrain[]>();
+            const add = (terrain: Terrain) => {
+                if (!segments.has(terrain.terrainInfoUuid)) segments.set(terrain.terrainInfoUuid, []);
+                segments.get(terrain.terrainInfoUuid).push(terrain);
+            };
+
+            this.zones.traverse(object => {
+                if ((object as any).isTerrainBatch) (object as any).sectors.forEach(add);
+                else if ((object as any).isTerrain && !(object as any).batchGeometry) add(object as Terrain);
+            });
+            for (const terrains of segments.values()) terrains.sort((a, b) => a.terrainSectorIndex - b.terrainSectorIndex);
+            this.cacheTerrainSegments = segments;
+        }
+
+        const terrains = this.cacheTerrainSegments.get(uuid);
+
+        if (!terrains) throw new Error(`TerrainInfo '${uuid}' has no decoded sectors.`);
+        const keys = this.arrTerrainSectorKeys;
+        keys.length = terrains.length;
+        for (let i = 0; i < terrains.length; i++) {
+            const terrain = terrains[i];
+
+            if (terrain.terrainSectorIndex !== i) throw new Error(`TerrainInfo '${uuid}' has no sector '${i}'.`);
+            const dx = terrain.decorationCenter.x - location.x;
+            const dy = terrain.decorationCenter.y - location.y;
+            const dz = terrain.decorationCenter.z - location.z;
+
+            keys[i] = (Math.trunc(Math.sqrt(dz * dz + dy * dy + dx * dx)) << 16) + i | 0;
+        }
+        sortTerrainSectorKeys(keys);
+        return terrains[keys[0] & 0xffff].getDecoLayerAlpha(location, radius);
+    }
+
     public getTerrainInfoActor(uuid: string): ScriptHost_T {
         const index = this.cacheLevelActorIndices.get(uuid);
 
@@ -447,6 +798,15 @@ export class SectorObject extends GameObject {
         }
         if (!actor) throw new Error(`Actor '${uuid}' has been removed from '${this.name}'.`);
         return actor;
+    }
+
+    public findLevelActorByRealId(realId: number): ScriptHost_T | null {
+        for (let i = 0; i < this.arrLevelActors.length; i++) {
+            const actor = this.arrLevelActors[i], info = actor === undefined ? this.arrLevelActorRecords[i] : actor;
+
+            if (info && getProperty(info as ScriptHost_T, "L2ServerObjectRealID") === realId) return this.getLevelActor(i);
+        }
+        return null;
     }
 
     public getLevelActor(index: number): ScriptHost_T | null {
@@ -487,6 +847,22 @@ export class SectorObject extends GameObject {
         return actor;
     }
 
+    public moveLevelActors(level: SectorObject): ScriptHost_T[] {
+        const actors: ScriptHost_T[] = [];
+
+        for (let i = 0; i < this.arrLevelActors.length; i++) {
+            const actor = this.arrLevelActors[i];
+
+            if (!actor || this.arrLevelActorRecords[i]) continue;
+
+            setProperty(actor, "Level", level.levelInfoActor as any);
+            updateLevelActor(actor);
+            actors.push(actor);
+        }
+
+        return actors;
+    }
+
     public releaseLevelActors(): void {
         for (const actor of this.arrLevelActors) if (actor) unregisterLevelActor(actor);
         deleteLevelActors(this.scriptVM.getLevelInfo());
@@ -495,6 +871,9 @@ export class SectorObject extends GameObject {
         this.arrLevelActorRecords.length = 0;
         this.firstDynamicActor = 0;
         this.hasRearrangedLevelActors = false;
+        this.hasInitializedL2GameEvents = false;
+        this.arrPendingL2GameEvents.length = 0;
+        this.hiddenActorUuids.clear();
         this.cacheLevelActorObjects.clear();
         this.cacheLevelActorIndices.clear();
     }
@@ -635,6 +1014,14 @@ export class SectorObject extends GameObject {
         return entry.uri;
     }
 
+    public getSoundData(soundName: string): Uint8Array | Blob {
+        const entry = (this as any).decodeLibrary?.soundBlobCache?.get(soundName);
+
+        if (!entry?.data) throw new Error(`Sector '${this.name}' has no decoded sound '${soundName}'.`);
+
+        return entry.data;
+    }
+
     public getPermeatingLights(bounds: Box3, target: string[], forcedRegionTag: string = "None", forcedRegion: number = 0): string[] {
         this.boxLeafIndices(bounds, arrLightLeaves, forcedRegionTag, forcedRegion);
         target.length = 0;
@@ -723,10 +1110,41 @@ export class SectorObject extends GameObject {
         this.add(this.helpers, this.zones, this.pawns);
     }
 
+    public singleLineCheck(query: ScriptTraceQuery_T): ScriptTraceResult_T | null {
+        if (!this.physicsManager) throw new Error(`Level '${this.name}' has no collision world.`);
+        tmpTraceStart.fromArray(query.start);
+        tmpTraceDelta.fromArray(query.end).sub(tmpTraceStart);
+        tmpTraceExtent.fromArray(query.extent);
+        traceQuery.sourceActor = query.sourceActor;
+        const source = query.sourceActor as ICollidable;
+
+        traceQuery.sourceProfile = source.getCollisionProfile ? source.getCollisionProfile() : undefined;
+        traceQuery.traceActors = query.traceActors;
+        traceQuery.traceMaterial = query.material;
+        let hit: CheckResult_T | null;
+
+        try {
+            hit = this.physicsManager.singleLineCheck(traceQuery);
+        } finally {
+            traceQuery.sourceActor = undefined;
+            traceQuery.sourceProfile = undefined;
+        }
+
+        if (!hit) return null;
+
+        return {
+            actor: getScriptActor(hit.actor),
+            location: hit.location.toArray().map(Math.fround) as Vector3Arr,
+            normal: hit.normal.toArray().map(Math.fround) as Vector3Arr,
+            material: query.material ? hit.material : null
+        };
+    }
+
     public setBSPInfo(bspZones: IBSPZoneDecodeInfo_T[], bspNodes: IBSPNodeDecodeInfo_T[], bspLeaves: IBSPLeafDecodeInfo_T[]) {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
+        this.rangeIgnoredNodes = null;
         this.invalidateDoorPortals();
 
         let outdoorMask = 1n << 0n;
@@ -738,6 +1156,36 @@ export class SectorObject extends GameObject {
         if (outdoorMask === (1n << 0n)) outdoorMask |= 1n << 1n;
 
         this.outdoorZoneMask = outdoorMask;
+    }
+
+    protected getRangeIgnoredNodes(library: DecodeLibrary): Uint8Array {
+        if (this.rangeIgnoredNodes && this.rangeIgnoredBatches === library.staticMeshBatches) return this.rangeIgnoredNodes;
+
+        const leaves = new Uint8Array(this.bspLeaves.length), nodes = new Uint8Array(this.bspNodes.length);
+        for (let i = 0; i < library.leafActors.length; i++)
+            for (const actor of library.leafActors[i])
+                if (actor.type === "StaticMeshActor" && (actor as any).isRangeIgnored) { leaves[i] = 1; break; }
+
+        for (const batch of library.staticMeshBatches?.batches || [])
+            for (const element of batch.batchElements)
+                if (element.isRangeIgnored && element.leaves)
+                    for (const leaf of element.leaves) leaves[leaf] = 1;
+
+        const stack = this.bspNodes.length ? [0] : [], order: number[] = [];
+        while (stack.length) {
+            const index = stack.pop()!, node = this.bspNodes[index];
+            order.push(index);
+            if (node.front >= 0) stack.push(node.front);
+            if (node.back >= 0) stack.push(node.back);
+        }
+        for (let i = order.length - 1; i >= 0; i--) {
+            const index = order[i], node = this.bspNodes[index];
+            nodes[index] = (node.front >= 0 ? nodes[node.front] : leaves[node.leaves[1]]) || (node.back >= 0 ? nodes[node.back] : leaves[node.leaves[0]]) ? 1 : 0;
+        }
+
+        this.rangeIgnoredNodes = nodes;
+        this.rangeIgnoredBatches = library.staticMeshBatches;
+        return nodes;
     }
 
     public invalidateDoorPortals(): void {
@@ -962,6 +1410,7 @@ export class SectorObject extends GameObject {
         leafOnlyMode: boolean = false,
         topLevelOnly: boolean = false
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
+        this.zoneVisibility.active = false;
         this.updateDoorPortals();
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
@@ -1016,6 +1465,8 @@ export class SectorObject extends GameObject {
         }
 
         const cameraPos = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
+        const library = (this as any).decodeLibrary as DecodeLibrary;
+        const rangeIgnoredNodes = library ? this.getRangeIgnoredNodes(library) : null;
         let currentZoneMask = activeZoneMask;
 
         const cameraZone = this.findPositionZone(cameraPosition);
@@ -1026,6 +1477,9 @@ export class SectorObject extends GameObject {
         const nodeStack = this.arrBSPStack;
         let stackCount = 1;
         nodeStack[0] = 0;
+        let previousNodeZoneMask: bigint = null;
+        let previousZoneMask: bigint = null;
+        let nodeZoneVisible = false;
 
         while (stackCount > 0) {
             const entry = nodeStack[--stackCount];
@@ -1034,22 +1488,26 @@ export class SectorObject extends GameObject {
 
             if (entry >= 0) {
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
+                if (hasViewZone && (previousNodeZoneMask !== nodeZoneMask || previousZoneMask !== currentZoneMask)) {
+                    previousNodeZoneMask = nodeZoneMask;
+                    previousZoneMask = currentZoneMask;
+                    nodeZoneVisible = !!nodeZoneMask && currentZoneMask !== 0n && (nodeZoneMask === currentZoneMask || !!(nodeZoneMask & currentZoneMask));
+                }
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
-                    if (!(nodeZoneMask & currentZoneMask)) {
+                    if (!nodeZoneVisible) {
                         continue;
                     }
                 }
 
                 // Model->Bounds(Node.iRenderBound), UnRenderVisibility.cpp lines 1800-1819.
-                const library = (this as any).decodeLibrary as DecodeLibrary;
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
-                        if (!nodeZoneMask || !(nodeZoneMask & currentZoneMask)) continue;
+                        if (!nodeZoneVisible) continue;
                         if (frustumCullingEnabled) {
                             tmpActorBox.min.fromArray(renderBound.min);
                             tmpActorBox.max.fromArray(renderBound.max);
-                            if (!cameraFrustum.intersectsBox(tmpActorBox)) continue;
+                            if (!cameraFrustum.intersectsBox(tmpActorBox) && (!rangeIgnoredNodes[nodeIndex] || !intersectsActorBounds(renderBound.min, renderBound.max, cameraFrustum, true))) continue;
                         }
                     }
                 }
@@ -1109,16 +1567,12 @@ export class SectorObject extends GameObject {
                         const currentZoneBit = 1n << BigInt(currentZone);
                         const isCurrentZoneActive = !!(currentZoneBit & currentZoneMask);
 
-                        const PORTAL_MAX_DISTANCE = 5000;
                         const portalSphere = currentNode.exclusiveSphereBound;
-                        const portalDistance = cameraPosition.distanceTo(portalSphere.center);
-                        const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
                         // shortcut: retain indoor-to-outdoor visibility until indoor BSP boundary visibility is verified.
                         const isDoorOccluded = !!(currentZoneBit & this.outdoorZoneMask) && !(this.outdoorZoneMask & (1n << BigInt(oppositeZone))) && this.blockedDoorPortals.has(current) && Math.abs(planeDot) > portalSphere.radius;
 
                         const portalVisible = isCurrentZoneActive &&
                             !isDoorOccluded &&
-                            isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
                         if (!leafOnlyMode && portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
@@ -1164,11 +1618,31 @@ export class SectorObject extends GameObject {
             }
         }
 
-        for (const leafIndex of visibleLeaves) {
-            const leaf = this.bspLeaves[leafIndex];
-            if (!leaf || leaf.zone < 0 || !(currentZoneMask & (1n << BigInt(leaf.zone))))
-                visibleLeaves.delete(leafIndex);
+        if (frustumCullingEnabled) {
+            currentZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, currentZoneMask);
+            if (this.zoneVisibility.active) visibleNodes.forEach(nodeIndex => {
+                const node = this.bspNodes[nodeIndex];
+                const mask = (1n << BigInt(node.zones[0])) | (1n << BigInt(node.zones[1]));
+                node.exclusiveSphereBound.getBoundingBox(tmpActorBox);
+                if (!this.zoneVisibility.intersectsBox(mask, tmpActorBox)) visibleNodes.delete(nodeIndex);
+            });
         }
+
+        if (this.cachedLeafZoneMask !== currentZoneMask) {
+            this.cacheLeafZoneVisibility.clear();
+            this.cachedLeafZoneMask = currentZoneMask;
+        }
+        visibleLeaves.forEach(leafIndex => {
+            const leaf = this.bspLeaves[leafIndex];
+            if (!leaf || leaf.zone < 0) { visibleLeaves.delete(leafIndex); return; }
+
+            let visible = this.cacheLeafZoneVisibility.get(leaf.zone);
+            if (visible === undefined) {
+                visible = !!(currentZoneMask & (1n << BigInt(leaf.zone)));
+                this.cacheLeafZoneVisibility.set(leaf.zone, visible);
+            }
+            if (!visible) visibleLeaves.delete(leafIndex);
+        });
 
         this.lastZoneMask = currentZoneMask;
         return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
@@ -1318,6 +1792,35 @@ export class SectorObject extends GameObject {
         return false;
     }
 
+    public updateFade(step: number): boolean {
+        const fade = Math.min(Math.max(this.fade + step, 0), 1);
+        const meshFade = this.staticMeshGroup
+            ? Math.min(Math.max(this.meshFade + step, 0), fade)
+            : 0;
+
+        if (fade === this.fade && meshFade === this.meshFade)
+            return false;
+
+        this.fade = fade;
+        this.meshFade = meshFade;
+        this.fadeAttribute.setX(0, fade).needsUpdate = true;
+        this.meshFadeAttribute.setX(0, meshFade).needsUpdate = true;
+
+        this.traverse(object => {
+            const mesh = object as any;
+            const attribute = mesh.isBatch
+                ? this.meshFadeAttribute
+                : mesh.isTerrainBatch || mesh.isBSPSection
+                    ? this.fadeAttribute
+                    : null;
+
+            if (attribute && mesh.geometry.getAttribute("sectorFade") !== attribute)
+                mesh.geometry.setAttribute("sectorFade", attribute);
+        });
+
+        return true;
+    }
+
     public setSortTransparent(enabled: boolean) {
         if (this.sortTransparent === enabled) return;
 
@@ -1327,6 +1830,7 @@ export class SectorObject extends GameObject {
             const mesh = object as LitActorMesh;
             if (!mesh.sortedIndexBuffers) return;
 
+            cacheBatchPacking.delete(mesh.geometry);
             if (mesh.elemVisibility) mesh.elemVisibility.fill(2);
             if (!enabled) mesh.sortedIndexBuffers.forEach(buffer => buffer.dispose());
         });
@@ -1346,7 +1850,9 @@ export class SectorObject extends GameObject {
         for (const child of this.bspGroup.children as THREE.Mesh[]) {
             if ((child as any).priority !== "transparent" || !child.geometry.index) continue;
 
-            const index = child.geometry.index, source = (index.array as Uint16Array).slice(), nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
+            const index = child.geometry.index;
+            const source = (index.array as Uint16Array).slice();
+            const nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
             const nodes: number[] = [], starts: number[] = [], counts: number[] = [];
 
             for (let i = 0; i < source.length; i += 3) {
@@ -1362,6 +1868,7 @@ export class SectorObject extends GameObject {
             this.arrTranslucentBSP.push({ mesh: child, source, nodes: Int32Array.from(nodes), starts: Uint32Array.from(starts), counts: Uint32Array.from(counts), order, previous: order.slice() });
         }
 
+        this.arrTranslucentBSPNodes = buildTranslucentBSPTree(this.bspNodes, this.arrTranslucentBSP);
         return this.arrTranslucentBSP;
     }
 
@@ -1369,46 +1876,53 @@ export class SectorObject extends GameObject {
         const sections = this.getTranslucentBSP();
         let hasVisible = false;
 
-        for (const section of sections) if (section.mesh.visible) { hasVisible = true; break; }
+        for (const section of sections) if (section.mesh.visible && section.order.length > 1) { hasVisible = true; break; }
         if (!hasVisible || !this.bspNodes.length) return;
 
-        const nodes = this.bspNodes, ranks = this.arrBSPRanks || (this.arrBSPRanks = new Int32Array(nodes.length));
+        const nodes = this.bspNodes;
+        const tree = this.arrTranslucentBSPNodes;
+        const ranks = this.arrBSPRanks || (this.arrBSPRanks = new Int32Array(nodes.length));
         const x = cameraPosition.x, y = cameraPosition.y, z = cameraPosition.z;
         let top = 0, rank = 0;
 
-        arrBSPStack[top++] = 0;
+        if (!tree.length) return;
+        arrBSPStack[top++] = tree.length - 1;
         while (top > 0) {
             const entry = arrBSPStack[--top];
 
             if (entry < 0) {
                 let lastRank = rank;
-                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) lastRank++;
+                for (let coplanar = tree[~entry].index; coplanar >= 0; coplanar = nodes[coplanar].iPlane) lastRank++;
                 rank = lastRank;
-                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) ranks[coplanar] = --lastRank;
+                for (let coplanar = tree[~entry].index; coplanar >= 0; coplanar = nodes[coplanar].iPlane) ranks[coplanar] = --lastRank;
                 continue;
             }
 
-            const node = nodes[entry], plane = node.plane;
+            const node = tree[entry], plane = node.plane;
             const isFront = x * plane.x + y * plane.y + z * plane.z - plane.w > 0;
             const near = isFront ? node.front : node.back, far = isFront ? node.back : node.front;
 
-            if (top + 3 > arrBSPStack.length) { const grown = new Int32Array(arrBSPStack.length * 2); grown.set(arrBSPStack); arrBSPStack = grown; }
+            if (top + 3 > arrBSPStack.length) {
+                const grown = new Int32Array(arrBSPStack.length * 2);
+                grown.set(arrBSPStack);
+                arrBSPStack = grown;
+            }
             if (near >= 0) arrBSPStack[top++] = near;
             arrBSPStack[top++] = ~entry;
             if (far >= 0) arrBSPStack[top++] = far;
         }
 
         for (const section of sections) {
-            if (!section.mesh.visible) continue;
+            if (!section.mesh.visible || section.order.length <= 1) continue;
 
             const { order, previous, nodes: sectionNodes } = section;
 
-            order.sort((a, b) => ranks[sectionNodes[a]] - ranks[sectionNodes[b]]);
-
             let isChanged = false;
 
-            for (let i = 0; i < order.length; i++) if (order[i] !== previous[i]) { isChanged = true; break; }
+            for (let i = 1; i < order.length; i++) if (ranks[sectionNodes[order[i - 1]]] > ranks[sectionNodes[order[i]]]) { isChanged = true; break; }
             if (!isChanged) continue;
+
+            order.sort((a, b) => ranks[sectionNodes[a]] - ranks[sectionNodes[b]]);
 
             const index = section.mesh.geometry.index, target = index.array as Uint16Array;
             let offset = 0;
@@ -1585,11 +2099,13 @@ export class SectorObject extends GameObject {
 
         if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
             const stamp = ++this.staticVisibilityStamp;
+            this.updateStaticVisibleLeaves(visibleLeaves);
 
             for (const leafIndex of visibleLeaves) {
                 const actors = library.leafActors[leafIndex];
                 if (actors) {
-                    for (const actorBase of actors) {
+                    for (let i = 0; i < actors.length; i++) {
+                        const actorBase = actors[i];
                         if (actorBase.type !== "StaticMeshActor") continue;
                         const actor = actorBase as StaticMeshActorDecodeInfo_T;
                         const actorIndex = this.getStaticActorIndex(actor.uuid);
@@ -1599,17 +2115,12 @@ export class SectorObject extends GameObject {
                         tmpActorBox.min.fromArray(actor.bounds.min);
                         tmpActorBox.max.fromArray(actor.bounds.max);
 
-                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
+                        const isRangeIgnored = !!(actor as any).isRangeIgnored;
+                        const isFrustumVisible = !frustumCullingEnabled || (isRangeIgnored ? intersectsActorBounds(actor.bounds.min, actor.bounds.max, cameraFrustum, true) : cameraFrustum.intersectsBox(tmpActorBox));
                         const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
-                        const actorCenter = tmpActorBox.getCenter(tmpVec3);
-                        const distSq = cameraPosition.distanceToSquared(actorCenter);
-                        const isRangeIgnored = !!(actor as any).isRangeIgnored;
-                        const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
-
-                        if (isFrustumVisible && isZoneVisible && isInRange) {
+                        if (isFrustumVisible && isZoneVisible && this.zoneVisibility.intersectsBounds(actor.zoneMask, actor.bounds.min, actor.bounds.max) && (isRangeIgnored || isActorInRange(actor.bounds.min, actor.bounds.max, cameraPosition, staticMeshCullDistanceSq))) {
                             this.staticActorVisibleStamps[actorIndex] = stamp;
-                            this.staticActorDistances[actorIndex] = distSq;
                         }
                     }
                 }
@@ -1649,41 +2160,35 @@ export class SectorObject extends GameObject {
                     let elemRelight = (object as any).elemRelight as Uint8Array;
                     if (!elemRelight || elemRelight.length !== batchElements.length)
                         elemRelight = (object as any).elemRelight = new Uint8Array(batchElements.length);
-                    let elemActorIndices = (object as any).elemActorIndices as Int32Array;
-                    if (!elemActorIndices || elemActorIndices.length !== batchElements.length) {
-                        elemActorIndices = (object as any).elemActorIndices = new Int32Array(batchElements.length);
-                        for (let ei = 0; ei < batchElements.length; ei++) elemActorIndices[ei] = this.getStaticActorIndex(batchElements[ei].uuid);
-                    }
-                    const candidateStamps = this.staticActorCandidateStamps, visibleStamps = this.staticActorVisibleStamps, actorDistances = this.staticActorDistances;
+                    const batchVisibility = this.getBatchVisibility(batchElements), leafVisibility = batchVisibility.visible, centers = batchVisibility.centers;
                     let visibilityChanged = false;
+                    if (frustumCullingEnabled && batchVisibility.nodes.length) {
+                        batchVisibility.frustumVisible.fill(0);
+                        updateBatchFrustum(batchVisibility, batchElements, cameraFrustum, 0, 63);
+                    }
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
                         const elem = batchElements[ei];
-                        const actorIndex = elemActorIndices[ei];
-
-                        let elemVisible = visibleStamps[actorIndex] === stamp;
-                        let distSq = elemVisible ? actorDistances[actorIndex] : 0;
-
-                        if (!elemVisible && candidateStamps[actorIndex] !== stamp) {
-                            let inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
+                        let elemVisible = false, distSq = 0;
+                        let inVisibleLeaves = leafVisibility[ei] === 1;
+                        if (leafVisibility[ei] === 2) {
+                            inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
                             if (!inVisibleLeaves) {
                                 for (const li of elem.leaves) {
                                     if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
                                 }
                             }
+                            leafVisibility[ei] = inVisibleLeaves ? 1 : 0;
+                        }
 
-                            if (inVisibleLeaves) {
-                                tmpActorBox.min.fromArray(elem.boundsMin);
-                                tmpActorBox.max.fromArray(elem.boundsMax);
-
-                                const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
-                                const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
-                                const actorCenter = tmpActorBox.getCenter(tmpVec3);
-                                distSq = cameraPosition.distanceToSquared(actorCenter);
-                                const isInRange = elem.isRangeIgnored || distSq <= staticMeshCullDistanceSq;
-
-                                elemVisible = isFrustumVisible && isZoneVisible && isInRange;
-                            }
+                        if (inVisibleLeaves && !this.hiddenActorUuids.has(elem.uuid)) {
+                            const isFrustumVisible = !frustumCullingEnabled || (elem.isRangeIgnored ? intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum, true) : batchVisibility.nodes.length ? batchVisibility.frustumVisible[ei] === 1 : intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum));
+                            const offset = ei * 3;
+                            const x = cameraPosition.x - centers[offset];
+                            const y = cameraPosition.y - centers[offset + 1];
+                            const z = cameraPosition.z - centers[offset + 2];
+                            distSq = x * x + y * y + z * z;
+                            elemVisible = isFrustumVisible && (!frustumCullingEnabled || !elem.zoneMask || elem.zoneMask === finalZoneMask || !!(elem.zoneMask & finalZoneMask)) && this.zoneVisibility.intersectsBounds(elem.zoneMask, elem.boundsMin, elem.boundsMax) && (elem.isRangeIgnored || isActorInRange(elem.boundsMin, elem.boundsMax, cameraPosition, staticMeshCullDistanceSq));
                         }
 
                         elemDistances[ei] = distSq;
@@ -1704,6 +2209,7 @@ export class SectorObject extends GameObject {
 
                         for (const group of previousGroups) {
                             if (!group.transparent) continue;
+                            if (group.transparent === 2 && group.materialIndex !== previousMaterial) previousDistance = Infinity;
                             const distance = elemDistances[group.elementIndex];
 
                             if (distance > previousDistance || distance === previousDistance && group.materialIndex < previousMaterial) {
@@ -1724,9 +2230,9 @@ export class SectorObject extends GameObject {
                         let visibleGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
                         if (!visibleGroups) visibleGroups = (object as any).visibleBatchGroups = [];
 
-                        let groupCount = 0;
+                        let groupCount = visibilityChanged ? 0 : visibleGroups.length;
 
-                        for (let ei = 0; ei < batchElements.length; ei++) {
+                        if (visibilityChanged) for (let ei = 0; ei < batchElements.length; ei++) {
                             if (!elemVisibility[ei]) continue;
 
                             const distance = elemDistances[ei];
@@ -1735,17 +2241,18 @@ export class SectorObject extends GameObject {
                                 if (!g.count) continue;
 
                                 let entry = groupPool[groupCount];
-                                if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
+                                if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0, ordinal: 0 };
 
                                 entry.elementIndex = ei;
                                 entry.start = g.start;
                                 entry.count = g.count;
                                 entry.materialIndex = g.materialIndex;
                                 entry.distance = distance;
+                                entry.ordinal = groupCount;
 
                                 visibleGroups[groupCount++] = entry;
                             }
-                        }
+                        } else for (const group of visibleGroups) group.distance = elemDistances[group.elementIndex];
 
                         visibleGroups.length = groupCount;
 
@@ -1760,19 +2267,33 @@ export class SectorObject extends GameObject {
 
                     if (this.sortTransparent && object.visible && (object as any).sortedIndexBuffers) {
                         const mesh = object as LitActorMesh, index = geometry.index;
+                        const packing = cacheBatchPacking.get(geometry), repacked = visibilityChanged || sortChanged;
+                        const ranges = packing && packing.index === index && packing.indexVersion === index.version ? packing.ranges : null;
                         let offset = 0, changed = false;
 
                         for (const group of mesh.visibleBatchGroups) {
                             const sorted = mesh.sortedIndexBuffers.get(group.start);
-                            if (sorted && sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, visibilityChanged || sortChanged)) changed = true;
+                            if (sorted && !usesAlphaCore(Array.isArray(mesh.material) ? mesh.material[group.materialIndex] : mesh.material)) {
+                                const packed = ranges && ranges.get(group.start);
+                                const restored = repacked && (!packed || packed.stamp !== packing.stamp || packed.copied);
+                                if (sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, auxiliary || restored)) {
+                                    index.addUpdateRange(offset, group.count);
+                                    changed = true;
+                                }
+                            }
                             offset += group.count;
                         }
                         if (changed) {
-                            mesh.sortedIndexRange.count = offset;
-                            index.clearUpdateRanges();
-                            index.updateRanges.push(mesh.sortedIndexRange);
+                            const previousVersion = index.version;
+                            if (index.updateRanges.length > 64) {
+                                let start = index.updateRanges[0].start, end = start + index.updateRanges[0].count;
+                                for (const range of index.updateRanges) { start = Math.min(start, range.start); end = Math.max(end, range.start + range.count); }
+                                index.clearUpdateRanges();
+                                index.addUpdateRange(start, end - start);
+                            }
                             index.needsUpdate = true;
                             for (const group of mesh.batchRenderGroups) group.indexVersion = index.version;
+                            if (packing && packing.index === index && packing.indexVersion === previousVersion) packing.indexVersion = index.version;
                         }
                     }
 
@@ -1785,18 +2306,14 @@ export class SectorObject extends GameObject {
                         tmpActorBox.min.fromArray((object as any).actorBoundsMin);
                         tmpActorBox.max.fromArray((object as any).actorBoundsMax);
 
-                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
+                        const isFrustumVisible = !frustumCullingEnabled || ((object as any).actorRangeIgnored ? intersectsActorBounds((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraFrustum, true) : cameraFrustum.intersectsBox(tmpActorBox));
                         const zoneMask = (object as any).actorZoneMask as bigint;
                         const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
-                        const actorCenter = tmpActorBox.getCenter(tmpVec3);
-                        const distSq = cameraPosition.distanceToSquared(actorCenter);
-                        const isInRange = (object as any).actorRangeIgnored || distSq <= staticMeshCullDistanceSq;
-
-                        isVisible = isFrustumVisible && isZoneVisible && isInRange;
+                        isVisible = isFrustumVisible && isZoneVisible && ((object as any).actorRangeIgnored || isActorInRange((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraPosition, staticMeshCullDistanceSq));
                     }
 
-                    object.visible = isVisible;
-                    if (isVisible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
+                    object.visible = isVisible && !this.hiddenActorUuids.has(uuid);
+                    if (object.visible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
                 }
             }
 
@@ -1826,7 +2343,7 @@ export class SectorObject extends GameObject {
                 const isInRange = isRangeIgnored || (dx * dx + dy * dy) <= emitterCullDistanceSq;
                 if (!isInRange) continue;
 
-                let isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin);
+                let isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin) && this.zoneVisibility.intersectsBounds(zoneMask, bounds.min, bounds.max);
 
                 if (!isFrustumVisible) {
                     for (const child of this.getEmitterObjects(actorBase.uuid)) {
@@ -1836,7 +2353,7 @@ export class SectorObject extends GameObject {
                         tmpEmitterBox.copy(box).applyMatrix4(child.matrixWorld);
                         tmpEmitterBox.expandByScalar((child as any).worldParticleExtent);
 
-                        if (cameraFrustum.intersectsBox(tmpEmitterBox)) {
+                        if (cameraFrustum.intersectsBox(tmpEmitterBox) && this.zoneVisibility.intersectsBox(zoneMask, tmpEmitterBox)) {
                             isFrustumVisible = true;
                             break;
                         }
@@ -1853,6 +2370,57 @@ export class SectorObject extends GameObject {
         this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
     }
 
+    protected updateStaticVisibleLeaves(visibleLeaves: Set<number>): void {
+        const previous = this.cacheStaticVisibleLeaves;
+        if (previous.size === visibleLeaves.size) {
+            let unchanged = true;
+            for (const leaf of visibleLeaves) if (!previous.has(leaf)) { unchanged = false; break; }
+            if (unchanged) return;
+        }
+        previous.clear();
+        for (const leaf of visibleLeaves) previous.add(leaf);
+        this.staticLeafVisibilityVersion++;
+    }
+
+    public *prepareBatchVisibility(): Generator<void, void> {
+        for (const object of this.staticMeshMap.values()) {
+            if (!(object as any).isBatch || !(object as any).batchElements) continue;
+
+            this.getBatchVisibility((object as any).batchElements);
+            yield;
+        }
+    }
+
+    protected getBatchVisibility(elements: any[]): BatchVisibility_T {
+        let cached = this.cacheBatchVisibility.get(elements);
+        if (!cached || cached.visible.length !== elements.length) {
+            const centers = new Float64Array(elements.length * 3);
+            for (let i = 0; i < elements.length; i++) {
+                const min = elements[i].boundsMin, max = elements[i].boundsMax;
+                if (max[0] < min[0] || max[1] < min[1] || max[2] < min[2]) continue;
+                centers[i * 3] = (min[0] + max[0]) * .5;
+                centers[i * 3 + 1] = (min[1] + max[1]) * .5;
+                centers[i * 3 + 2] = (min[2] + max[2]) * .5;
+            }
+            const order = [], nodes: BatchBoundsNode_T[] = [];
+            let finiteBounds = elements.length >= 32;
+            for (let i = 0; i < elements.length; i++) {
+                order.push(i);
+                for (let axis = 0; axis < 3; axis++) {
+                    if (!Number.isFinite(elements[i].boundsMin[axis]) || !Number.isFinite(elements[i].boundsMax[axis]) || elements[i].boundsMax[axis] < elements[i].boundsMin[axis]) finiteBounds = false;
+                }
+            }
+            if (finiteBounds) buildBatchBounds(elements, centers, order, nodes, 0, elements.length);
+            cached = { version: -1, visible: new Uint8Array(elements.length), centers, nodes, order, frustumVisible: new Uint8Array(elements.length) };
+            this.cacheBatchVisibility.set(elements, cached);
+        }
+        if (cached.version !== this.staticLeafVisibilityVersion) {
+            cached.visible.fill(2);
+            cached.version = this.staticLeafVisibilityVersion;
+        }
+        return cached;
+    }
+
     protected getStaticActorIndex(uuid: string): number { // string-keyed sets dominated the per-frame visibility pass while the camera turns
         let index = this.cacheStaticActorIndices.get(uuid);
 
@@ -1863,14 +2431,12 @@ export class SectorObject extends GameObject {
 
         if (index >= this.staticActorVisibleStamps.length) {
             const size = this.staticActorVisibleStamps.length * 2;
-            const candidates = new Uint32Array(size), visible = new Uint32Array(size), distances = new Float64Array(size);
+            const candidates = new Uint32Array(size), visible = new Uint32Array(size);
 
             candidates.set(this.staticActorCandidateStamps);
             visible.set(this.staticActorVisibleStamps);
-            distances.set(this.staticActorDistances);
             this.staticActorCandidateStamps = candidates;
             this.staticActorVisibleStamps = visible;
-            this.staticActorDistances = distances;
         }
 
         return index;
@@ -1920,28 +2486,52 @@ export class SectorObject extends GameObject {
             const originalGroups = (batch as any).originalGroups as any[];
             if (!sectors || !batchGeo || !originalGroups) continue;
 
-            let groupKey = "";
-            const visibleGroups: any[] = [];
+            let cached = this.cacheTerrainVisibility.get(batch);
+            let changed = !cached || cached.key !== (batch as any).visibleGroupKey;
+            if (changed) {
+                cached = { key: (batch as any).visibleGroupKey, visible: [] };
+                this.cacheTerrainVisibility.set(batch, cached);
+            }
 
-            sectors.forEach(sector => {
-                const isVisible = zoneVisible && (!frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds));
-
+            let visibleCount = 0;
+            for (let i = 0; i < sectors.length; i++) {
+                const sector = sectors[i];
+                const isVisible = zoneVisible && (!frustumCullingEnabled || intersectsBoxIgnoringRange(sector.bounds, cameraFrustum)); // bIgnoredRange meshes draw past the fog plane, terrain must still occlude them
                 if (isVisible) {
+                    if (cached.visible[visibleCount] !== i) { changed = true; cached.visible[visibleCount] = i; }
+                    visibleCount++;
                     sector.update(this, environment);
-                    const start = sector.batchGroupOffset;
-                    const count = sector.batchGroupCount;
-                    groupKey += start + ",";
-                    for (let i = start; i < start + count; i++) {
-                        visibleGroups.push(originalGroups[i]);
-                    }
                 }
 
                 const decorations = this.terrainRenderables.decorations.get(sector.terrainSegmentUuid);
-                if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));
-            });
+                if (decorations) for (let j = 0; j < decorations.length; j++) decorations[j].updateVisibility(cameraPosition, isVisible, this.renderDeco);
+            }
 
+            if (cached.visible.length !== visibleCount) { changed = true; cached.visible.length = visibleCount; }
+            if (!changed) continue;
+            let groupKey = "";
+            for (let i = 0; i < cached.visible.length; i++) groupKey += sectors[cached.visible[i]].batchGroupOffset + ",";
             if (groupKey === (batch as any).visibleGroupKey) continue;
-            (batch as any).visibleGroupKey = groupKey;
+            cached.key = (batch as any).visibleGroupKey = groupKey;
+
+            const visibleGroups: BatchRenderGroup_T[] = [];
+            const index = batchGeo.index, position = batchGeo.getAttribute("position") as THREE.BufferAttribute;
+            for (let i = 0; i < cached.visible.length; i++) {
+                const sector = sectors[cached.visible[i]], start = sector.batchGroupOffset, count = sector.batchGroupCount;
+                const bounds = getBatchBounds(batchGeo, index.array as Uint32Array, originalGroups[start]);
+                const run = visibleGroups.length - count;
+                const isAdjacent = run >= 0 && visibleGroups[run].start + visibleGroups[run].count === originalGroups[start].start;
+
+                for (let j = 0; j < count; j++) {
+                    const group = originalGroups[start + j];
+
+                    if (isAdjacent) {
+                        visibleGroups[run + j].count += group.count;
+                        visibleGroups[run + j].boundsCount += group.count;
+                        visibleGroups[run + j].bounds.union(bounds);
+                    } else visibleGroups.push({ start: group.start, count: group.count, materialIndex: group.materialIndex, bounds: bounds.clone(), boundsStart: group.start, boundsCount: group.count, position, index, positionVersion: position.version, indexVersion: index.version });
+                }
+            }
 
             if (visibleGroups.length > 0) {
                 batch.visible = true;
@@ -1991,7 +2581,7 @@ export class SectorObject extends GameObject {
                     const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
                     const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
-                    if (isFrustumVisible && isZoneVisible) {
+                    if (isFrustumVisible && isZoneVisible && !this.hiddenActorUuids.has(actor.uuid)) {
                         visibleActorUuids.add(actor.uuid);
                     }
                 }
@@ -2026,7 +2616,7 @@ export class SectorObject extends GameObject {
                         elemVisible = isFrustumVisible && isZoneVisible;
                     }
 
-                    if (elemVisible) {
+                    if (elemVisible && !this.hiddenActorUuids.has(elem.uuid)) {
                         for (const g of elem.groups) {
                             visibleGroups.push(g);
                         }
@@ -2048,7 +2638,7 @@ export class SectorObject extends GameObject {
                     (object as any)?.update(this, environment);
                 }
             } else {
-                const isVisible = visibleActorUuids.has(uuid);
+                const isVisible = visibleActorUuids.has(uuid) && !this.hiddenActorUuids.has(uuid);
                 object.visible = isVisible;
                 if (isVisible) {
                     visibleCount++;

@@ -1,7 +1,8 @@
 import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
 import type { FVector } from "./un-vector";
 import type { FColor } from "./un-color";
-import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr, ColorArr } from "./library-types";
 
 export type PhysicsVolumeDecodeInfo_T = IBaseObjectDecodeInfo & {
@@ -126,11 +127,11 @@ export abstract class UPhysicsVolume extends UVolume {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): PhysicsVolumeDecodeInfo_T | IWaterVolumeDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): PhysicsVolumeDecodeInfo_T | IWaterVolumeDecodeInfo {
         const isWater = this.isWaterVolume || this.isL2WaterVolume || this.constructor.friendlyName === "WaterVolume";
 
         if (!isWater)
-            return { uuid: this.uuid, type: "PhysicsVolume", name: this.objectName, objectPath: this.name, bsp: this.brush ? this.getWorldBspInfo() : null };
+            return { uuid: this.uuid, type: "PhysicsVolume", name: this.objectName, objectPath: this.name, bsp: this.brush ? this.getWorldBspInfo(builder) : null };
 
         const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as Vector3Arr;
         const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as Vector3Arr;
@@ -142,7 +143,7 @@ export abstract class UPhysicsVolume extends UVolume {
         } : null;
 
         return {
-            ...(this.brush ? super.getDecodeInfo(library) : { uuid: this.uuid, name: this.objectName }),
+            ...(this.brush ? super.getDecodeInfo() : { uuid: this.uuid, name: this.objectName }),
             type: "WaterVolume",
             objectPath: this.name,
             priority: this.priority ?? this.locationPriority ?? 0,
@@ -154,7 +155,7 @@ export abstract class UPhysicsVolume extends UVolume {
             cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as ColorArr : null,
             waitHitEffect: this.waitHitEffect ?? null,
             runHitEffect: this.runHitEffect ?? null,
-            bsp: this.brush ? this.getWorldBspInfo() : null
+            bsp: this.brush ? this.getWorldBspInfo(builder) : null
         };
     }
 }

@@ -1,5 +1,7 @@
 import type { Vector3Arr } from "@l2js/engine";
 
+const LINEAR_CONTROL_SCALE = Math.fround(1 / 3);
+
 type MatineePath_T = { samples: Vector3Arr[], length: number };
 
 const tmpPoints: Vector3Arr[] = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
@@ -16,7 +18,7 @@ function sampleMatineePath(from: Vector3Arr, startControl: Vector3Arr, to: Vecto
 
     if (pathStyle === "linear") {
         const square = tmpDir[0] * tmpDir[0] + tmpDir[1] * tmpDir[1] + tmpDir[2] * tmpDir[2];
-        const length = Math.fround(Math.sqrt(square)), scale = length * Math.fround(1 / 3);
+        const length = Math.fround(Math.sqrt(square)), scale = length * LINEAR_CONTROL_SCALE;
 
         for (let i = 0; i < 3; i++) {
             const direction = square >= 1e-8 ? Math.fround(tmpDir[i] / Math.sqrt(square)) : tmpDir[i];
@@ -37,7 +39,9 @@ function sampleMatineePath(from: Vector3Arr, startControl: Vector3Arr, to: Vecto
         const p0 = tmpPoints[0][i], p1 = tmpPoints[1][i], p2 = tmpPoints[2][i], p3 = tmpPoints[3][i];
         const b = i === 0 ? Math.fround((p1 - p0) * 3) : i === 2 ? Math.fround(p1 - p0) * 3 : (p1 - p0) * 3;
         const c = i === 0 ? Math.fround(Math.fround(Math.fround(p2 - p1 * 2) + p0) * 3) : i === 1 ? Math.fround(Math.fround(p2 - p1 * 2 + p0) * 3) : Math.fround((p2 - p1 * 2 + p0) * 3);
-        const d = i === 0 ? Math.fround(Math.fround(Math.fround(p3 - p2 * 3) + p1 * 3) - p0) : i === 1 ? Math.fround(Math.fround(p3 - p2 * 3) + p1 * 3 - p0) : Math.fround(Math.fround(p3 - Math.fround(p2 * 3)) + Math.fround(p1 * 3) - p0);
+        const d = i === 0 ?
+            Math.fround(Math.fround(Math.fround(p3 - p2 * 3) + p1 * 3) - p0) :
+            i === 1 ? Math.fround(Math.fround(p3 - p2 * 3) + p1 * 3 - p0) : Math.fround(Math.fround(p3 - Math.fround(p2 * 3)) + Math.fround(p1 * 3) - p0);
         const cq = i === 1 ? Math.fround(c * q * q) : Math.fround(Math.fround(c * q) * q);
         const dq = i === 0 ? Math.fround(Math.fround(Math.fround(d * q) * q) * q) : i === 1 ? Math.fround(Math.fround(d * q * q) * q) : Math.fround(Math.fround(d * q) * q * q);
 

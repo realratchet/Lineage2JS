@@ -71,7 +71,22 @@ export class TerrainDecoration extends InstancedMesh {
 
     public setTerrain(terrain: Terrain) {
         this.terrain = terrain;
+        terrain.decorations.push(this);
         this.updateLighting();
+    }
+
+    public getDecoLayerAlpha(location: Vector3, radius: number = 0): number {
+        const matrices = this.instanceMatrix.array;
+        const range = radius > 0 ? radius : 64;
+        let count = 0;
+
+        for (let i = 0; i < this.count; i++) {
+            const dx = matrices[i * 16 + 12] - location.x;
+            const dy = matrices[i * 16 + 13] - location.y;
+
+            if (Math.sqrt(dx * dx + dy * dy) < range) count++;
+        }
+        return count;
     }
 
     public updateLighting() {

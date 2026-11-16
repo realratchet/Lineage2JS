@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { initChunkerMiddleware } = require("./chunker-middleware");
+const prebuiltClasses = process.env.PREBUILT_CLASSES !== "0" && (process.env.PREBUILT_CLASSES === "1" || process.env.CLASS_CABINET_SOURCE || fs.existsSync(path.resolve(__dirname, "../assets-c4"))) ? require("./prebuild-classes") : null;
 // const { SourceMapDevToolPlugin } = require("webpack");
 
 function* walkSync(dir) {
@@ -21,7 +22,8 @@ const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U"
 
 function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats, httpAssets, defaultLoginServer, preloadSectors = [], characterCreationRaces = [0, 1, 2, 3, 4], loginExitUrl = "", clientDownloadUrl = "" }) {
-        if (!characterCreationRaces.length || characterCreationRaces.some(race => !Number.isInteger(race) || race < 0 || race > 4) || new Set(characterCreationRaces).size !== characterCreationRaces.length)
+        if (!characterCreationRaces.length || characterCreationRaces.some(race => !Number.isInteger(race) || race < 0 || race > 4) ||
+            new Set(characterCreationRaces).size !== characterCreationRaces.length)
             throw new Error(`Invalid character creation races: ${characterCreationRaces}`);
         if (preloadSectors.some(sector => !/^\d+_\d+$/.test(sector))) throw new Error(`Invalid preload sectors: ${preloadSectors}`);
 
@@ -34,8 +36,16 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             ]);
 
         const dirAssets = path.resolve(__dirname, "../assets-c4") + path.sep;
-        const plugins = [new webpack.DefinePlugin({ BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"), DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""), PRELOAD_SECTORS: JSON.stringify(preloadSectors), CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces), LOGIN_EXIT_URL: JSON.stringify(loginExitUrl), CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl) })];
+        const plugins = [new webpack.DefinePlugin({
+            BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"),
+            DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""),
+            PRELOAD_SECTORS: JSON.stringify(preloadSectors),
+            CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces),
+            LOGIN_EXIT_URL: JSON.stringify(loginExitUrl),
+            CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl)
+        })];
         const servedAssets = { files: Object.create(null), version: "" };
+        if (prebuiltClasses) plugins.push(new prebuiltClasses.PrebuiltClassesPlugin());
         const dirThreeWasm = path.resolve(__dirname, "../node_modules/three-wasm/src");
 
         if (!isWorker) {
@@ -104,6 +114,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             plugins.push(new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
+                    { from: path.join(path.dirname(require.resolve("zlib-streams/package.json")), "LICENSE"), to: "zlib-streams.LICENSE" },
                     ...(httpAssets ? [{ from: "../asset-list.json", to: "asset-list.json" }] : []),
                     // ...copyFiles
                 ],
@@ -137,6 +148,9 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         }
 
         const rules = [{
+            test: /zlib-streams[\\/]dist[\\/]zip-module\.wasm$/,
+            type: "asset/inline"
+        }, {
             test: /\.(sa|sc|c)ss$/,
             use: pluginsSASS,
             exclude: /(node_modules|submodules)/,
@@ -145,6 +159,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             loader: "raw-loader"
         }];
 
+
+        if (!isWorker) rules.push({
+            test: /three[\\/]src[\\/]renderers[\\/](WebGLRenderer|webgl[\\/](WebGLBindingStates|WebGLPrograms|WebGLShaderCache))\.js$/,
+            loader: path.resolve(__dirname, "three-override-loader.js")
+        });
 
         rules.unshift({
             test: /\.vue$/,
@@ -238,13 +257,22 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
 
+                    const httpAssetPaths = Object.create(null);
+
+                    if (httpAssets)
+                        for (const fname of walkSync(dirAssets)) {
+                            const relPath = path.relative(dirAssets, fname).split(path.sep).join("/");
+
+                            httpAssetPaths[relPath.toLowerCase()] = relPath;
+                        }
+
                     middlewares.unshift({ name: "served-assets", path: "/assets", middleware: (req, res, next) => {
                         let assetPath;
 
                         try { assetPath = decodeURIComponent(req.url.split("?")[0]).slice(1).toLowerCase(); }
                         catch (e) { return res.sendStatus(400); }
 
-                        const file = servedAssets.files[assetPath];
+                        const file = servedAssets.files[assetPath] || httpAssetPaths[assetPath];
 
                         if (file) return res.sendFile(path.resolve(dirAssets, file));
                         if (httpAssets) return next();
@@ -268,6 +296,7 @@ const resolve = {
     },
     extensions: [".tsx", ".ts", ".js"],
     alias: {
+        "@generated/classes": prebuiltClasses ? prebuiltClasses.output : path.resolve(__dirname, "prebuilt-classes-empty.js"),
         "@l2js/engine$": path.resolve(__dirname, "../src/assets/unreal/contracts/index.ts"),
         "@l2js/engine": path.resolve(__dirname, "../src/assets/unreal"),
         "@l2js/core": "@l2js/core/src"

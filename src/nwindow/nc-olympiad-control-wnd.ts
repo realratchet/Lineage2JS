@@ -34,7 +34,7 @@ export class NCOlympiadControlWnd {
         layer.button(this.element, 19, 29, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.MoveToArena), () => { if (this.onOtherGame) this.onOtherGame(); });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 38), 0); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 38), 0); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
 }
