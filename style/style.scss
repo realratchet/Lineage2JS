@@ -15,6 +15,13 @@ body {
     position: absolute;
     display: block;
     background-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+
+    input, textarea, [contenteditable="true"] {
+        -webkit-user-select: text;
+        user-select: text;
+    }
     
     viewport {
         width: 100%;
