@@ -2,6 +2,7 @@ import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
 import { DIGIT_CELLS, DIGIT_FONTS, DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
 import { SKIN_SLOTS } from "./skin-textures";
+import { supportsBitmap } from "../browser";
 
 const CARET_BLINK = 500;
 const TEXT_COLOR = 0xffdcdcdc;
@@ -378,7 +379,7 @@ export class NDomLayer {
 
             page.forEach(i => context.drawImage(images[i], places[i][0], places[i][1]));
 
-            const url = URL.createObjectURL(encodeBitmap(atlas));
+            const url = supportsBitmap ? URL.createObjectURL(encodeBitmap(atlas)) : atlas.toDataURL("image/png");
 
             page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth: atlas.width, atlasHeight: atlas.height });
             atlas.width = atlas.height = 0;
@@ -487,7 +488,11 @@ export class NDomLayer {
     public getTintUrl(path: string, color: number, alphaRef: number = -1, useIntrinsicAlpha = true): string {
         const key = `${this.manager.canvas.getTextureKey(path, useIntrinsicAlpha)}:${color & 0xffffff}:${alphaRef}`;
 
-        if (!this.cacheTintUrls.has(key)) this.cacheTintUrls.set(key, URL.createObjectURL(encodeBitmap(this.manager.canvas.getTintedImage(path, color, alphaRef, useIntrinsicAlpha))));
+        if (!this.cacheTintUrls.has(key)) {
+            const canvas = this.manager.canvas.getTintedImage(path, color, alphaRef, useIntrinsicAlpha);
+
+            this.cacheTintUrls.set(key, supportsBitmap ? URL.createObjectURL(encodeBitmap(canvas)) : canvas.toDataURL("image/png"));
+        }
 
         return this.cacheTintUrls.get(key);
     }
