@@ -264,7 +264,7 @@ export class NCShopWnd {
     public async paintItems(scrollSide = -1) {
         const generation = ++this.generation, strings = this.layer.getManager().strings;
 
-        await this.layer.loadTextures([...new Set(this.items.flat().map(item => strings.itemIcons[item.itemId]))]);
+        await this.layer.loadTextures([...new Set(this.items.flat().map(item => strings.itemIcons[item.itemId]).filter(icon => !!icon))]);
         if (generation !== this.generation) return;
 
         this.lists.forEach((list, side) => {
@@ -292,7 +292,8 @@ export class NCShopWnd {
 
                 frame.dataset.selected = "";
                 frame.hidden = item !== this.selected[side];
-                this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, strings.itemIcons[item.itemId]);
+                const icon = strings.itemIcons[item.itemId];
+                if (icon) this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, icon);
                 if (!this.isSell && !this.isPreview && !this.isStore && side === 0 && item.count > 0) this.layer.text(button, String(item.count), 0xffff0000, FontType_T.SMALL, 1, 1);
                 button.addEventListener("mouseenter", event => this.hoverItem(side, index, event.buttons));
                 button.addEventListener("mouseleave", () => {
