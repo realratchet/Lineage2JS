@@ -316,6 +316,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     public isFollowingPlayer(): boolean { return this.followPlayer || this.isPawnFreeCamera; }
     public isCameraInputLocked(): boolean { return this.isCameraLocked; }
     public isFreeCameraEnabled(): boolean { return this.isFreeCamera; }
+    public setInvertMouseWheel(isInverted: boolean): void { this.controls.orbit.invertWheel = isInverted; }
 
     public setFreeCamera(enabled: boolean): void {
         if (enabled && this.isCameraLocked) return;
@@ -1133,6 +1134,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("bCameraManuallyRotating", false);
         properties.set("bCameraMovingToDefault", true);
         orbit.enableRotate = false;
+        if (!network.getGameClient().isPlayingReplay()) network.checkTutorialClientEvent(8); // UInput::Exec 0x8496c2..0x8496d3
     }
 
     protected updateDefaultCamera(wasMovingToDefault: boolean, target: Vector3): boolean {
@@ -1527,8 +1529,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network");
 
         if (network.isInWorld()) {
-            if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, event.shiftKey)) return;
-            if (physicsIntersection && network.requestAction(physicsIntersection.actor, event.shiftKey, event.ctrlKey || network.ui.getInputModifiers()[0])) return;
+            const [isCtrl, isShift] = network.ui.getInputModifiers();
+
+            if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, isShift)) return;
+            if (physicsIntersection && network.requestAction(physicsIntersection.actor, isShift, isCtrl)) return;
 
             if (physicsIntersection) {
                 tmpMouseIntersection.copy(physicsIntersection.location);
@@ -1576,7 +1580,11 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onHandleMouseUp(event: MouseEvent): void {
         if (event.button === 2) {
+            const held = event.timeStamp - this.rightMouseDownTime;
+
             this.rightMouseDownTime = -Infinity;
+            if (held !== Infinity && this.inputBindings && !this.replayCameraState) // WinDrv 0x11105b6d..0x11105b90: release amount is the held time in ms
+                this.inputBindings.process(EInputKey_T.IK_RightMouse, EInputAction_T.IST_Release, Math.fround(held), (command, action, amount, viewport) => parseInputCommand(command, "FixedDefaultCamera") === null || this.executeInputCommand(command, action, amount, viewport));
             return;
         }
         if (event.button !== 0) return;

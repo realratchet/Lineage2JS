@@ -16,6 +16,7 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
     public onCameraZoom: (direction: number, distance: number) => number = null;
     public unclippedDistance: number = 0;
     public unclippedOffset: Vector3 = null;
+    public invertWheel = false;
     protected nativeLike: boolean;
 
     [key: string]: any;
@@ -607,8 +608,10 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
         function handleMouseWheel(event: WheelEvent) {
 
-            if (scope.nativeLike && scope.onCameraZoom && event.deltaY !== 0) {
-                const direction = Math.sign(event.deltaY), distance = scope.unclippedDistance || scope.object.position.distanceTo(scope.target), next = scope.onCameraZoom(direction, distance);
+            const deltaY = scope.invertWheel ? -event.deltaY : event.deltaY;
+
+            if (scope.nativeLike && scope.onCameraZoom && deltaY !== 0) {
+                const direction = Math.sign(deltaY), distance = scope.unclippedDistance || scope.object.position.distanceTo(scope.target), next = scope.onCameraZoom(direction, distance);
 
                 if (next !== null) {
                     scope.unclippedDistance = next;
@@ -620,8 +623,8 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
             let dollyFunc = null;
 
-            if (event.deltaY < 0) dollyFunc = scope.nativeLike ? dollyOut : dollyIn;
-            else if (event.deltaY > 0) dollyFunc = scope.nativeLike ? dollyIn : dollyOut;
+            if (deltaY < 0) dollyFunc = scope.nativeLike ? dollyOut : dollyIn;
+            else if (deltaY > 0) dollyFunc = scope.nativeLike ? dollyIn : dollyOut;
 
             dollyFunc?.(getZoomScale());
 

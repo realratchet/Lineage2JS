@@ -2,7 +2,7 @@ import { loginExitUrl } from "../build-settings";
 import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "../loading-progress";
 import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
-import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
+import type { AudioConfig_T, GameOptions_T } from "../assets/unreal/conf-files/un-conf-system";
 import { Vector3 } from "three";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import NWindowManager from "./nwindow-manager";
@@ -164,7 +164,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected heroTowerWnd: HeroTowerWndView_T = null;
     protected commandInfoWnd: CommandInfoWndView_T = null;
     protected trainWnd: TrainWndView_T = null;
-    protected options: AssetManager["userConfig"] & { audio: AudioConfig_T };
+    protected options: AssetManager["userConfig"] & { audio: AudioConfig_T; game: GameOptions_T };
     protected privateShopWnd: PrivateShopWndView_T = null;
     protected privateBuyWnd: PrivateBuyWndView_T = null;
     protected vipShopWnd: VIPShopWndView_T = null;
@@ -248,7 +248,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render");
 
         this.manNetwork = network;
-        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl" }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
@@ -257,8 +257,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.strings = this.nwindow.strings;
         for (const type of ["keydown", "keyup", "mousedown", "mouseup", "mousemove"])
             window.addEventListener(type, (event: KeyboardEvent | MouseEvent) => {
-                this.inputCtrl = event.ctrlKey;
-                this.inputShift = event.shiftKey;
+                const forceKey = this.options.game.forceAttackKey;
+
+                this.inputCtrl = forceKey === "alt" ? event.altKey : forceKey === "shift" ? event.shiftKey : event.ctrlKey;
+                this.inputShift = forceKey === "shift" ? event.ctrlKey : event.shiftKey;
                 if (type === "mousedown" && (event as MouseEvent).button === 0) network.resetMacros();
                 if (type === "keydown" && !event.altKey && this.screen === "world" && this.chatWnd.isInputFocused()) {
                     const key = (event as KeyboardEvent).key;
@@ -622,7 +624,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }
         this.targetStatusWnd.onClose = () => network.cancelTarget();
         this.restartMenuWnd.onRestart = type => network.requestRestartPoint(type);
-        this.shortCutWnd.onUse = (page, slot, ctrl, shift) => network.useShortCut(page, slot, ctrl, shift);
+        this.shortCutWnd.onUse = (page, slot) => network.useShortCut(page, slot, this.inputCtrl, this.inputShift);
         this.shortCutWnd.onMove = (page, slot, targetPage, targetSlot) => network.moveShortCut(page, slot, targetPage, targetSlot);
         this.shortCutWnd.onDelete = (page, slot) => network.deleteShortCut(page, slot);
         this.shortCutWnd.onDrop = (page, slot, x, y) => this.macroWnd.dropCommand(`/${this.getStrings().commands[27]} ${page + 1} ${slot + 1}`, x * this.nwindow.canvas.cssScale, y * this.nwindow.canvas.cssScale);
@@ -632,7 +634,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             document.documentElement.classList.toggle("ndom-item-drag", !!entry);
         };
         this.shortCutWnd.onAutoSoulShot = (page, slot) => network.toggleAutoSoulShot(page, slot);
-        this.playerStatusWnd.onClick = shift => network.requestAction(render.player, shift);
+        this.playerStatusWnd.onClick = () => network.requestAction(render.player, this.inputShift);
         this.chatWnd.onSend = (text, type, target) => network.say(text, type, target);
         this.chatWnd.onBuildCommand = command => network.sendBypassBuildCmd(command);
         this.chatWnd.onCommand = (command, isShift) => network.execCommand(command, isShift);
@@ -731,9 +733,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.inventoryWnd = this.skin.createInventoryWnd(this.layer);
         this.petWnd = this.skin.createPetWnd(this.layer, this.inventoryWnd);
         this.summonedWnd = this.skin.createSummonedWnd(this.layer, this.inventoryWnd);
-        this.summonedWnd.onAction = (id, ctrl, shift) => network.useAction(id, ctrl, shift);
+        this.summonedWnd.onAction = id => network.useAction(id, this.inputCtrl, this.inputShift);
         this.petWnd.onUseItem = objectId => network.usePetItem(objectId);
-        this.petWnd.onAction = (id, ctrl, shift) => network.useAction(id, ctrl, shift);
+        this.petWnd.onAction = id => network.useAction(id, this.inputCtrl, this.inputShift);
         this.petWnd.onGetItem = item => this.transferPetItem(item, false);
         this.petWnd.onRename = () => this.renamePet();
         this.petWnd.onHideBag = owner => {
@@ -1264,8 +1266,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         };
         this.skillWnd = this.mainWnd.skillWnd;
         this.skillWnd.onShow = () => network.requestSkillList();
-        this.skillWnd.onUse = (id, ctrl, shift) => network.useSkill(id, ctrl, shift);
-        this.mainWnd.actionWnd.onUse = (id, ctrl, shift) => network.useAction(id, ctrl, shift);
+        this.skillWnd.onUse = id => network.useSkill(id, this.inputCtrl, this.inputShift);
+        this.mainWnd.actionWnd.onUse = id => network.useAction(id, this.inputCtrl, this.inputShift);
         void this.mainWnd.actionWnd.setActions(this.strings);
         void this.mainWnd.questWnd.setStrings(this.strings);
         void this.petWnd.setActions(this.strings);
@@ -1588,8 +1590,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (this.areHudWindowsAdded) return;
 
         this.areHudWindowsAdded = true;
-        this.petStatusWnd.onTargetAction = this.summonedStatusWnd.onTargetAction = (objectId, shift) => this.manNetwork.requestPetAction(objectId, shift);
-        this.partyWnd.onAction = (objectId, shift, ctrl) => this.manNetwork.requestPartyMemberAction(objectId, shift, ctrl);
+        this.petStatusWnd.onTargetAction = this.summonedStatusWnd.onTargetAction = objectId => this.manNetwork.requestPetAction(objectId, this.inputShift);
+        this.partyWnd.onAction = objectId => this.manNetwork.requestPartyMemberAction(objectId, this.inputShift, this.inputCtrl);
         this.partyWnd.onAssist = objectId => this.manNetwork.requestPartyMemberTarget(objectId);
         void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, TEX_MOUSE_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack, ...arrBalloonTextures]);
     }
@@ -2663,7 +2665,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         localStorage.setItem("gamma:*", String(gamma));
     }
 
-    protected applyGameOptions(options: Partial<GameConfig_T>) {
+    protected applyGameOptions(options: Partial<GameOptions_T>) {
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error(`Invalid game options.`);
 
         for (const [key, value] of Object.entries(options)) {
@@ -2683,6 +2685,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "transparencyMode":
                 case "oldChatting":
                 case "enterChatting":
+                case "invertMouseWheel":
                 case "myName":
                 case "npcName":
                 case "groupName":
@@ -2701,14 +2704,18 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "partyLooting":
                     if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 4) throw new Error(`Invalid game option '${key}'.`);
                     break;
+                case "forceAttackKey":
+                    if (value !== "ctrl" && value !== "alt" && value !== "shift") throw new Error(`Invalid game option '${key}'.`);
+                    break;
                 default: throw new Error(`Unknown game option '${key}'.`);
             }
         }
 
         const asset = this.manNetwork.getParent().getComponent("asset");
 
-        this.options.game = { ...asset.userConfig.game, ...options };
+        this.options.game = { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl", ...options };
         asset.playerController.isEnterChatting = this.options.game.enterChatting;
+        this.manGame.getComponent("input").setInvertMouseWheel(this.options.game.invertMouseWheel);
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
         this.manRender.setSortTransparent(this.options.game.sortTransparent);
@@ -2742,7 +2749,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         localStorage.setItem("option:UIScale", String(scale));
     }
 
-    public setGameOptions(options: Partial<GameConfig_T>) {
+    public setGameOptions(options: Partial<GameOptions_T>) {
         this.applyGameOptions(options);
         localStorage.setItem("option:*", JSON.stringify(options));
     }

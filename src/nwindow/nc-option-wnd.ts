@@ -2,7 +2,7 @@ import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom"
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
-import type { AudioConfig_T, BackgroundAudio_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
+import type { AudioConfig_T, BackgroundAudio_T, ForceAttackKey_T, GameConfig_T, GameOptions_T } from "../assets/unreal/conf-files/un-conf-system";
 import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import SysString_T from "./sys-string";
@@ -23,8 +23,8 @@ export const PAWN_LIMITS = [50, 100, 200, 300, 400, 10000];
 export class NCOptionWnd {
     public static getTextures() { return [TEX_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...NCComboBox.getTextures(), ...NCFrameCtrl.getTextures()]; }
     public readonly element: HTMLDivElement;
-    public getOptions: () => GameConfig_T = null;
-    public onApply: (options: GameConfig_T) => void = null;
+    public getOptions: () => GameOptions_T = null;
+    public onApply: (options: GameOptions_T) => void = null;
     public getAudioOptions: () => AudioConfig_T = null;
     public onApplyAudio: (options: AudioConfig_T) => void = null;
     public getGamma: () => number = null;
@@ -77,6 +77,9 @@ export class NCOptionWnd {
     protected readonly systemMsgWndDamage: NDomCheckBox_T;
     protected readonly systemMsgWndExpendableItem: NDomCheckBox_T;
     protected readonly partyLooting: NCComboBox;
+    protected readonly invertMouseWheel: NDomCheckBox_T;
+    protected readonly forceAttackKey: NCComboBox;
+    protected readonly forceAttackKeys: ForceAttackKey_T[] = ["ctrl", "alt", "shift"];
     protected lootType = 0;
     protected lootEnabled = true;
 
@@ -272,7 +275,8 @@ export class NCOptionWnd {
         this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(SysString_T.SystemMessageWindow), () => this.updateSystemMessageControls());
         this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(SysString_T.Damage));
         this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(SysString_T.Consumables));
-        [...this.nameChecks, this.autoTrackingPawn, this.useColorCursor, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem].forEach(checkbox => {
+        this.invertMouseWheel = layer.checkbox(game, 25, 274, 150, 12, "Invert mouse scroll");
+        [...this.nameChecks, this.autoTrackingPawn, this.useColorCursor, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem, this.invertMouseWheel].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
                 if (checkbox.getAttribute("aria-disabled") === "true" || event.repeat || event.key !== " " && event.key !== "Enter") return;
@@ -300,6 +304,20 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
             this.partyLooting.setOpen(false);
         });
+        const forceText = layer.text(game, "Forced attack", 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText("Forced attack"), 396);
+
+        this.forceAttackKey = new NCComboBox(layer, game, 87, 393, 125, 17);
+        this.forceAttackKey.setItems(["Ctrl", "Alt", "Shift"]);
+        this.forceAttackKey.element.tabIndex = 0;
+        this.forceAttackKey.element.setAttribute("role", "combobox");
+        this.forceAttackKey.element.setAttribute("aria-label", "Forced attack");
+        this.forceAttackKey.element.addEventListener("keydown", event => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+            event.preventDefault();
+            this.forceAttackKey.setSelected(Math.max(0, Math.min(2, this.forceAttackKey.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
+            this.forceAttackKey.setOpen(false);
+        });
         layoutSections(this.video, [
             [[gammaText, this.gamma.element], [textureText, this.textureDetail.element]],
             [[terrainText, this.terrainRange.element], [rangeText, this.pawnRange.element], [limitText, this.pawnLimit.element]],
@@ -318,9 +336,9 @@ export class NCOptionWnd {
         layoutSections(game, [
             [[interfaceText, initialize, this.transparencyMode]],
             [[displayText, names]],
-            [[this.enterChatting, this.oldChatting], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle]],
+            [[this.enterChatting, this.oldChatting], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle], [this.invertMouseWheel]],
             [[this.systemMsgWnd], [this.systemMsgWndDamage, this.systemMsgWndExpendableItem]],
-            [[lootText, this.partyLooting.element]]
+            [[lootText, this.partyLooting.element], [forceText, this.forceAttackKey.element]]
         ]);
         names.parentElement.classList.add("ndom-options-tree");
         const footer = document.createElement("div");
@@ -359,6 +377,7 @@ export class NCOptionWnd {
         this.textureDetail.setOpen(false);
         this.antiAliasing.setOpen(false);
         this.partyLooting.setOpen(false);
+        this.forceAttackKey.setOpen(false);
         this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
         this.backgroundAudio.setOpen(false);
@@ -404,6 +423,8 @@ export class NCOptionWnd {
             this.updateSystemMessageControls();
             this.lootType = options.partyLooting;
             this.partyLooting.setSelected(this.lootType);
+            this.invertMouseWheel.setChecked(options.invertMouseWheel);
+            this.forceAttackKey.setSelected(this.forceAttackKeys.indexOf(options.forceAttackKey));
             const audio = this.getAudioOptions();
 
             this.backgroundAudio.setSelected(this.backgroundAudioModes.indexOf(audio.backgroundAudio));
@@ -453,6 +474,7 @@ export class NCOptionWnd {
         this.audio.hidden = index !== 1;
         this.video.hidden = index !== 0;
         this.partyLooting.setOpen(false);
+        this.forceAttackKey.setOpen(false);
         this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
         this.backgroundAudio.setOpen(false);
@@ -524,7 +546,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio({ ...Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])), backgroundAudio: this.backgroundAudioModes[this.backgroundAudio.getSelected()] } as AudioConfig_T);
-        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLighting.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLighting.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()] } as GameOptions_T);
     }
 }
 

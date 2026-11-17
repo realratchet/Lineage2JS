@@ -16,6 +16,8 @@ export type ClippingRangeConfig_T = {
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
 export type GameConfig_T = { renderActorLimitOpt: number; antiAliasing: number; textureDetail: number; useTrilinear: boolean; renderDeco: boolean; pawnShadow: boolean; sortTransparent: boolean; skillEffectLighting: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
+export type ForceAttackKey_T = "ctrl" | "alt" | "shift";
+export type GameOptions_T = GameConfig_T & { invertMouseWheel: boolean; forceAttackKey: ForceAttackKey_T; };
 export type BackgroundAudio_T = "all" | "combat" | "notices" | "none";
 export type AudioVolumeConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
 export type AudioConfig_T = AudioVolumeConfig_T & { backgroundAudio: BackgroundAudio_T; };
