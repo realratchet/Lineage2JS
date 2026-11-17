@@ -21,6 +21,7 @@ import type { ScriptComponent } from "../game/script-component";
 import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import type { CollisionQuery_T } from "../physics/collision-world";
+import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 
 const MIN_ACTOR_DELTA = Math.fround(0.0005);
 const MAX_ACTOR_DELTA = Math.fround(0.4);
@@ -564,6 +565,11 @@ export class NetworkActors {
         }
 
         if (!this.inWorld || generation !== this.teleportGeneration) return;
+
+        if (!this.network.session.game.isPlayingReplay() && !this.network.movement.isMounted) {
+            const player = render.player, movement = player.getComponent<PawnMovementComponent>("pawnMovement");
+            movement.adjustSpawnLocation(setVector(new Vector3(), this.userInfo));
+        }
 
         render.setZoneMusicEnabled(true);
         this.network.items.requestManorList(); // NConsole 0x1006fa20 -> 0x1006db90 on the switch into the game console

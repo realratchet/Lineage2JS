@@ -2,7 +2,7 @@ import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
-import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
+import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T, type CollisionOverlapQuery_T } from "./collision-world";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
@@ -245,6 +245,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return !hit || hit.time > 0;
     }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
+    public overlapCheck(query: CollisionOverlapQuery_T): ICollidable | null { return this.collisionWorld.overlapCheck(query); }
     public isBlockedBy(source: ScriptHost_T, target: ScriptHost_T, vm: UnScriptVM): boolean { return this.collisionWorld.isBlockedBy(source, target, vm); }
     protected setActorRotation(pawn: BaseActor | CollidingMesh, rotation: Vector3Arr): void {
         pawn.setUnrealScriptProperty("Rotation", rotation);

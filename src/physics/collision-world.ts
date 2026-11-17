@@ -1061,8 +1061,10 @@ export class CollisionWorld {
 
             this.stats.analyticalPrimitiveTests++;
 
-            if (pointPrimitive(entry.primitive, query.location, query.extent)) {
+            const hit = pointPrimitive(entry.primitive, query.location, query.extent);
+            if (hit) {
                 if (unsupported) this.stats.unsupportedQueries++;
+                if (records && records.length) return (entry.actor as CollidingMesh).getCollisionActor(hit.item);
                 return (entry.actor as any).scriptActor || entry.actor;
             }
         }
