@@ -412,7 +412,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         (statusType === 1 ? this.summonedStatusWnd : this.petStatusWnd).showStatus();
     }
 
-    public setPetStatusEffects(spelled: GamePackets.PartySpelled_T) {
+    public setPartyAndPetStatusEffects(spelled: GamePackets.PartySpelled_T) {
         if (spelled.type === GamePackets.PartySpelledType_T.PLAYER) this.partyWnd.setEffects(spelled.objectId, spelled.effects);
         else if (spelled.type === GamePackets.PartySpelledType_T.PET) this.petStatusWnd.setEffects(spelled.effects);
         else if (spelled.type === GamePackets.PartySpelledType_T.SUMMON) this.summonedStatusWnd.setEffects(spelled.effects);
