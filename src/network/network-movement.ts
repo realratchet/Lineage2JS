@@ -107,6 +107,7 @@ export class NetworkMovement {
 
     public adjustPawnLocation(object: NetObject_T, position: GamePackets.Location_T) {
         setVector(object.position, position);
+        object.moveTime = this.network.getParent().getCurrentTime();
 
         const actor = object.actor;
 
@@ -128,6 +129,21 @@ export class NetworkMovement {
         if (actor.position.distanceTo(object.position) > 200) actor.adjustLocation(object.position);
     }
 
+    public advancePendingMovement(object: NetObject_T): void {
+        const time = this.network.getParent().getCurrentTime(), elapsed = (time - object.moveTime) / 1000;
+
+        object.moveTime = time;
+        if (!object.destination || object.kind === "user" || object.isDead || elapsed <= 0) return;
+
+        const speeds = object.speeds, environment = object.environment;
+        const speed = (environment === 1 ? object.isRunning ? speeds.swimRunSpd : speeds.swimWalkSpd : environment === 2 && speeds.airRunSpd !== undefined ? object.isRunning ? speeds.airRunSpd : speeds.airWalkSpd : object.isRunning ? speeds.runSpd : speeds.walkSpd) * speeds.moveMultiplier;
+        const dx = object.destination.x - object.position.x, dy = object.destination.y - object.position.y, dz = environment === 1 || environment === 2 ? object.destination.z - object.position.z : 0;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (speed > 0 && distance > object.moveOffset)
+            object.position.lerp(object.destination, Math.min(distance - object.moveOffset, speed * elapsed) / distance);
+    }
+
     public onMoveToLocation(packet: PacketReader) {
         const object = this.network.actors.objects.get(packet.d());
 
@@ -138,6 +154,8 @@ export class NetworkMovement {
         object.pendingVehicleMove = null;
 
         setVector(object.position, this.readLocation(packet));
+        object.moveTime = this.network.getParent().getCurrentTime();
+        object.moveOffset = 0;
 
         if (object.isDead) return;
 
@@ -174,6 +192,8 @@ export class NetworkMovement {
         if (!object) return;
 
         setVector(object.position, position);
+        object.moveTime = this.network.getParent().getCurrentTime();
+        object.moveOffset = Math.fround(distance);
 
         if (object.isDead) return;
 
@@ -197,6 +217,7 @@ export class NetworkMovement {
             await Promise.all([object.actorReady, target.actorReady]);
 
             if (object.destination !== destination || object.isRemoved || target.isRemoved || object.isDead || !object.actor || !target.actor) return;
+            this.advancePendingMovement(object);
         }
 
         this.adjustPawnLocation(object, object.position);
@@ -234,6 +255,7 @@ export class NetworkMovement {
         if (!object) return;
 
         setVector(object.position, this.readLocation(packet));
+        object.moveTime = this.network.getParent().getCurrentTime();
         object.heading = packet.d() & 0xffff;
 
         const actor = object.actor;
@@ -377,7 +399,8 @@ export class NetworkMovement {
     public onChangeMoveType(objectId: number, isRunning: boolean, environment: number) {
         const object = this.network.actors.objects.get(objectId);
 
-        if (!object || object.isRunning === isRunning) return;
+        if (!object || object.isRunning === isRunning && object.environment === environment) return;
+        if (!object.actor) this.advancePendingMovement(object);
         object.isRunning = isRunning;
         object.environment = environment;
         if (object.kind === "user") {

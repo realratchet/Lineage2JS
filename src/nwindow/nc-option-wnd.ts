@@ -2,7 +2,7 @@ import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom"
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
-import type { AudioConfig_T, BackgroundAudio_T, ForceAttackKey_T, GameConfig_T, GameOptions_T } from "../assets/unreal/conf-files/un-conf-system";
+import type { AudioConfig_T, BackgroundAudio_T, ForceAttackKey_T, GameConfig_T, GameOptions_T, SkillEffectLighting_T } from "../assets/unreal/conf-files/un-conf-system";
 import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import SysString_T from "./sys-string";
@@ -50,7 +50,8 @@ export class NCOptionWnd {
     protected readonly terrainRange: NCComboBox;
     protected readonly pawnLimit: NCComboBox;
     protected readonly pawnRange: NCComboBox;
-    protected readonly skillEffectLighting: NDomCheckBox_T;
+    protected readonly skillEffectLighting: NCComboBox;
+    protected readonly skillEffectLightingModes: SkillEffectLighting_T[] = ["all", "pawnOnly", "none"];
     protected readonly sortTransparent: NDomCheckBox_T;
     protected readonly pawnShadow: NDomCheckBox_T;
     protected readonly renderDeco: NDomCheckBox_T;
@@ -158,8 +159,21 @@ export class NCOptionWnd {
         this.renderDeco = layer.checkbox(this.video, 135, 270, 109, 17, manager.getSysString(SysString_T.GroundDetail));
         this.useTrilinear = layer.checkbox(this.video, 135, 287, 100, 17, manager.getSysString(SysString_T.TextureFilter));
         this.sortTransparent = layer.checkbox(this.video, 25, 287, 109, 17, "Sort transparent");
-        this.skillEffectLighting = layer.checkbox(this.video, 25, 304, 207, 17, "Skill effect lighting");
-        [this.pawnShadow, this.renderDeco, this.useTrilinear, this.sortTransparent, this.skillEffectLighting].forEach(checkbox => {
+        const skillEffectLightingText = layer.text(this.video, "Skill effect lighting", 0xffdcdcdc, FontType_T.SMALL, 25, 307);
+
+        this.skillEffectLighting = new NCComboBox(layer, this.video, 107, 304, 125, 17);
+        this.skillEffectLighting.setItems(["All", "Pawn only", "None"]);
+        this.skillEffectLighting.element.tabIndex = 0;
+        this.skillEffectLighting.element.setAttribute("role", "combobox");
+        this.skillEffectLighting.element.setAttribute("aria-label", "Skill effect lighting");
+        this.skillEffectLighting.element.addEventListener("keydown", event => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+            event.preventDefault();
+            this.skillEffectLighting.setSelected(Math.max(0, Math.min(this.skillEffectLightingModes.length - 1, this.skillEffectLighting.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
+            this.skillEffectLighting.setOpen(false);
+        });
+        [this.pawnShadow, this.renderDeco, this.useTrilinear, this.sortTransparent].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
                 if (event.repeat || event.key !== " " && event.key !== "Enter") return;
@@ -321,7 +335,7 @@ export class NCOptionWnd {
         layoutSections(this.video, [
             [[gammaText, this.gamma.element], [textureText, this.textureDetail.element]],
             [[terrainText, this.terrainRange.element], [rangeText, this.pawnRange.element], [limitText, this.pawnLimit.element]],
-            [[antiAliasingText, this.antiAliasing.element], [this.pawnShadow, this.renderDeco], [this.sortTransparent, this.useTrilinear], [this.skillEffectLighting]],
+            [[antiAliasingText, this.antiAliasing.element], [skillEffectLightingText, this.skillEffectLighting.element], [this.pawnShadow, this.renderDeco], [this.sortTransparent, this.useTrilinear]],
             [[scaleText, this.uiScale.element]]
         ]);
         layoutSections(this.audio, [audioRows]);
@@ -376,6 +390,7 @@ export class NCOptionWnd {
         this.pawnLimit.setOpen(false);
         this.textureDetail.setOpen(false);
         this.antiAliasing.setOpen(false);
+        this.skillEffectLighting.setOpen(false);
         this.partyLooting.setOpen(false);
         this.forceAttackKey.setOpen(false);
         this.uiScale.setOpen(false);
@@ -400,7 +415,7 @@ export class NCOptionWnd {
 
             this.pawnShadow.setChecked(options.pawnShadow);
             this.sortTransparent.setChecked(options.sortTransparent);
-            this.skillEffectLighting.setChecked(options.skillEffectLighting);
+            this.skillEffectLighting.setSelected(this.skillEffectLightingModes.indexOf(options.skillEffectLighting));
             this.renderDeco.setChecked(options.renderDeco);
             this.useTrilinear.setChecked(options.useTrilinear);
             this.textureDetail.setSelected(options.textureDetail);
@@ -546,7 +561,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio({ ...Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])), backgroundAudio: this.backgroundAudioModes[this.backgroundAudio.getSelected()] } as AudioConfig_T);
-        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLighting.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()] } as GameOptions_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLightingModes[this.skillEffectLighting.getSelected()], ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()] } as GameOptions_T);
     }
 }
 

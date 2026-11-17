@@ -2638,6 +2638,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const options = game === null ? {} : JSON.parse(game);
 
         delete options.screenshotQuality;
+        if (typeof options.skillEffectLighting === "boolean") options.skillEffectLighting = options.skillEffectLighting ? "all" : "none";
         this.applyGameOptions(options);
         this.applyAudioOptions(audio === null ? {} : JSON.parse(audio));
         this.applyGamma(gamma === null ? 0 : JSON.parse(gamma));
@@ -2674,7 +2675,6 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "renderDeco":
                 case "pawnShadow":
                 case "sortTransparent":
-                case "skillEffectLighting":
                 case "useColorCursor":
                 case "autoTrackingPawn":
                 case "arrowMode":
@@ -2707,19 +2707,22 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "forceAttackKey":
                     if (value !== "ctrl" && value !== "alt" && value !== "shift") throw new Error(`Invalid game option '${key}'.`);
                     break;
+                case "skillEffectLighting":
+                    if (value !== "all" && value !== "pawnOnly" && value !== "none") throw new Error(`Invalid game option '${key}'.`);
+                    break;
                 default: throw new Error(`Unknown game option '${key}'.`);
             }
         }
 
         const asset = this.manNetwork.getParent().getComponent("asset");
 
-        this.options.game = { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl", ...options };
+        this.options.game = { ...asset.userConfig.game, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", ...options };
         asset.playerController.isEnterChatting = this.options.game.enterChatting;
         this.manGame.getComponent("input").setInvertMouseWheel(this.options.game.invertMouseWheel);
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
         this.manRender.setSortTransparent(this.options.game.sortTransparent);
-        this.manRender.skillLightProbe.enabled = this.options.game.skillEffectLighting;
+        this.manRender.skillLightProbe.mode = this.options.game.skillEffectLighting;
         this.manRender.setRenderDeco(this.options.game.renderDeco);
         this.manRender.setUseTrilinear(this.options.game.useTrilinear);
         this.manRender.setTextureDetail(this.options.game.textureDetail);

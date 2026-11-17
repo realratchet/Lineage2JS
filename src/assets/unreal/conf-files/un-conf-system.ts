@@ -15,7 +15,8 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { renderActorLimitOpt: number; antiAliasing: number; textureDetail: number; useTrilinear: boolean; renderDeco: boolean; pawnShadow: boolean; sortTransparent: boolean; skillEffectLighting: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
+export type SkillEffectLighting_T = "all" | "pawnOnly" | "none";
+export type GameConfig_T = { renderActorLimitOpt: number; antiAliasing: number; textureDetail: number; useTrilinear: boolean; renderDeco: boolean; pawnShadow: boolean; sortTransparent: boolean; skillEffectLighting: SkillEffectLighting_T; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
 export type ForceAttackKey_T = "ctrl" | "alt" | "shift";
 export type GameOptions_T = GameConfig_T & { invertMouseWheel: boolean; forceAttackKey: ForceAttackKey_T; };
 export type BackgroundAudio_T = "all" | "combat" | "notices" | "none";
@@ -49,7 +50,7 @@ export class UConfigSystem extends BaseConfigFile {
     public alAudio: ALAudioConfig_T = { channels: 32, ambientVolume: 1, rollOff: 0.5 };
     public characterDisplay: CharacterDisplayConfig_T = { name: true, dist: 1000 };
 
-    public game: GameConfig_T = { renderActorLimitOpt: 6, antiAliasing: 0, textureDetail: 0, useTrilinear: true, renderDeco: true, pawnShadow: true, sortTransparent: true, skillEffectLighting: true, useColorCursor: true, autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public game: GameConfig_T = { renderActorLimitOpt: 6, antiAliasing: 0, textureDetail: 0, useTrilinear: true, renderDeco: true, pawnShadow: true, sortTransparent: true, skillEffectLighting: "pawnOnly", useColorCursor: true, autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public cameraViewHeightAdjust = 0;
     public useAutoTrackingPawn = false;
     public autoTrackingPawnSpeed = 0;

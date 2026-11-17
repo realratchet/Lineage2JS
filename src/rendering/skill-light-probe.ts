@@ -4,6 +4,7 @@ import type BaseActor from "../base-actor";
 import type BaseEmitter from "../objects/emitters/base-emitter";
 import NPawnLightComponent from "./components/pawn-light-component";
 import GLOBAL_UNIFORMS, { NUM_SKILL_LIGHTS } from "../materials/global-uniforms";
+import type { SkillEffectLighting_T } from "../assets/unreal/conf-files/un-conf-system";
 
 const tmpPosition = new Vector3();
 const tmpColor = new Color();
@@ -14,7 +15,7 @@ const arrWhite = [1, 1, 1];
 type EffectLight_T = { emitters: BaseEmitter[], position: Vector3, color: Color, radius: number, distance: number };
 
 export class SkillLightProbe {
-    public enabled = true;
+    public mode: SkillEffectLighting_T = "pawnOnly";
     public version = 0;
     public hasLights = false;
     protected lastTime = 0;
@@ -56,7 +57,7 @@ export class SkillLightProbe {
                 this.effects.delete(effect);
                 continue;
             }
-            if (!this.enabled) {
+            if (this.mode === "none") {
                 light.color.setRGB(0, 0, 0);
                 light.radius = 0;
                 continue;
@@ -122,7 +123,7 @@ export class SkillLightProbe {
         this.arrLights.sort(compareLights);
         this.arrLights.length = Math.min(this.arrLights.length, NUM_SKILL_LIGHTS);
         this.hasLights = this.arrLights.length > 0;
-        GLOBAL_UNIFORMS.skillLightCount.value = this.arrLights.length;
+        GLOBAL_UNIFORMS.skillLightCount.value = this.mode === "all" ? this.arrLights.length : 0;
 
         for (let i = 0; i < this.arrLights.length; i++) {
             const light = this.arrLights[i];
@@ -132,7 +133,7 @@ export class SkillLightProbe {
     }
 
     public sample(actor: Object3D, sphere: Sphere): NPawnLightComponent | null {
-        if (!this.enabled || !this.hasLights || !sphere) return null;
+        if (this.mode === "none" || !this.hasLights || !sphere) return null;
 
         let total = 0, radius = 0;
 

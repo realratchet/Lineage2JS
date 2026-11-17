@@ -50,6 +50,8 @@ export type NetObject_T = {
     isRemoved: boolean;
     position: Vector3;
     destination: Vector3;
+    moveTime: number;
+    moveOffset: number;
     heading: number;
     name: string;
     title: string;
@@ -368,6 +370,8 @@ export class NetworkActors {
             isRemoved: false,
             position: setVector(new Vector3(), info),
             destination: null,
+            moveTime: this.network.getParent().getCurrentTime(),
+            moveOffset: 0,
             heading: info.heading,
             name: info.name,
             title: info.title,
@@ -912,6 +916,7 @@ export class NetworkActors {
         const questMark = npc.questMark, user = this.userInfo;
 
         object.hasQuestMark = !!questMark && !!user && user.level >= questMark.minLevel && user.level <= questMark.maxLevel && (!questMark.classIds.length || questMark.classIds.includes(user.classId));
+        this.network.movement.advancePendingMovement(object);
         this.attachActor(object, actor, this.findNpcSpawnLocation(object, actor, object.environment ?? (info as GamePackets.PetInfo_T).environment));
         if (info.spawnType === 2 && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
     }
@@ -959,6 +964,7 @@ export class NetworkActors {
     }
 
     protected attachActor(object: NetObject_T, actor: BaseActor, position: Vector3 = null) {
+        if (!position) this.network.movement.advancePendingMovement(object);
         object.actor = actor;
 
         actor.setUnrealScriptProperty("CreatureID", object.objectId);
