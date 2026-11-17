@@ -39,6 +39,17 @@ export class ZoneVisibility {
             }
         }
 
+        if (exterior) {
+            let visible = false;
+            for (const { node } of this.portals) {
+                const distance = node.plane.x * position.x + node.plane.y * position.y + node.plane.z * position.z - node.plane.w;
+                const source = node.zones[distance > 0 ? 1 : 0], target = node.zones[distance > 0 ? 0 : 1];
+                if (!(sector.outdoorZoneMask & arrZoneBits[source]) || sector.outdoorZoneMask & arrZoneBits[target]) continue;
+                if (frustum.intersectsSphere(node.exclusiveSphereBound)) { visible = true; break; }
+            }
+            if (!visible) return sector.outdoorZoneMask;
+        }
+
         const planes = frustum.planes, near = planes[5];
         for (const portal of this.portals) {
             const node = portal.node, vertices = node.portalVertices, rect = portal.rect;
@@ -47,7 +58,8 @@ export class ZoneVisibility {
             portal.target = node.zones[distance > 0 ? 0 : 1];
             rect.minX = rect.minY = 0;
             rect.maxX = rect.maxY = 1;
-            portal.visible = true;
+            portal.visible = !exterior || frustum.intersectsSphere(node.exclusiveSphereBound);
+            if (!portal.visible) continue;
             if (!vertices || vertices.length < 9 || Math.abs(distance) < 1) continue;
 
             rect.minX = rect.minY = Infinity;
