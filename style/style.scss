@@ -9,6 +9,9 @@
 body {
     padding: 0;
     margin: 0;
+    user-select: none;
+
+    input, textarea { user-select: text; }
 
     width: 100%;
     height: 100%;

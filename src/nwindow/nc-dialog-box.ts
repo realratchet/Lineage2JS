@@ -59,6 +59,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         layer.tile(this.element, 11, 15, 24, 24, 0, 0, 24, 24, TEX_ICON);
 
         this.textBox = layer.createWindow(TEXT_X, TEXT_Y, 256 - TEXT_X, 108 - TEXT_Y, this.element);
+        this.textBox.classList.add("ndom-selectable");
         this.textBox.style.overflow = "hidden";
 
         this.timer = layer.tile(this.element, 17, 61, 222, 6, 0, 0, 222, 6, TEX_TIME_BACK);

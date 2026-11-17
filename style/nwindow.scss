@@ -76,7 +76,11 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     > i { background-image: var(--glyphs); }
 }
 
-.ndom-button, .ndom-inventory-item { cursor: inherit; }
+.ndom-selectable { user-select: text; }
+
+.ndom-button, .ndom-inventory-item { cursor: inherit; user-select: none; }
+
+.ndom-layer [role="checkbox"], .ndom-layer [role="tab"] { user-select: none; }
 
 .ndom-window:focus-visible, .ndom-button[role="tab"] { outline: none; }
 

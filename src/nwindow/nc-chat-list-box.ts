@@ -19,6 +19,7 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
     protected readonly scrollBar: NCScrollBar;
     protected readonly lines: ChatLine_T[] = [];
     protected readonly pending: ChatEntry_T[] = [];
+    protected renderedLine: ChatLine_T = null;
     protected width: number;
     protected height: number;
     protected rows = 9;
@@ -32,7 +33,7 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
         this.element.style.overflow = "hidden";
         if (isSystem) this.back = layer.tile(this.element, 0, 0, width, height, 0, 0, width, 128, TEX_SYSTEM);
         this.text = layer.createWindow(0, 0, width, height, this.element);
-        this.text.style.pointerEvents = "none";
+        this.text.classList.add("ndom-selectable");
         this.scrollBar = new NCScrollBar(layer, this.element, 5, isSystem ? 5 : 10, isSystem ? height - 9 : height - 10); // NCChatSystemMsgWnd (vtable 0x101aca78): OnCreate 0x100540f0 scroll column (5,5)..(5,H-19), paint 0x10056900.
         this.scrollBar.onScroll = position => {
             this.scrollTop = position;
@@ -84,9 +85,13 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
         });
     }
 
-    protected pushLine(line: ChatLine_T) { // AddString 0x10021510: drop the oldest line at 200, otherwise follow the bottom once rows are full.
-        if (this.lines.length >= MAX_LINES) this.lines.shift();
-        else if (this.lines.length >= this.rows) this.scrollTop++;
+    protected pushLine(line: ChatLine_T) { // AddString 0x10021510 caps history at 200 lines.
+        const isAtBottom = this.scrollTop >= this.lines.length - this.rows;
+
+        if (this.lines.length >= MAX_LINES) {
+            this.lines.shift();
+            if (!isAtBottom) this.scrollTop = Math.max(0, this.scrollTop - 1);
+        } else if (isAtBottom && this.lines.length >= this.rows) this.scrollTop++;
 
         this.lines.push(line);
     }
@@ -120,6 +125,10 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
 
         this.scrollBar.setRange(this.lines.length, this.rows);
         this.scrollBar.setPosition(this.scrollTop);
+
+        if (this.renderedLine === this.lines[this.scrollTop] && this.text.childElementCount === Math.min(this.rows, this.lines.length - this.scrollTop)) return;
+
+        this.renderedLine = this.lines[this.scrollTop];
         this.text.replaceChildren();
 
         for (let row = 0; row < this.rows && this.scrollTop + row < this.lines.length; row++) {

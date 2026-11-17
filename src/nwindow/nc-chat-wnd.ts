@@ -70,6 +70,9 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     protected readonly tellTargets: string[] = [];
     protected tellTargetIndex = -1;
     protected isReplyMode = false;
+    protected readonly arrSentMessages: string[] = [];
+    protected sentMessageIndex = 0;
+    protected draftMessage = "";
 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
@@ -130,7 +133,8 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
             if (event.key === "Escape") this.editBox.input.blur();
             if (event.key === "ArrowUp" || event.key === "ArrowDown") {
                 event.preventDefault();
-                this.selectTell(event.key === "ArrowUp");
+                if (this.isReplyMode) this.selectTell(event.key === "ArrowUp");
+                else this.selectSentMessage(event.key === "ArrowUp");
             }
         });
         this.editBox.input.addEventListener("input", event => {
@@ -285,6 +289,12 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     }
 
     protected submit(line: string, isShift: boolean = false) { // Enter handler 0x10059a3a..0x10059f66; U+FF02 is a tell prefix (0x10059aff) outside the strip list.
+        if (line.trim()) {
+            this.arrSentMessages.push(line);
+            if (this.arrSentMessages.length > 10) this.arrSentMessages.shift();
+        }
+        this.sentMessageIndex = this.arrSentMessages.length;
+        this.draftMessage = "";
         this.isReplyMode = false;
         this.editBox.setValue("");
 
@@ -352,6 +362,20 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         this.tellTargetIndex = this.tellTargets.length - 1;
     }
 
+    protected selectSentMessage(isUp: boolean) {
+        if (!this.arrSentMessages.length) return;
+
+        if (this.sentMessageIndex === this.arrSentMessages.length) {
+            if (!isUp) return;
+
+            this.draftMessage = this.editBox.getValue();
+        }
+
+        this.sentMessageIndex = Math.max(0, Math.min(this.arrSentMessages.length, this.sentMessageIndex + (isUp ? -1 : 1)));
+        this.editBox.setValue("");
+        this.editBox.appendValue(this.sentMessageIndex === this.arrSentMessages.length ? this.draftMessage : this.arrSentMessages[this.sentMessageIndex]);
+    }
+
     protected selectTell(isUp: boolean) { // NCChatWnd 0x10054380.
         if (!this.isReplyMode) return;
 
@@ -376,6 +400,9 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         this.editBox.setValue("");
         this.tellTargets.length = 0;
         this.isReplyMode = false;
+        this.arrSentMessages.length = 0;
+        this.sentMessageIndex = 0;
+        this.draftMessage = "";
     }
 
     protected sendMessage(text: string, type: number, target: string) {
