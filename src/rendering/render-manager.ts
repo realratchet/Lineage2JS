@@ -87,6 +87,8 @@ const tmpSize = new Vector2();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
 const tmpPawnViewOrigin = new Vector3();
+const tmpAudioViewOrigin = new Vector3();
+const tmpAudioListenerOrigin = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
 const arrSectorIndex: [number, number] = [0, 0];
 const arrPawnLights: DynamicLight[] = [];
@@ -637,6 +639,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.visualizer = new Visualizer(this.scene);
         this.wireEmitterVisibilityHandlers();
+        this.wireAudioMuteHandlers();
 
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
@@ -1368,6 +1371,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.visualizer.setEmitterVisibilityHandlers(
             (uuid, visible) => this.setEmitterVisible(uuid, visible),
             (visible) => this.setAllEmittersVisible(visible)
+        );
+    }
+
+    protected wireAudioMuteHandlers(): void {
+        this.visualizer.setAudioMuteHandlers(
+            (id, muted) => this.audioManager.setAmbientSoundMuted(id, muted),
+            muted => this.audioManager.setAllAmbientSoundsMuted(muted)
         );
     }
 
@@ -2747,17 +2757,30 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const timeOfDay = this.environment.getTimeOfDay();
             const isSoundDay = timeOfDay >= 5.999 || timeOfDay <= 0.001, isSoundNight = timeOfDay < 6.001 || timeOfDay > 23.999; // UL2NEnvManager::IsSoundDay 0x104e7360 / IsSoundNight 0x104e73a0
             const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
+            const controller = this.manGame.getComponent("asset").playerController;
+            const viewTarget = getProperty(controller, "ViewTarget");
+            const isFollowingPlayer = this.getInputManager().isFollowingPlayer();
+            const soundTarget = isFollowingPlayer ? !viewTarget || viewTarget === controller ? this.player : viewTarget as unknown as THREE.Object3D : this.camera;
+            const pawn = getProperty(controller, "Pawn") as unknown as BaseActor;
+            const listenerTarget = isFollowingPlayer && pawn ? pawn : this.camera;
 
-            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isSoundDay, isSoundNight, isSubmerged);
+            soundTarget.getWorldPosition(tmpAudioViewOrigin);
+            if ((soundTarget as BaseActor).isActor) tmpAudioViewOrigin.z += (soundTarget as BaseActor).getCollisionHeight();
 
-            if (!this.lastListenerPos.equals(camPos) || !this.lastListenerQuat.equals(this.camera.quaternion)) {
-                this.lastListenerPos.copy(camPos);
+            // FCameraSceneNode 0x8e9d77..0x8e9dcb: render origin +0x194, audio origin +0x1bc uses Controller.Pawn.Location.
+            listenerTarget.getWorldPosition(tmpAudioListenerOrigin);
+            if ((listenerTarget as BaseActor).isActor) tmpAudioListenerOrigin.z += (listenerTarget as BaseActor).getCollisionHeight();
+
+            this.audioManager.updateAmbientSounds(currentTime, tmpAudioListenerOrigin.x, tmpAudioListenerOrigin.y, tmpAudioListenerOrigin.z, tmpAudioViewOrigin.x, tmpAudioViewOrigin.y, tmpAudioViewOrigin.z, isSoundDay, isSoundNight, isSubmerged);
+
+            if (!this.lastListenerPos.equals(tmpAudioListenerOrigin) || !this.lastListenerQuat.equals(this.camera.quaternion)) {
+                this.lastListenerPos.copy(tmpAudioListenerOrigin);
                 this.lastListenerQuat.copy(this.camera.quaternion);
 
                 const fwd = this.camera.getWorldDirection(new Vector3());
                 const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
                 this.audioManager.updateListenerPosition(
-                    camPos.x, camPos.y, camPos.z,
+                    tmpAudioListenerOrigin.x, tmpAudioListenerOrigin.y, tmpAudioListenerOrigin.z,
                     fwd.x, fwd.y, fwd.z,
                     up.x, up.y, up.z,
                 );
@@ -2919,6 +2942,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
                 (this as any).visualizer = new Visualizer(this.scene);
                 this.wireEmitterVisibilityHandlers();
+                this.wireAudioMuteHandlers();
                 this.getParent().getComponent("ui").attachVisualizerDebugElements(this.visualizer);
 
                 this.visualizer.setMode(currentMode);
@@ -3011,7 +3035,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else if (this.visualizer.getMode() === VisualizerMode.Audio) {
                 const musicState = this.audioManager.getMusicState();
                 const ambientSounds = this.audioManager.getAmbientSounds();
-                this.visualizer.updateAudioHUD(musicState, ambientSounds, currentTime, this.camera.position);
+                this.visualizer.updateAudioHUD(musicState, ambientSounds, currentTime, this.lastListenerPos);
             } else if (this.visualizer.getMode() === VisualizerMode.Emitters) {
                 this.visualizer.updateEmitters(this.collectEmitterDebugInfo());
             }

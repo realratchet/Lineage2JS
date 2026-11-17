@@ -67,7 +67,10 @@ class Visualizer {
     private readonly audioHudElement: HTMLElement;
     private readonly emittersHudElement: HTMLElement;
     private readonly hudColors: Map<string, { swatch: HTMLElement, rgbDisplay: HTMLElement, alpha: HTMLElement }> = new Map();
-    private readonly audioLines: Map<string, HTMLElement> = new Map();
+    private readonly audioLines: Map<string, { element: HTMLLabelElement, checkbox: HTMLInputElement, text: HTMLElement }> = new Map();
+    protected audioMasterCheckbox: HTMLInputElement;
+    protected onAudioMute?: (id: string, muted: boolean) => void;
+    protected onAudioMuteAll?: (muted: boolean) => void;
     private readonly emitterLines: Map<string, HTMLElement> = new Map();
     private readonly emitterGroups: Map<string, { wrapper: HTMLElement, header: HTMLElement, body: HTMLElement }> = new Map(); // one wrapper per parent "Emitter" actor
     private readonly emitterLabels: Map<string, Sprite> = new Map();
@@ -84,6 +87,11 @@ class Visualizer {
     public setEmitterVisibilityHandlers(onToggle: (uuid: string, visible: boolean) => void, onToggleAll: (visible: boolean) => void): void {
         this.onEmitterToggle = onToggle;
         this.onEmitterToggleAll = onToggleAll;
+    }
+
+    public setAudioMuteHandlers(onMute: (id: string, muted: boolean) => void, onMuteAll: (muted: boolean) => void): void {
+        this.onAudioMute = onMute;
+        this.onAudioMuteAll = onMuteAll;
     }
 
     public setMode(mode: VisualizerMode): void {
@@ -266,6 +274,18 @@ class Visualizer {
         hud.appendChild(musicPanel);
 
         const ambientPanel = createPanel("AMBIENT SOUNDS");
+        ambientPanel.style.pointerEvents = "auto";
+        const masterRow = document.createElement("label");
+        Object.assign(masterRow.style, { display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px", cursor: "pointer" });
+        this.audioMasterCheckbox = document.createElement("input");
+        this.audioMasterCheckbox.type = "checkbox";
+        this.audioMasterCheckbox.checked = true;
+        this.audioMasterCheckbox.onchange = () => this.onAudioMuteAll?.(!this.audioMasterCheckbox.checked);
+        const masterLabel = document.createElement("span");
+        masterLabel.innerText = "Play all";
+        masterRow.appendChild(this.audioMasterCheckbox);
+        masterRow.appendChild(masterLabel);
+        ambientPanel.appendChild(masterRow);
         this.ambientListElement = document.createElement("div");
         this.ambientListElement.style.display = "grid";
         this.ambientListElement.style.gridTemplateRows = "repeat(15, auto)";
@@ -525,7 +545,7 @@ class Visualizer {
         return parts.length >= 3 ? parts[1] : fullName;
     }
 
-    public updateAudioHUD(musicData: any, ambientSounds: any[], currentTime: number, cameraPosition: Vector3): void {
+    public updateAudioHUD(musicData: any, ambientSounds: any[], currentTime: number, listenerPosition: Vector3): void {
         if (!this.enabled || this.mode !== VisualizerMode.Audio) return;
 
         if (this.musicInfoElement) {
@@ -542,9 +562,9 @@ class Visualizer {
 
         if (this.ambientListElement) {
             const sorted = [...ambientSounds].map(s => {
-                const dx = s.info.position[0] - cameraPosition.x;
-                const dy = s.info.position[1] - cameraPosition.y;
-                const dz = s.info.position[2] - cameraPosition.z;
+                const dx = s.info.position[0] - listenerPosition.x;
+                const dy = s.info.position[1] - listenerPosition.y;
+                const dz = s.info.position[2] - listenerPosition.z;
                 const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 return { ...s, dist };
             }).sort((a, b) => a.dist - b.dist);
@@ -554,23 +574,36 @@ class Visualizer {
 
             for (const id of existingIds) {
                 if (!currentIds.has(id)) {
-                    this.audioLines.get(id)?.remove();
+                    this.audioLines.get(id)!.element.remove();
                     this.audioLines.delete(id);
                 }
             }
 
+            const mutedCount = sorted.filter(s => s.isMuted).length;
+            this.audioMasterCheckbox.checked = mutedCount === 0;
+            this.audioMasterCheckbox.indeterminate = mutedCount > 0 && mutedCount < sorted.length;
+
+            let previous: HTMLElement = null;
             sorted.forEach(s => {
                 let line = this.audioLines.get(s.id);
                 if (!line) {
-                    line = document.createElement("div");
-                    line.style.borderLeft = "2px solid #444";
-                    line.style.paddingLeft = "6px";
-                    line.style.fontSize = "11px";
+                    const element = document.createElement("label"), checkbox = document.createElement("input"), text = document.createElement("span");
+                    Object.assign(element.style, { display: "flex", alignItems: "start", gap: "6px", borderLeft: "2px solid #444", paddingLeft: "6px", fontSize: "11px", cursor: "pointer" });
+                    element.dataset.soundId = s.id;
+                    element.title = `${s.id}\n${s.info.position.join(", ")}`;
+                    checkbox.type = "checkbox";
+                    checkbox.onchange = () => this.onAudioMute?.(s.id, !checkbox.checked);
+                    text.style.whiteSpace = "pre";
+                    element.appendChild(checkbox);
+                    element.appendChild(text);
+                    line = { element, checkbox, text };
                     this.audioLines.set(s.id, line);
                 }
-                
-                // Re-appending naturally moves the element, keeping the DOM sorted 
-                this.ambientListElement.appendChild(line);
+
+                const next = previous ? previous.nextElementSibling : this.ambientListElement.firstElementChild;
+                if (next !== line.element) this.ambientListElement.insertBefore(line.element, next);
+                previous = line.element;
+                line.checkbox.checked = !s.isMuted;
 
                 const sndName = s.info.soundName;
                 const distText = Math.round(s.dist).toString().padStart(6, " ");
@@ -580,18 +613,18 @@ class Visualizer {
                 const ref = s.info.refDistance;
                 let attenuation = 1.0;
                 if (s.dist > ref) {
-                    attenuation = ref / (ref + 0.5 * (s.dist - ref));
+                    attenuation = ref / (ref + s.rollOff * (s.dist - ref));
                 }
-                const actualVol = baseVol * attenuation;
+                const actualVol = s.gain * attenuation;
 
                 const baseVolText = Math.round(baseVol * 100).toString().padStart(3, " ");
                 const actualVolText = Math.round(actualVol * 100).toString().padStart(3, " ");
-                const status = s.isPlaying ? "PLAYING" : "WAITING";
+                const status = s.isMuted ? "MUTED" : s.isPlaying ? "PLAYING" : "WAITING";
                 const prioText = ` (prio: ${Math.round(s.priority * 1000) / 1000}${s.info.looping ? ", loop" : ""})`;
 
-                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${prioText}`;
-                line.style.color = s.isPlaying ? "#fff" : "#888";
-                line.style.borderColor = s.isPlaying ? "#0f0" : "#444";
+                line.text.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${prioText}`;
+                line.element.style.color = s.isPlaying && !s.isMuted ? "#fff" : "#888";
+                line.element.style.borderColor = s.isPlaying && !s.isMuted ? "#0f0" : "#444";
             });
         }
     }

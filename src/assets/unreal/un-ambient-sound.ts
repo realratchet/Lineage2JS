@@ -61,7 +61,7 @@ export abstract class UAmbientSoundObject extends UAActor {
 
         const position = this.location.getElements();
         const refDistance = this.radius;
-        const maxDistance = this.radius * 100; // GAudioMaxRadiusMultiplier = 100 in UE2
+        const maxDistance = this.radius * 50; // Core.dll GAudioMaxRadiusMultiplier 0x101cdf80 = 50.
         const volume = this.volume / 255;
         const pitch = this.pitch / 64;
         const randomChance = this.randomAmbient;
