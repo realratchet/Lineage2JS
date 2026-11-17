@@ -194,7 +194,7 @@ export class NetworkCommunity {
             this.applyPartyMember(member);
             this.network.ui.addPartyMember(member, leaderId, lootDistribution);
             const effects = this.partyEffects.get(member.objectId);
-            if (effects) this.network.ui.setPartyAndPetStatusEffects(effects);
+            if (effects) this.network.ui.setPetStatusEffects(effects);
         }
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
@@ -923,7 +923,7 @@ export class NetworkCommunity {
         const spelled = GamePackets.readPartySpelled(packet);
 
         this.partyEffects.set(spelled.objectId, spelled);
-        this.network.ui.setPartyAndPetStatusEffects(spelled);
+        this.network.ui.setPetStatusEffects(spelled);
     }
 
     public onSnoop(packet: PacketReader) {
