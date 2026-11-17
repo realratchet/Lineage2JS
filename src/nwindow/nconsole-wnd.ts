@@ -295,6 +295,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }, true);
         window.addEventListener("keydown", event => { // UL2Console 0x100760e7..0x10076126.
             if (event.isComposing || event.key !== "Escape" || this.screen !== "world") return;
+            if ((event.target as HTMLElement).closest(".ndom-item-search")) return;
             if (asset.playerController.scriptProperties.get("bCameraWalking")) return;
 
             event.preventDefault();

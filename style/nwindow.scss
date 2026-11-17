@@ -78,6 +78,17 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 
 .ndom-selectable { user-select: text; }
 
+.ndom-item-search {
+    z-index: 2;
+    background: #161b23;
+    border: 1px solid #635b49;
+    box-sizing: border-box;
+
+    .ndom-input::placeholder { color: #8c8c8c; }
+}
+
+.ndom-search-miss { filter: grayscale(1) brightness(0.4); }
+
 .ndom-button, .ndom-inventory-item { cursor: inherit; user-select: none; }
 
 .ndom-layer [role="checkbox"], .ndom-layer [role="tab"] { user-select: none; }

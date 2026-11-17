@@ -44,7 +44,7 @@ function glyphHtml(x: number, y: number, w: number, h: number, u: number, v: num
 
 export type NDomCheckBox_T = HTMLDivElement & { setChecked(checked: boolean): void, getChecked(): boolean };
 export type NDomButton_T = HTMLDivElement & { setLabel(label: string): void, setEnabled(isEnabled: boolean): void, setTextures(normal: string, down: string, over?: string): void };
-export type NDomScrollPane_T = HTMLDivElement & { content: HTMLDivElement, setContentHeight(height: number, preserveScroll?: boolean): void, setScroll(position: number, isClamped?: boolean): void, getScroll(): number };
+export type NDomScrollPane_T = HTMLDivElement & { content: HTMLDivElement, setContentHeight(height: number, preserveScroll?: boolean): void, setHeight(height: number): void, setScroll(position: number, isClamped?: boolean): void, getScroll(): number };
 export type NDomEdit_T = HTMLDivElement & { input: HTMLInputElement, getValue(): string, setValue(value: string): void, appendValue(value: string): void, setEnabled(isEnabled: boolean): void, setWidthLimit(width: number): void, focus(): void };
 
 export class NDomLayer {
@@ -128,6 +128,7 @@ export class NDomLayer {
     }
 
     public getManager() { return this.manager; }
+    public getActiveWindow() { return this.activeWindow; }
     public getModalWindows() { return this.arrModalWindows.map(entry => entry.element); }
     public getWindows() { return [...this.consoleRoot.children, ...this.root.children].filter(wnd => wnd !== this.consoleRoot) as HTMLElement[]; }
 
@@ -725,7 +726,7 @@ export class NDomLayer {
         const thumb = this.createWindow(w - 15, 15, 15, 0, element);
         const thumbCenter = this.tile(thumb, 0, 8, 15, 8, 0, 0, 15, 8, SKIN_SLOTS.scrollThumbCenter);
         const thumbBottom = this.tile(thumb, 0, 8, 15, 8, 0, 0, 15, 8, SKIN_SLOTS.scrollThumbBottom);
-        const viewRows = visibleRows;
+        let viewRows = visibleRows;
         let scroll = 0, contentHeight = 0, thumbLen = 0;
 
         const update = () => {
@@ -779,7 +780,9 @@ export class NDomLayer {
         };
 
         pushButton(this.button(element, w - 15, 0, 15, 15, SKIN_SLOTS.scrollUp, SKIN_SLOTS.scrollUpDown, SKIN_SLOTS.scrollUp), -1);
-        pushButton(this.button(element, w - 15, h - 15, 15, 15, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, SKIN_SLOTS.scrollDown), 1);
+        const downButton = this.button(element, w - 15, h - 15, 15, 15, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, SKIN_SLOTS.scrollDown);
+
+        pushButton(downButton, 1);
         this.tile(thumb, 0, 0, 15, 8, 0, 0, 15, 8, SKIN_SLOTS.scrollThumbTop);
         thumb.tabIndex = -1;
         thumb.addEventListener("mousedown", event => {
@@ -805,6 +808,13 @@ export class NDomLayer {
             });
         });
         element.addEventListener("wheel", event => element.setScroll(scroll + Math.sign(event.deltaY) * step));
+        element.setHeight = height => {
+            h = height;
+            viewRows = Math.max(1, Math.ceil(h / step));
+            element.style.height = `${h}px`;
+            this.place(downButton, w - 15, h - 15);
+            element.setScroll(scroll);
+        };
         element.setContentHeight(0);
 
         return element;

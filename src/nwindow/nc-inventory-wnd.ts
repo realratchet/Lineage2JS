@@ -6,6 +6,7 @@ import { ItemType2_T, type HennaStatus_T } from "../network/game-packets";
 import NCTooltip, { TEX_TOOLTIP_SLICES } from "./nc-tooltip";
 import { SKIN_SLOTS } from "./skin-textures";
 import SysString_T from "./sys-string";
+import NCItemSearch from "./nc-item-search";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.Inventory_Back";
 const TEX_TAB = "L2UI_CH3.InventoryWnd.Inventory_tab2";
@@ -73,7 +74,7 @@ function getWeaponTable(weaponType: number, bodyPart: number) { // 0x100741b0 ju
 }
 
 export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 0x10099a60, OnPaint 0x10095870.
-    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, TEX_HENNA, TEX_DISABLED, ...arrWeightBars, ...arrTooltipSlices, ...TEX_TOOLTIP_SLICES, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, TEX_HENNA, TEX_DISABLED, ...arrWeightBars, ...arrTooltipSlices, ...TEX_TOOLTIP_SLICES, "L2UI.NWindow.Number", ...NCItemSearch.getTextures(), ...NDOM_SCROLL_TEXTURES]; }
 
     public readonly element: HTMLDivElement;
     public onUse: (item: InventoryEntry_T, isRight: boolean) => void = null;
@@ -118,6 +119,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected readonly arrInput: InventoryInput_T[] = Array.from({ length: 3 }, () => ({ pressed: -1, hovered: -1, selected: -1, isArmed: false, isDoubleClick: false, isReleaseBlocked: false }));
     protected heldSource = -1;
     protected cursorSource = -1;
+    protected readonly search: NCItemSearch;
 
     public constructor(layer: NDomLayer) {
         this.layer = layer;
@@ -258,6 +260,13 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.tooltip = layer.createWindow(0, 0, 0, 0);
         this.tooltip.classList.add("ndom-opaque", "ndom-tooltip");
         this.tooltip.hidden = true;
+
+        this.search = new NCItemSearch(layer, this.element, this.arrBags, () => {
+            this.endDrag();
+            this.heldSource = -1;
+            this.arrInput.forEach(input => { input.pressed = input.hovered = -1; input.isArmed = false; });
+            this.tooltip.hidden = true;
+        });
 
         [this.arrBags[0], this.arrBags[1], this.equipment].forEach((pane, source) => {
             pane.addEventListener("mousedown", event => {
@@ -409,6 +418,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
     public getItemOwner(item: InventoryEntry_T) { return item.slot >= 0 ? this.equipment : this.arrBags[Number(item.isQuest)]; }
     public setVisible(isVisible: boolean) {
+        if (!isVisible) this.search.close(false);
         this.folded.hidden = true;
         this.caption.hidden = true;
 
@@ -587,6 +597,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         }
 
         this.arrBags.forEach((bag, tab) => bag.setContentHeight(Math.ceil(arrCounts[tab] / 6) * 35, preserveScroll));
+        this.search.refresh();
 
         const count = `(${this.items.filter(item => !item.isMoney).length}/${this.limit})`;
 
@@ -605,6 +616,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         button.type = "button";
         button.className = "ndom-inventory-item";
         button.dataset.objectId = String(item.objectId);
+        button.dataset.searchName = item.name;
         button.setAttribute("aria-label", `${item.name}${item.count > 1 ? ` (${item.count.toLocaleString("en-US")})` : ""}`);
         this.layer.place(button, x, y, 34, 34);
         this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, icon);
@@ -655,9 +667,11 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             }
             return -1;
         }
-        if (x < 1 || x > 223 || y < 1 || y > 141) return -1;
+        const rows = this.search.isOpen() ? 3 : 4;
 
-        return (Math.trunc(this.arrBags[source].getScroll() / 35) + Math.min(3, Math.trunc((y - 1) / 35))) * 6 + Math.min(5, Math.trunc((x - 1) / 37));
+        if (x < 1 || x > 223 || y < 1 || y > rows * 35 + 1) return -1;
+
+        return (Math.trunc(this.arrBags[source].getScroll() / 35) + Math.min(rows - 1, Math.trunc((y - 1) / 35))) * 6 + Math.min(5, Math.trunc((x - 1) / 37));
     }
 
     protected getEquipSlot(item: InventoryEntry_T) { return item.bodyPart === SLOT_LR_HAND ? 5 : item.bodyPart === SLOT_FULL_ARMOR || item.bodyPart === SLOT_ALLDRESS ? 6 : item.slot; }
@@ -665,7 +679,16 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (index < 0) return null;
         if (source === 2) return this.items.find(item => item.slot >= 0 && this.getEquipSlot(item) === index);
 
-        const objectId = this.arrBagOrder[source][index];
+        const orderIndex = this.search.getIndex(source, index);
+        let objectId = this.arrBagOrder[source][orderIndex];
+
+        if (this.search.isOpen()) {
+            const button = this.arrBags[source].content.children[orderIndex] as HTMLElement;
+
+            if (!button) return null;
+
+            objectId = Number(button.dataset.objectId);
+        }
 
         return this.items.find(item => item.objectId === objectId && item.slot < 0 && Number(item.isQuest) === source);
     }
@@ -793,10 +816,18 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         const rect = this.getBag().getBoundingClientRect();
         const x = this.layer.toUI(event.clientX - rect.left) - 1, y = this.layer.toUI(event.clientY - rect.top) - 1;
 
-        if (x < 0 || y < 0 || x > 6 * 37 || y > 4 * 35) return;
+        const rows = this.search.isOpen() ? 3 : 4;
 
-        const index = (Math.trunc(this.getBag().getScroll() / 35) + Math.min(3, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
+        if (x < 0 || y < 0 || x > 6 * 37 || y > rows * 35) return;
+
+        let index = (Math.trunc(this.getBag().getScroll() / 35) + Math.min(rows - 1, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
         const order = this.arrBagOrder[Number(this.isQuest)], source = order.indexOf(item.objectId);
+
+        if (this.search.isOpen()) {
+            const target = this.getInputItem(Number(this.isQuest), index);
+
+            index = target ? order.indexOf(target.objectId) : order.length;
+        }
 
         if (source < 0 || source === index) return;
 
