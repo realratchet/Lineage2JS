@@ -3,6 +3,7 @@ import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import type BaseActor from "../base-actor";
 import type BaseEmitter from "../objects/emitters/base-emitter";
 import NPawnLightComponent from "./components/pawn-light-component";
+import GLOBAL_UNIFORMS, { NUM_SKILL_LIGHTS } from "../materials/global-uniforms";
 
 const tmpPosition = new Vector3();
 const tmpColor = new Color();
@@ -10,7 +11,7 @@ const tmpLightPosition = new Vector3();
 const tmpLightColor = new Color();
 const arrWhite = [1, 1, 1];
 
-type EffectLight_T = { emitters: BaseEmitter[], position: Vector3, color: Color, radius: number };
+type EffectLight_T = { emitters: BaseEmitter[], position: Vector3, color: Color, radius: number, distance: number };
 
 export class SkillLightProbe {
     public enabled = true;
@@ -18,6 +19,7 @@ export class SkillLightProbe {
     public hasLights = false;
     protected lastTime = 0;
     protected readonly effects = new Map<Object3D, EffectLight_T>();
+    protected readonly arrLights: EffectLight_T[] = [];
     protected readonly pawns = new WeakMap<Object3D, NPawnLightComponent>();
     protected readonly cacheTextures = new WeakMap<Texture, Color>();
     protected readonly pixels = new Uint8Array(8 * 8 * 4);
@@ -35,18 +37,19 @@ export class SkillLightProbe {
         const emitters: BaseEmitter[] = [];
 
         effect.traverse(child => { if ((child as any).particlePool) emitters.push(child as BaseEmitter); });
-        if (emitters.length) this.effects.set(effect, { emitters, position: new Vector3(), color: new Color(0, 0, 0), radius: 0 });
+        if (emitters.length) this.effects.set(effect, { emitters, position: new Vector3(), color: new Color(0, 0, 0), radius: 0, distance: 0 });
     }
 
     public remove(effect: Object3D): void { this.effects.delete(effect); }
 
-    public update(renderer: WebGLRenderer): void {
+    public update(renderer: WebGLRenderer, focus: Vector3): void {
         const now = performance.now();
         const dt = this.lastTime ? Math.min(0.1, (now - this.lastTime) / 1000) : 0;
 
         this.lastTime = now;
         this.version++;
         this.hasLights = false;
+        this.arrLights.length = 0;
 
         for (const [effect, light] of this.effects) {
             if (!effect.parent) {
@@ -71,7 +74,11 @@ export class SkillLightProbe {
                     const texture = emitter.getLightTexture();
 
                     peak = Math.max(peak, tmpColor.r, tmpColor.g, tmpColor.b);
-                    if (texture) tmpColor.multiply(this.getTextureColor(renderer, texture));
+                    if (texture) {
+                        const textureColor = this.getTextureColor(renderer, texture);
+                        if (!textureColor) continue;
+                        tmpColor.multiply(textureColor);
+                    }
                     const brightness = Math.max(tmpColor.r, tmpColor.g, tmpColor.b);
 
                     tmpLightPosition.addScaledVector(tmpPosition, brightness);
@@ -85,6 +92,7 @@ export class SkillLightProbe {
 
             if (weight > 0) {
                 tmpLightPosition.divideScalar(weight);
+                tmpLightPosition.z += radius * 0.25;
                 tmpLightColor.multiplyScalar(0.45 * peak / weight); // hue weighted by texture emission, intensity from particle colour
 
                 if (light.radius === 0) {
@@ -105,7 +113,21 @@ export class SkillLightProbe {
                 light.radius = 0;
                 continue;
             }
-            if (light.radius > 0) this.hasLights = true;
+            if (light.radius > 0) {
+                light.distance = Math.max(0, light.position.distanceTo(focus) - light.radius);
+                this.arrLights.push(light);
+            }
+        }
+
+        this.arrLights.sort(compareLights);
+        this.arrLights.length = Math.min(this.arrLights.length, NUM_SKILL_LIGHTS);
+        this.hasLights = this.arrLights.length > 0;
+        GLOBAL_UNIFORMS.skillLightCount.value = this.arrLights.length;
+
+        for (let i = 0; i < this.arrLights.length; i++) {
+            const light = this.arrLights[i];
+            GLOBAL_UNIFORMS.skillLightPositions.value[i].set(light.position.x, light.position.y, light.position.z, light.radius);
+            GLOBAL_UNIFORMS.skillLightColors.value[i].set(light.color.r, light.color.g, light.color.b);
         }
     }
 
@@ -117,7 +139,7 @@ export class SkillLightProbe {
         tmpLightPosition.set(0, 0, 0);
         tmpLightColor.setRGB(0, 0, 0);
 
-        for (const light of this.effects.values()) {
+        for (const light of this.arrLights) {
             if (light.radius === 0) continue;
 
             const distance = Math.max(0, light.position.distanceTo(sphere.center) - sphere.radius);
@@ -151,7 +173,7 @@ export class SkillLightProbe {
         return component;
     }
 
-    protected getTextureColor(renderer: WebGLRenderer, texture: Texture): Color {
+    protected getTextureColor(renderer: WebGLRenderer, texture: Texture): Color | null {
         let color = this.cacheTextures.get(texture);
 
         if (color) return color;
@@ -162,7 +184,10 @@ export class SkillLightProbe {
         try {
             this.material.uniforms.map.value = texture;
             renderer.setRenderTarget(this.target);
+            const program = (renderer.properties.get(this.material) as { currentProgram: { isReady(): boolean } }).currentProgram;
+            const isReady = program && program.isReady();
             this.quad.render(renderer);
+            if (!isReady) return null;
             renderer.readRenderTargetPixels(this.target, 0, 0, 8, 8, this.pixels);
         } finally {
             renderer.setRenderTarget(target, face, mip);
@@ -188,12 +213,18 @@ export class SkillLightProbe {
 
     public dispose(): void {
         this.effects.clear();
+        this.arrLights.length = 0;
         this.hasLights = false;
+        GLOBAL_UNIFORMS.skillLightCount.value = 0;
         this.material.uniforms.map.value = null;
         this.target.dispose();
         this.material.dispose();
         this.quad.dispose();
     }
+}
+
+function compareLights(a: EffectLight_T, b: EffectLight_T): number {
+    return a.distance - b.distance || Math.max(b.color.r, b.color.g, b.color.b) - Math.max(a.color.r, a.color.g, a.color.b);
 }
 
 export default SkillLightProbe;

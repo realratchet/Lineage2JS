@@ -38,7 +38,7 @@ import LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
 import LocalSpaceSkeleton from "../objects/local-space-skeleton";
 import type GroundPickup from "../objects/ground-pickup";
-import ShadowProjector from "../objects/shadow-projector";
+import ShadowProjector, { isInShadowRange } from "../objects/shadow-projector";
 import PawnCrowd from "../objects/pawn-crowd";
 import boneAtlas from "../objects/bone-atlas";
 import type PawnMesh from "../objects/pawn-mesh";
@@ -365,6 +365,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected pawnShadowRecoveryTime = 0;
     protected pawnShadowLastTickTime = 0;
     public readonly skillLightProbe = new SkillLightProbe();
+    protected readonly skillLightFocus = new Vector3();
     protected sortTransparent = true;
     protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
@@ -1914,7 +1915,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const ambientChanged = state.envVersion !== envVersion || renderLeavesChanged || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
         const pawnLightVersion = pawnLights ? pawnLights.version : -1;
-        const skillLights = (actor as BaseActor).isActor && (!pawnLights || !pawnLights.getLights().length) ? this.skillLightProbe.sample(actor, lightingSphere) : null;
+        const skillLights = renderable && (actor === this.player || !this.pawnShadowLimited && isInShadowRange(state.position, this.skillLightFocus)) && (!pawnLights || !pawnLights.getLights().length) ? this.skillLightProbe.sample(actor, lightingSphere) : null;
         const skillLightVersion = skillLights ? this.skillLightProbe.version : -1;
         let relevantLightsChanged = false;
         let relevantLightUpdated = false;
@@ -2150,7 +2151,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.overHeadAlarm.clear();
         this.manGame.getComponent("gui").updateNameplates();
-        this.skillLightProbe.update(this.renderer);
+        const focus = this.manGame.getComponent("network").isInWorld() || this.player.visible ? this.player : this.camera;
+        focus.getWorldPosition(this.skillLightFocus);
+        this.skillLightProbe.update(this.renderer, this.skillLightFocus);
         this.updatePawnLighting(true, currentTime);
 
         for (const emitter of this.getPhysicsManager().getParticleEmitters()) {

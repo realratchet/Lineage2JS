@@ -561,7 +561,7 @@ export class SectorObject extends GameObject {
     protected readonly cacheTerrainVisibility = new WeakMap<Mesh, TerrainVisibility_T>();
     protected cacheTerrainSegments: Map<string, Terrain[]>;
     protected readonly arrTerrainSectorKeys: number[] = [];
-    protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
+    protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], stitched: Terrain[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
     protected readonly cacheStaticVisibleLeaves = new Set<number>();
@@ -1942,7 +1942,11 @@ export class SectorObject extends GameObject {
     public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
         if (!auxiliary) this.updateLights(environment);
 
-        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) return;
+        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) {
+            if (this.terrainRenderables) for (const terrain of this.terrainRenderables.stitched)
+                if (terrain.needsStitchedLightingUpdate()) terrain.update(this, environment);
+            return;
+        }
 
         const library = (this as any).decodeLibrary as DecodeLibrary;
 
@@ -2477,8 +2481,10 @@ export class SectorObject extends GameObject {
                 }
             });
 
-            this.terrainRenderables = { batches, standalone, decorations };
+            this.terrainRenderables = { batches, standalone, stitched: [], decorations };
         }
+
+        this.terrainRenderables.stitched.length = 0;
 
         for (const batch of this.terrainRenderables.batches) {
             const batchGeo = batch.geometry as BufferGeometry;
@@ -2501,6 +2507,7 @@ export class SectorObject extends GameObject {
                     if (cached.visible[visibleCount] !== i) { changed = true; cached.visible[visibleCount] = i; }
                     visibleCount++;
                     sector.update(this, environment);
+                    if (sector.offsetX === 240 || sector.offsetY === 240) this.terrainRenderables.stitched.push(sector);
                 }
 
                 const decorations = this.terrainRenderables.decorations.get(sector.terrainSegmentUuid);
@@ -2543,7 +2550,10 @@ export class SectorObject extends GameObject {
 
         for (const terrain of this.terrainRenderables.standalone) {
             const isVisible = zoneVisible && terrain.visible;
-            if (isVisible) terrain.update?.(this, environment);
+            if (isVisible) {
+                terrain.update?.(this, environment);
+                if (terrain.offsetX === 240 || terrain.offsetY === 240) this.terrainRenderables.stitched.push(terrain);
+            }
 
             const decorations = this.terrainRenderables.decorations.get(terrain.terrainSegmentUuid);
             if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));

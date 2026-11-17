@@ -1,3 +1,10 @@
+#if !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
+#define USE_SKILL_LIGHTS
+#endif
+#ifdef USE_SKILL_LIGHTS
+varying vec3 vSkillLightPosition;
+varying vec3 vSkillLightNormal;
+#endif
 #include <common>
 #ifdef USE_PROJECTOR_RECEIVER
     varying vec3 vProjectorNormal;
@@ -879,7 +886,7 @@ void main() {
     // #endif
 
     #include <color_vertex>
-    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS ) || defined( USE_ACTOR_LIGHTS )
+    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS ) || defined( USE_ACTOR_LIGHTS ) || defined(USE_SKILL_LIGHTS)
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
@@ -993,6 +1000,17 @@ void main() {
     #ifdef USE_PROJECTOR_RECEIVER
         vProjectorNormal = normalize(normalMatrix * normal);
     #endif
+    #endif
+    #ifdef USE_SKILL_LIGHTS
+        vec4 skillLightPosition = vec4(transformed, 1.0);
+        #ifdef USE_BATCHING
+            skillLightPosition = batchingMatrix * skillLightPosition;
+        #endif
+        #ifdef USE_INSTANCING
+            skillLightPosition = instanceMatrix * skillLightPosition;
+        #endif
+        vSkillLightPosition = (modelMatrix * skillLightPosition).xyz;
+        vSkillLightNormal = inverseTransformDirection(transformedNormal, viewMatrix);
     #endif
     #include <project_vertex>
     #ifdef USE_TERRAIN_DECORATION_FADE

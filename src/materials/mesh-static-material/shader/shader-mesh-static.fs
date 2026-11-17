@@ -1,3 +1,6 @@
+#if !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
+#define USE_SKILL_LIGHTS
+#endif
 uniform vec3 diffuse;
 #ifdef USE_TEX_MODIFIER
 uniform vec3 texModifierColor;
@@ -605,6 +608,8 @@ vec3 getFadeColor(FadeData fade) {
     varying float vVertexAlpha;
 #endif
 
+#include <skill_light>
+
 void main() {
     #include <clipping_planes_fragment>
     #ifdef USE_RANGE_FADE
@@ -869,6 +874,10 @@ void main() {
 
     #ifdef USE_BSP_AMBIENT
         outgoingLight = clamp(outgoingLight, 0.0, 1.0) * ambient.color * 2.0;
+    #endif
+
+    #ifdef USE_SKILL_LIGHTS
+        outgoingLight += getSkillLight() * diffuseColor.rgb;
     #endif
 
     #if defined(USE_SPECULAR) && !defined(USE_SELF_ILLUMINATION)

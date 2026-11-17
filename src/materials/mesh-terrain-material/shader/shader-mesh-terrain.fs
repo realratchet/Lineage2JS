@@ -1,3 +1,6 @@
+#ifndef USE_PROJECTOR_RECEIVER
+#define USE_SKILL_LIGHTS
+#endif
 uniform vec3 diffuse;
 uniform float opacity;
 #ifndef FLAT_SHADED
@@ -48,6 +51,8 @@ varying vec4 vShadowCoord;
     #include <projector_receiver>
 #endif
 
+#include <skill_light>
+
 void main() {
     #include <clipping_planes_fragment>
     float ditherNoise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -69,6 +74,9 @@ void main() {
         diffuseColor.a *= texelDiffuse.a;
     #endif
 
+    #ifdef USE_SKILL_LIGHTS
+        vec3 skillLightDiffuse = diffuseColor.rgb;
+    #endif
     #include <color_fragment>
 
     // D3DTOP_MODULATE2X: ATerrainInfo::Render (0x9bdfb8) passes EnableLighting Modulate2X=1
@@ -90,6 +98,9 @@ void main() {
     reflectedLight.indirectDiffuse *= diffuseColor.rgb;
     vec3 outgoingLight = reflectedLight.indirectDiffuse;
 
+    #ifdef USE_SKILL_LIGHTS
+        outgoingLight += getSkillLight() * skillLightDiffuse;
+    #endif
 
     #include <envmap_fragment>
     #include <opaque_fragment>

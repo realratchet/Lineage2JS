@@ -144,6 +144,12 @@ export class Terrain extends GameMesh implements ICollidable {
 
     public lightingGate: boolean = true;
 
+    public needsStitchedLightingUpdate(): boolean {
+        return (this.stitchEastNeighbor?.lightingRevision ?? -1) !== this.lastStitchEastRevision ||
+            (this.stitchSouthNeighbor?.lightingRevision ?? -1) !== this.lastStitchSouthRevision ||
+            (this.stitchCornerNeighbor?.lightingRevision ?? -1) !== this.lastStitchCornerRevision;
+    }
+
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightingInfo) return;
         if (this.needsInitialLighting() && !this.lightingGate) return;
@@ -185,7 +191,7 @@ export class Terrain extends GameMesh implements ICollidable {
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
-        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
+        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !this.needsStitchedLightingUpdate()) return;
 
         const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
 
@@ -283,6 +289,10 @@ export class Terrain extends GameMesh implements ICollidable {
             cache[selfIdx + 1] = n[neighborIdx + 1];
             cache[selfIdx + 2] = n[neighborIdx + 2];
         }
+
+        this.lastStitchEastRevision = this.stitchEastNeighbor?.lightingRevision ?? -1;
+        this.lastStitchSouthRevision = this.stitchSouthNeighbor?.lightingRevision ?? -1;
+        this.lastStitchCornerRevision = this.stitchCornerNeighbor?.lightingRevision ?? -1;
     }
 
     protected computeLighting(lights: { flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, isCache: boolean) {
@@ -495,6 +505,9 @@ export class Terrain extends GameMesh implements ICollidable {
     protected stitchEastNeighbor: Terrain | null = null;
     protected stitchSouthNeighbor: Terrain | null = null;
     protected stitchCornerNeighbor: Terrain | null = null;
+    protected lastStitchEastRevision: number = -1;
+    protected lastStitchSouthRevision: number = -1;
+    protected lastStitchCornerRevision: number = -1;
 
     public stitchWestToEast(neighbor: Terrain) {
         const targetGeometry = this.batchGeometry || this.geometry;
@@ -524,6 +537,7 @@ export class Terrain extends GameMesh implements ICollidable {
         }
 
         this.stitchEastNeighbor = neighbor;
+        this.lastStitchEastRevision = -1;
 
         if (!changed) return false;
 
@@ -560,6 +574,7 @@ export class Terrain extends GameMesh implements ICollidable {
         }
 
         this.stitchSouthNeighbor = neighbor;
+        this.lastStitchSouthRevision = -1;
 
         if (!changed) return false;
 
@@ -588,6 +603,7 @@ export class Terrain extends GameMesh implements ICollidable {
         const height = nPos[neighborIdx] + hDiff;
 
         this.stitchCornerNeighbor = neighbor;
+        this.lastStitchCornerRevision = -1;
 
         if (pos[selfIdx] === height) return false;
 

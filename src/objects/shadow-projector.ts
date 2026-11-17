@@ -149,8 +149,7 @@ export class ShadowProjector {
             const actor = object as BaseActor;
             if (actor.getUnrealScriptProperty("bHidden") || actor.getUnrealScriptProperty("bHideShadow")) continue;
             object.getWorldPosition(tmpCasterPos);
-            const dx = tmpCasterPos.x - tmpFocusPos.x, dy = tmpCasterPos.y - tmpFocusPos.y, dz = tmpCasterPos.z - tmpFocusPos.z;
-            if (dz <= -SHADOW_BAND_Z || dz >= SHADOW_BAND_Z || Math.hypot(dx, dy) > SHADOW_RANGE) continue;
+            if (!isInShadowRange(tmpCasterPos, tmpFocusPos)) continue;
 
             const animation = actor.getComponent<AnimationComponent>("animation");
             if (!animation.getMeshes().length) continue;
@@ -542,6 +541,11 @@ function swapMaterials(root: Object3D, material: Material, cacheSilhouetteMateri
 
 function getSilhouetteMaterial(source: Material, opaque: Material): Material {
     return (source as MeshStaticMaterial).isStaticMeshMaterial ? (source as MeshStaticMaterial).getShadowMaterial() || opaque : opaque;
+}
+
+export function isInShadowRange(position: Vector3, focus: Vector3): boolean {
+    const dx = position.x - focus.x, dy = position.y - focus.y, dz = position.z - focus.z;
+    return dz > -SHADOW_BAND_Z && dz < SHADOW_BAND_Z && Math.hypot(dx, dy) <= SHADOW_RANGE;
 }
 
 export default ShadowProjector;
