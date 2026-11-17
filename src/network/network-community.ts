@@ -188,10 +188,13 @@ export class NetworkCommunity {
         this.partyLootDistribution = lootDistribution;
         this.partyMembers.clear();
         this.partyPositions.clear();
+        this.network.ui.deleteAllPartyMembers();
         for (const member of members) {
             this.partyMembers.set(member.objectId, member);
             this.applyPartyMember(member);
             this.network.ui.addPartyMember(member, leaderId, lootDistribution);
+            const effects = this.partyEffects.get(member.objectId);
+            if (effects) this.network.ui.setPetStatusEffects(effects);
         }
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
