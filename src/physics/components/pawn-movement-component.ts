@@ -1170,9 +1170,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     protected getWaterVolume(position: Vector3): IWaterVolumeDecodeInfo | null {
         if (this.hasStartedPhysics && position.equals(this.getPosition()))
-            return this.getWaterVolumeData(this.getParent().getUnrealScriptProperty("HeadVolume") as unknown as PhysicsVolume);
+            return this.getWaterVolumeData(this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume);
 
-        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
+        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
 
         return this.getWaterVolumeAt(tmpWaterPosition);
     }
