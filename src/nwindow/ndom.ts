@@ -1,4 +1,4 @@
-import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
+import NCTooltip, { type TooltipSource_T } from "./nc-tooltip";
 import { DIGIT_CELLS, DIGIT_FONTS, DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -651,9 +651,9 @@ export class NDomLayer {
         return element;
     }
 
-    public tooltip(parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T, topOffset = 32) { this.tooltips.bind(this, parent, button, info, topOffset); }
+    public tooltip(parent: HTMLElement, button: HTMLElement, info: TooltipSource_T, topOffset = 32) { this.tooltips.bind(this, parent, button, info, topOffset); }
 
-    public tab(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, selected: string, label: string, tooltip: string, onSelect: () => void): NDomButton_T { // NCTabButton 0x10001b90, 0x10001a50: selected stays state 1; unselected hover uses state 2.
+    public tab(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, selected: string, label: string, tooltip: string | (() => string), onSelect: () => void, textureWidth = w): NDomButton_T { // NCTabButton 0x10001b90, 0x10001a50: selected stays state 1; unselected hover uses state 2.
         let isEnabled = true, isSelected = normal === selected;
         const select = () => { // 0x10002a50 / 0x1002e550.
             if (!isEnabled) return;
@@ -673,7 +673,8 @@ export class NDomLayer {
             label ? normal === selected || !this.hasTexture(`${normal}_over`) ? normal : `${normal}_over` : selected,
             label,
             null,
-            isDown => { if (isDown) select(); }
+            isDown => { if (isDown) select(); },
+            textureWidth
         );
         const setTextures = tab.setTextures, setEnabled = tab.setEnabled;
 
@@ -684,7 +685,7 @@ export class NDomLayer {
         tab.setEnabled = value => { isEnabled = value; setEnabled(value); };
         tab.tabIndex = 0;
         tab.setAttribute("role", "tab");
-        tab.setAttribute("aria-label", tooltip || label);
+        tab.setAttribute("aria-label", typeof tooltip === "function" ? tooltip() : tooltip || label);
         tab.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
         if (tooltip) this.tooltip(parent, tab, tooltip);
         tab.addEventListener("keydown", event => {

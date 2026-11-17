@@ -8,6 +8,7 @@ const TEXT_COLOR = 0xffdcdcdc;
 export const TEX_TOOLTIP_SLICES = [SKIN_SLOTS.tooltip1, SKIN_SLOTS.tooltip2, SKIN_SLOTS.tooltip3, SKIN_SLOTS.tooltip4, SKIN_SLOTS.tooltip5, SKIN_SLOTS.tooltip6, SKIN_SLOTS.tooltip7, SKIN_SLOTS.tooltip8, SKIN_SLOTS.tooltip9];
 
 export type TooltipInfo_T = { title: string; extentTitle?: string; titleRuns?: { text: string; color: number; gap?: number }[]; lines: { label: string; value: string }[]; description: string; minimumWidth?: number; };
+export type TooltipSource_T = string | TooltipInfo_T | (() => string | TooltipInfo_T);
 type TooltipLayout_T = { width: number; height: number; runs: { x: number; y: number; color: number; text: string }[]; };
 
 export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCWnd::OnCreate 0x100360d6); nine 8x8 slices.
@@ -152,14 +153,14 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         return tooltip;
     }
 
-    public bind(layer: NDomLayer, parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T, topOffset = 32) { // 0x10032560 uses 32 at the top edge; NCButton's 0x10032860 uses 0.
+    public bind(layer: NDomLayer, parent: HTMLElement, button: HTMLElement, info: TooltipSource_T, topOffset = 32) { // 0x10032560 uses 32 at the top edge; NCButton's 0x10032860 uses 0.
         let tooltip: HTMLDivElement = null;
         const hide = () => { if (tooltip) { tooltip.remove(); tooltip = null; } };
         const show = () => {
             hide();
             const rect = button.getBoundingClientRect();
 
-            tooltip = this.createDOM(layer, parent, layer.toUI(rect.left), layer.toUI(rect.top), info, topOffset);
+            tooltip = this.createDOM(layer, parent, layer.toUI(rect.left), layer.toUI(rect.top), typeof info === "function" ? info() : info, topOffset);
         };
 
         button.addEventListener("mouseenter", show);

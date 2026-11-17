@@ -2744,10 +2744,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.activeMusicId = musicId;
 
             if (musicId >= 0) {
-                console.log(`[Music] Playing track ${musicId} (forced: ${musicInfo.isForced})`);
+                // console.log(`[Music] Playing track ${musicId} (forced: ${musicInfo.isForced})`);
                 this.audioManager.playMusic(musicId, musicInfo.isLooped, musicInfo.isForced, currentTime);
             } else {
-                console.log(`[Music] Letting current track finish (left music volume)`);
+                // console.log(`[Music] Letting current track finish (left music volume)`);
                 this.audioManager.letTrackFinish();
             }
         }

@@ -1,4 +1,4 @@
-import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom";
+import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomCheckBox_T, type NDomScrollPane_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
@@ -6,6 +6,8 @@ import type { AudioConfig_T, BackgroundAudio_T, ForceAttackKey_T, GameConfig_T, 
 import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import SysString_T from "./sys-string";
+import { WINDOW_ACTIONS, getDefaultWindowKeyBindings, getWindowKeyChord, isWindowKeyChord, formatWindowKeyChord } from "../game/window-key-bindings";
+import type { WindowAction_T, WindowKeyBindings_T } from "../game/window-key-bindings";
 
 const TEX_BACK = "L2UI_ch3.OptionWnd.option3_back";
 const TEX_TAB_BACK = "L2UI_ch3.SSQWnd.ssq_back";
@@ -15,13 +17,14 @@ const TEX_BUTTON = SKIN_SLOTS.button;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_INITIALIZE = "L2UI_ch3.button.smallbutton2";
 const TEX_INITIALIZE_DOWN = "L2UI_ch3.button.smallbutton2_down";
+const WIDTH = 340;
 
 export const UI_SCALES = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.25, 1.5, 1.75, 2];
 export const PAWN_RANGES = [3, 2.5, 2, 1.5, 1];
 export const PAWN_LIMITS = [50, 100, 200, 300, 400, 10000];
 
 export class NCOptionWnd {
-    public static getTextures() { return [TEX_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...NCComboBox.getTextures(), ...NCFrameCtrl.getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...NDOM_SCROLL_TEXTURES, ...NCComboBox.getTextures(), ...NCFrameCtrl.getTextures()]; }
     public readonly element: HTMLDivElement;
     public getOptions: () => GameOptions_T = null;
     public onApply: (options: GameOptions_T) => void = null;
@@ -35,6 +38,7 @@ export class NCOptionWnd {
     public onApplyPawnRange: (range: number) => void = null;
     public onInitialize: () => void = null;
     public canChangePartyLoot: () => boolean = null;
+    public canUseGMControls: () => boolean = null;
     public getAntiAliasingLevels: () => number[] = null;
     public getUIScale: () => number = null;
     public getUIScales: () => number[] = null;
@@ -42,6 +46,15 @@ export class NCOptionWnd {
     protected readonly game: HTMLDivElement;
     protected readonly audio: HTMLDivElement;
     protected readonly video: HTMLDivElement;
+    protected readonly controls: HTMLDivElement;
+    protected readonly bindingButtons = new Map<WindowAction_T, NDomButton_T>();
+    protected readonly bindingRows = new Map<WindowAction_T, HTMLDivElement>();
+    protected gmControlsVisible: boolean = null;
+    protected readonly bindingStatus: HTMLDivElement;
+    protected readonly bindingList: NDomScrollPane_T;
+    protected windowKeyBindings: WindowKeyBindings_T = getDefaultWindowKeyBindings();
+    protected captureAction: WindowAction_T = null;
+    protected readonly capturedKeys = new Set<string>();
     protected readonly uiScale: NCComboBox;
     protected readonly gamma: NCComboBox;
     protected readonly antiAliasing: NCComboBox;
@@ -87,16 +100,16 @@ export class NCOptionWnd {
     public constructor(protected readonly layer: NDomLayer) {
         const manager = layer.getManager();
 
-        this.element = layer.createWindow(0, 0, 256, 480);
+        this.element = layer.createWindow(0, 0, WIDTH, 480);
         this.element.classList.add("ndom-options");
         this.element.hidden = true;
         this.background = document.createElement("canvas");
         this.background.className = "ndom-tile ndom-options-background";
         this.element.appendChild(this.background);
-        layer.tile(this.element, 0, 20, 256, 28, 0, 0, 256, 28, TEX_TAB_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.Options), false, () => this.setVisible(false));
-        [SysString_T.Video, SysString_T.Audio, SysString_T.Game].forEach((id, index) => {
-            const tab = layer.tab(this.element, 12 + index * 75, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
+        layer.tile(this.element, 0, 20, WIDTH, 28, 0, 0, 256, 28, TEX_TAB_BACK);
+        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(SysString_T.Options), false, () => this.setVisible(false));
+        [manager.getSysString(SysString_T.Video), manager.getSysString(SysString_T.Audio), manager.getSysString(SysString_T.Game), "Controls"].forEach((label, index) => {
+            const tab = layer.tab(this.element, 12 + index * 79, 25, 78, 23, TEX_TAB, TEX_TAB_SELECTED, label, null, () => this.selectTab(index), 74);
 
             tab.setAttribute("aria-selected", String(index === 2));
             tab.tabIndex = 0;
@@ -106,11 +119,13 @@ export class NCOptionWnd {
 
         content.className = "ndom-options-pages";
         this.element.appendChild(content);
-        const game = this.game = layer.createWindow(0, 48, 256, 400, content);
-        this.audio = layer.createWindow(0, 48, 256, 400, content);
+        const game = this.game = layer.createWindow(0, 48, WIDTH, 400, content);
+        this.audio = layer.createWindow(0, 48, WIDTH, 400, content);
         this.audio.hidden = true;
-        this.video = layer.createWindow(0, 48, 256, 400, content);
+        this.video = layer.createWindow(0, 48, WIDTH, 400, content);
         this.video.hidden = true;
+        this.controls = layer.createWindow(0, 48, WIDTH, 400, content);
+        this.controls.hidden = true;
         const gammaLabel = manager.getSysString(SysString_T.Gamma);
 
         const gammaText = layer.text(this.video, gammaLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(gammaLabel), 52);
@@ -289,7 +304,7 @@ export class NCOptionWnd {
         this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(SysString_T.SystemMessageWindow), () => this.updateSystemMessageControls());
         this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(SysString_T.Damage));
         this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(SysString_T.Consumables));
-        this.invertMouseWheel = layer.checkbox(game, 25, 274, 150, 12, "Invert mouse scroll");
+        this.invertMouseWheel = layer.checkbox(this.controls, 25, 0, 150, 12, "Invert mouse scroll");
         [...this.nameChecks, this.autoTrackingPawn, this.useColorCursor, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem, this.invertMouseWheel].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
@@ -318,9 +333,9 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
             this.partyLooting.setOpen(false);
         });
-        const forceText = layer.text(game, "Forced attack", 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText("Forced attack"), 396);
+        const forceText = layer.text(this.controls, "Forced attack", 0xffdcdcdc, FontType_T.SMALL, 0, 0);
 
-        this.forceAttackKey = new NCComboBox(layer, game, 87, 393, 125, 17);
+        this.forceAttackKey = new NCComboBox(layer, this.controls, 0, 0, 125, 17);
         this.forceAttackKey.setItems(["Ctrl", "Alt", "Shift"]);
         this.forceAttackKey.element.tabIndex = 0;
         this.forceAttackKey.element.setAttribute("role", "combobox");
@@ -350,11 +365,59 @@ export class NCOptionWnd {
         layoutSections(game, [
             [[interfaceText, initialize, this.transparencyMode]],
             [[displayText, names]],
-            [[this.enterChatting, this.oldChatting], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle], [this.invertMouseWheel]],
+            [[this.enterChatting, this.oldChatting], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle]],
             [[this.systemMsgWnd], [this.systemMsgWndDamage, this.systemMsgWndExpendableItem]],
-            [[lootText, this.partyLooting.element], [forceText, this.forceAttackKey.element]]
+            [[lootText, this.partyLooting.element]]
         ]);
         names.parentElement.classList.add("ndom-options-tree");
+        const bindings = document.createElement("div");
+        const headings = document.createElement("div");
+
+        bindings.className = "ndom-control-bindings";
+        headings.className = "ndom-control-heading";
+        ["Window", "Key", "Clear"].forEach(label => layer.text(headings, label, 0xffb09b79));
+        this.bindingList = layer.scrollPane(bindings, 0, 0, WIDTH - 38, 208, 26);
+        this.bindingList.setContentHeight(WINDOW_ACTIONS.length * 26);
+        WINDOW_ACTIONS.forEach(({ id, label }, index) => {
+            const row = document.createElement("div");
+
+            row.className = "ndom-control-binding";
+            layer.text(row, label);
+            const button = layer.button(row, 0, 0, 110, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, "", () => this.startKeyCapture(id), null, 76);
+            const clearBinding = () => {
+                this.cancelKeyCapture();
+                this.windowKeyBindings[id] = "";
+                this.updateKeyBindings();
+            };
+            const clear = layer.button(row, 0, 0, 15, 15, SKIN_SLOTS.frameClose, SKIN_SLOTS.frameCloseDown, null, null, clearBinding);
+
+            button.setAttribute("aria-label", `Rebind ${label}`);
+            clear.setAttribute("aria-label", `Clear ${label} binding`);
+            clear.title = `Clear ${label} binding`;
+            [button, clear].forEach(element => element.addEventListener("focus", () => {
+                const top = index * 26, scroll = this.bindingList.getScroll();
+
+                if (top < scroll) this.bindingList.setScroll(top);
+                else if (top + 26 > scroll + 208) this.bindingList.setScroll(top + 26 - 208);
+            }));
+            this.bindKeyButton(button, () => this.startKeyCapture(id));
+            this.bindKeyButton(clear, clearBinding);
+            this.bindingButtons.set(id, button);
+            this.bindingRows.set(id, row);
+            this.bindingList.content.appendChild(row);
+        });
+        const bindingHelp = layer.text(null, "Click a key to rebind; Esc cancels.");
+        const resetBindings = layer.button(this.controls, 0, 0, 150, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, "Reset key bindings", () => this.resetKeyBindings(), null, 76);
+
+        resetBindings.setAttribute("aria-label", "Reset key bindings");
+        this.bindKeyButton(resetBindings, () => this.resetKeyBindings());
+        this.bindingStatus = layer.text(null, "F1–F12 are reserved for shortcuts.");
+        this.bindingStatus.classList.add("ndom-binding-status");
+        this.bindingStatus.setAttribute("role", "status");
+        layoutSections(this.controls, [[[this.invertMouseWheel], [forceText, this.forceAttackKey.element]], [[bindingHelp], [headings], [bindings], [resetBindings], [this.bindingStatus]]]);
+        resetBindings.parentElement.style.justifyContent = "center";
+        this.updateKeyBindings();
+        this.updateGMControls();
         const footer = document.createElement("div");
 
         footer.className = "ndom-options-footer";
@@ -380,10 +443,11 @@ export class NCOptionWnd {
         new ResizeObserver(() => this.updateBackground()).observe(this.element);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 128), Math.max(0, Math.trunc((height - (this.element.offsetHeight || 480)) * 0.5))); }
+    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc((width - WIDTH) * 0.5), Math.max(0, Math.trunc((height - (this.element.offsetHeight || 480)) * 0.5))); }
     public isVisible() { return !this.element.hidden; }
 
     public setVisible(isVisible: boolean) {
+        this.cancelKeyCapture();
         this.gamma.setOpen(false);
         this.pawnRange.setOpen(false);
         this.terrainRange.setOpen(false);
@@ -399,6 +463,7 @@ export class NCOptionWnd {
         this.element.hidden = !isVisible;
 
         if (isVisible) {
+            this.updateGMControls();
             const gamma = this.getGamma();
 
             this.gamma.setSelected(gamma === 0 ? GAMMA_STEPS.length : GAMMA_STEPS.indexOf(gamma));
@@ -440,6 +505,8 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
             this.invertMouseWheel.setChecked(options.invertMouseWheel);
             this.forceAttackKey.setSelected(this.forceAttackKeys.indexOf(options.forceAttackKey));
+            this.windowKeyBindings = { ...options.windowKeyBindings };
+            this.updateKeyBindings();
             const audio = this.getAudioOptions();
 
             this.backgroundAudio.setSelected(this.backgroundAudioModes.indexOf(audio.backgroundAudio));
@@ -463,6 +530,92 @@ export class NCOptionWnd {
         else manager.playWindowCloseSound();
     }
 
+    public captureKeyEvent(event: KeyboardEvent) {
+        if (event.type === "keyup") return this.capturedKeys.delete(event.code) || this.captureAction !== null;
+        if (event.repeat && this.capturedKeys.has(event.code)) return true;
+
+        this.capturedKeys.delete(event.code);
+        if (this.captureAction === null) return false;
+
+        this.capturedKeys.add(event.code);
+        if (event.isComposing || event.repeat) return true;
+        if (event.key === "Escape") {
+            this.cancelKeyCapture();
+            return true;
+        }
+        if (/^(Control|Alt|Shift|Meta)(Left|Right)$/.test(event.code)) return true;
+
+        const chord = getWindowKeyChord(event);
+
+        if (event.metaKey || !isWindowKeyChord(chord)) {
+            this.layer.renderText(this.bindingStatus, /^F\d+$/.test(event.code) ? "Function keys are reserved for shortcuts." : "That key combination is reserved.", 0xffb09b79);
+            return true;
+        }
+        const conflict = WINDOW_ACTIONS.find(action => action.id !== this.captureAction && this.windowKeyBindings[action.id] === chord);
+
+        if (conflict) {
+            this.layer.renderText(this.bindingStatus, `${formatWindowKeyChord(chord)} is assigned to ${conflict.label}.`, 0xffb09b79);
+            return true;
+        }
+
+        this.windowKeyBindings[this.captureAction] = chord;
+        this.cancelKeyCapture();
+        return true;
+    }
+
+    public cancelKeyCapture() {
+        this.captureAction = null;
+        this.updateKeyBindings();
+        this.layer.renderText(this.bindingStatus, "F1–F12 are reserved for shortcuts.", 0xffb09b79);
+    }
+
+    protected startKeyCapture(id: WindowAction_T) {
+        if (this.bindingRows.get(id)!.hidden) return;
+
+        this.cancelKeyCapture();
+        this.captureAction = id;
+        this.bindingButtons.get(id)!.setLabel("Press a key…");
+        this.bindingButtons.get(id)!.focus();
+        this.layer.renderText(this.bindingStatus, "Press a key combination. Esc cancels.", 0xffdcdcdc);
+    }
+
+    protected bindKeyButton(button: NDomButton_T, press: () => void) {
+        button.tabIndex = 0;
+        button.setAttribute("role", "button");
+        button.addEventListener("keydown", event => {
+            if (event.repeat || event.key !== " " && event.key !== "Enter") return;
+
+            event.preventDefault();
+            press();
+        });
+    }
+
+    protected resetKeyBindings() {
+        this.cancelKeyCapture();
+        this.windowKeyBindings = getDefaultWindowKeyBindings();
+        this.updateKeyBindings();
+    }
+
+    protected updateKeyBindings() {
+        for (const { id } of WINDOW_ACTIONS) {
+            const button = this.bindingButtons.get(id)!;
+
+            button.setLabel(formatWindowKeyChord(this.windowKeyBindings[id]));
+            button.title = formatWindowKeyChord(this.windowKeyBindings[id]);
+        }
+    }
+
+    public updateGMControls() {
+        const visible = this.canUseGMControls ? this.canUseGMControls() : false;
+
+        if (visible === this.gmControlsVisible) return;
+
+        this.gmControlsVisible = visible;
+        this.bindingRows.get("gm")!.hidden = this.bindingRows.get("gmPetitions")!.hidden = !visible;
+        if (!visible && (this.captureAction === "gm" || this.captureAction === "gmPetitions")) this.cancelKeyCapture();
+        this.bindingList.setContentHeight((WINDOW_ACTIONS.length - (visible ? 0 : 2)) * 26);
+    }
+
     public updatePartyLootControl() {
         if (!this.isVisible()) return;
 
@@ -478,6 +631,7 @@ export class NCOptionWnd {
     }
 
     protected selectTab(index: number) {
+        this.cancelKeyCapture();
         this.gamma.setOpen(false);
         this.pawnRange.setOpen(false);
         this.terrainRange.setOpen(false);
@@ -488,6 +642,7 @@ export class NCOptionWnd {
         this.game.hidden = index !== 2;
         this.audio.hidden = index !== 1;
         this.video.hidden = index !== 0;
+        this.controls.hidden = index !== 3;
         this.partyLooting.setOpen(false);
         this.forceAttackKey.setOpen(false);
         this.uiScale.setOpen(false);
@@ -513,7 +668,7 @@ export class NCOptionWnd {
         context.drawImage(image, 0, 400, 256, 1, 0, 0, width, height - 4);
         context.drawImage(image, 0, 428, 256, 4, 0, height - 4, width, 4);
 
-        const panel = [this.video, this.audio, this.game][this.selectedTab];
+        const panel = [this.video, this.audio, this.game, this.controls][this.selectedTab];
 
         for (const section of Array.from(panel.children) as HTMLElement[]) {
             const x = panel.offsetLeft + section.offsetLeft, y = panel.offsetTop + section.offsetTop - 48;
@@ -561,7 +716,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio({ ...Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])), backgroundAudio: this.backgroundAudioModes[this.backgroundAudio.getSelected()] } as AudioConfig_T);
-        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLightingModes[this.skillEffectLighting.getSelected()], ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()] } as GameOptions_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLightingModes[this.skillEffectLighting.getSelected()], ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()], windowKeyBindings: { ...this.windowKeyBindings } } as GameOptions_T);
     }
 }
 

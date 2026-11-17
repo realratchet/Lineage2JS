@@ -13,6 +13,7 @@ export class NCMenuWnd {
     public readonly element: HTMLDivElement;
     public onSelect: (button: MenuButton_T) => void = null;
     protected readonly layer: NDomLayer;
+    protected readonly arrButtonElements: HTMLElement[] = [];
 
     public constructor(layer: NDomLayer) {
         this.layer = layer;
@@ -44,10 +45,11 @@ export class NCMenuWnd {
             const select = () => { if (this.onSelect) this.onSelect(arrButtons[index]); };
             const button = layer.button(this.element, 19 + index * 37, 6, 34, 34, path, `${path}_down`, null, null, select, () => { });
 
-            layer.tooltip(this.element, button, label);
+            layer.tooltip(this.element, button, () => layer.getManager().getSysString(arrLabels[index]));
             button.tabIndex = 0;
             button.setAttribute("role", "button");
             button.setAttribute("aria-label", label);
+            this.arrButtonElements.push(button);
             button.addEventListener("keydown", event => {
                 if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
 
@@ -58,6 +60,7 @@ export class NCMenuWnd {
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 173, height - 46); }
+    public updateKeyBindings() { this.arrButtonElements.forEach((button, index) => button.setAttribute("aria-label", this.layer.getManager().getSysString(arrLabels[index]))); }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
 }
 

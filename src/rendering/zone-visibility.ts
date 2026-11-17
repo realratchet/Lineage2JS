@@ -18,13 +18,13 @@ export class ZoneVisibility {
     protected readonly zones: number[] = [];
     protected readonly queued = new Uint8Array(64);
     protected mask = 0n;
-    protected cameraZone = -1;
+    protected cameraMask = 0n;
     public active = false;
 
-    public prepare(sector: SectorObject, position: THREE.Vector3, frustum: THREE.Frustum, mask: bigint): bigint {
+    public prepare(sector: SectorObject, position: THREE.Vector3, frustum: THREE.Frustum, mask: bigint, exterior = false): bigint {
         const cameraZone = sector.findPositionZone(position);
         this.active = false;
-        if (cameraZone === null || cameraZone <= 0 || cameraZone >= 64 || sector.outdoorZoneMask & (1n << BigInt(cameraZone))) return mask;
+        if (!exterior && (cameraZone === null || cameraZone <= 0 || cameraZone >= 64 || sector.outdoorZoneMask & (1n << BigInt(cameraZone)))) return mask;
 
         if (this.nodes !== sector.bspNodes) {
             this.nodes = sector.bspNodes;
@@ -78,14 +78,18 @@ export class ZoneVisibility {
             rect.minX = rect.minY = Infinity;
             rect.maxX = rect.maxY = -Infinity;
         }
-        const view = this.rects[cameraZone];
-        view.minX = view.minY = 0;
-        view.maxX = view.maxY = 1;
         this.queue.length = 0;
-        this.queue.push(cameraZone);
         this.queued.fill(0);
-        this.queued[cameraZone] = 1;
-        this.mask = 1n << BigInt(cameraZone);
+        this.cameraMask = exterior ? sector.outdoorZoneMask : 1n << BigInt(cameraZone);
+        this.mask = this.cameraMask;
+        for (let zone = 0; zone < 64; zone++) {
+            if (!(this.cameraMask & arrZoneBits[zone])) continue;
+            const view = this.rects[zone];
+            view.minX = view.minY = 0;
+            view.maxX = view.maxY = 1;
+            this.queue.push(zone);
+            this.queued[zone] = 1;
+        }
         for (let i = 0; i < this.queue.length; i++) {
             const source = this.queue[i], from = this.rects[source];
             this.queued[source] = 0;
@@ -120,7 +124,6 @@ export class ZoneVisibility {
             this.clipPlane(clipped[2], planes[2], planes[3], rect.minY);
             this.clipPlane(clipped[3], planes[3], planes[2], 1 - rect.maxY);
         }
-        this.cameraZone = cameraZone;
         this.active = true;
         return this.mask;
     }
@@ -148,7 +151,7 @@ export class ZoneVisibility {
     }
 
     public intersectsBounds(mask: bigint, min: ArrayLike<number>, max: ArrayLike<number>): boolean {
-        if (!this.active || !mask || mask & arrZoneBits[this.cameraZone]) return true;
+        if (!this.active || !mask || mask & this.cameraMask) return true;
         mask &= this.mask;
         for (const zone of this.zones) {
             if (!(mask & arrZoneBits[zone])) continue;

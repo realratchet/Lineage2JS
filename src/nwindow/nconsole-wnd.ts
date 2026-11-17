@@ -3,6 +3,7 @@ import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "../loadin
 import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
 import type { AudioConfig_T, GameOptions_T } from "../assets/unreal/conf-files/un-conf-system";
+import { WINDOW_ACTIONS, getDefaultWindowKeyBindings, getWindowKeyChord, validateWindowKeyBindings } from "../game/window-key-bindings";
 import { Vector3 } from "three";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import NWindowManager from "./nwindow-manager";
@@ -230,7 +231,53 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     protected manRender: RenderManager;
 
-    public constructor(protected readonly skin: Skin = new Skin()) { }
+    public constructor(protected readonly skin: Skin = new Skin()) {
+        for (const type of ["keydown", "keyup"])
+            window.addEventListener(type, (event: KeyboardEvent) => {
+                if (!this.optionWnd || !this.optionWnd.captureKeyEvent(event)) return;
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }, true);
+        window.addEventListener("keydown", event => this.onWindowKeyDown(event), true);
+        window.addEventListener("blur", () => { if (this.optionWnd) this.optionWnd.cancelKeyCapture(); });
+    }
+
+    protected onWindowKeyDown(event: KeyboardEvent) {
+        if (this.screen !== "world" || event.defaultPrevented || event.isComposing || event.metaKey) return;
+
+        const target = event.target as HTMLElement;
+
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable) return;
+        if (this.layer.getModalWindows().length || this.optionWnd.element.contains(target)) return;
+
+        const chord = getWindowKeyChord(event), bindings = this.options.game.windowKeyBindings;
+        const action = WINDOW_ACTIONS.find(action => bindings[action.id] === chord);
+
+        if (!action) return;
+        if ((action.id === "gm" || action.id === "gmPetitions") && (this.windowGroup !== 0 || !this.statusInfo || !(this.statusInfo.gmLevel > 0 && this.statusInfo.gmLevel < 7))) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+
+        switch (action.id) {
+            case "character": this.toggleCharacterStatus(); break;
+            case "status": this.toggleSkillTab("status"); break;
+            case "skills": this.toggleSkills(); break;
+            case "actions": this.toggleSkillTab("actions"); break;
+            case "quest": this.toggleSkillTab("quest"); break;
+            case "clan": this.toggleSkillTab("clan"); break;
+            case "inventory": this.toggleInventory(); break;
+            case "map": this.toggleMap(); break;
+            case "systemMenu": this.toggleSystemMenu(); break;
+            case "community": this.communityWnd.toggle(); break;
+            case "macro": this.macroWnd.setVisible(!this.macroWnd.isVisible()); break;
+            case "gm": this.gmWnd.toggle(); break;
+            case "gmPetitions": this.gmPetitionWnd.setVisible(true); this.gmPetitionWnd.focus(); break;
+            default: throw new Error(`Unknown window action '${action.id}'.`);
+        }
+    }
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
     public getParent(): GameManager { return this.manGame; }
@@ -248,7 +295,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render");
 
         this.manNetwork = network;
-        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl" }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl", windowKeyBindings: getDefaultWindowKeyBindings() }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
@@ -330,14 +377,6 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             event.stopPropagation();
             this.chatWnd.focusInput();
         }, true);
-        window.addEventListener("keydown", event => {
-            if (this.screen !== "world" || this.windowGroup !== 0 || !event.altKey || !["KeyG", "KeyO"].includes(event.code) || !this.statusInfo || !(this.statusInfo.gmLevel > 0 && this.statusInfo.gmLevel < 7)) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            if (event.code === "KeyG") this.gmWnd.toggle();
-            else { this.gmPetitionWnd.setVisible(true); this.gmPetitionWnd.focus(); }
-        }, true);
         window.addEventListener("resize", () => this.placeScreens());
         window.addEventListener("dragover", event => this.onSkillDrop(event));
         window.addEventListener("drop", event => this.onSkillDrop(event));
@@ -349,24 +388,6 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.inputCtrl = this.inputShift = false;
             this.endSkillPointerDrag();
         });
-        window.addEventListener("keydown", event => {
-            const target = event.target as HTMLElement;
-
-            if (this.screen !== "world" || !event.altKey || !["KeyI", "KeyT", "KeyK", "KeyC", "KeyU", "KeyN", "KeyV", "KeyM", "KeyX"].includes(event.code) || event.repeat || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-
-            event.preventDefault();
-            switch (event.code) {
-                case "KeyI": this.toggleCharacterStatus(); break;
-                case "KeyT": this.toggleSkillTab("status"); break;
-                case "KeyK": this.toggleSkills(); break;
-                case "KeyC": this.toggleSkillTab("actions"); break;
-                case "KeyU": this.toggleSkillTab("quest"); break;
-                case "KeyN": this.toggleSkillTab("clan"); break;
-                case "KeyV": this.toggleInventory(); break;
-                case "KeyM": this.toggleMap(); break;
-                case "KeyX": this.toggleSystemMenu(); break;
-            }
-        }, true);
         this.loadOptions();
     }
 
@@ -1321,6 +1342,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.optionWnd.getPawnRange = () => this.manRender.getPawnRange();
         this.optionWnd.onApplyPawnRange = range => this.setPawnRange(range);
         this.optionWnd.canChangePartyLoot = () => !network.isInParty() && !this.partyRoomWnd.isVisible();
+        this.optionWnd.canUseGMControls = () => this.screen === "world" && !!this.statusInfo && this.statusInfo.gmLevel > 0 && this.statusInfo.gmLevel < 7;
         this.optionWnd.getAntiAliasingLevels = () => this.manRender.getAntiAliasingLevels();
         this.optionWnd.getUIScale = () => this.nwindow.canvas.uiScale;
         this.optionWnd.getUIScales = () => UI_SCALES.filter(scale => {
@@ -1408,6 +1430,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected show(screen: Screen_T) {
         if (screen && screen !== "loading") hideLoadingProgress();
         this.screen = screen;
+        this.optionWnd.updateGMControls();
         this.dialogBox.isInGame = this.yesNoDialogBox.isInGame = screen === "world";
         this.loginWnd.setVisible(screen === "login" || screen === "servers", screen === "login");
         this.loginServerWnd.setVisible(screen === "servers");
@@ -2142,6 +2165,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (this.mapWnd && this.mapWnd.isVisible()) {
             const position = this.manRender.player.position;
 
+            if (this.manNetwork.community.partyMembers.size)
+                this.setMapPartyMembers(this.manNetwork.community.partyMembers, this.manNetwork.community.partyPositions, this.manNetwork.actors.userId);
             this.mapWnd.setPosition(position.x, position.y, false, position.z);
             this.manRender.camera.getWorldDirection(tmpMapDirection);
             this.mapWnd.setFacing(Math.atan2(tmpMapDirection.y, tmpMapDirection.x));
@@ -2152,6 +2177,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public setStatus(info: GamePackets.UserInfo_T) {
         this.statusInfo = info;
+        this.optionWnd.updateGMControls();
         this.trainWnd.setStatus(info);
         this.mainWnd.actionWnd.setClass(info.classId);
         this.playerStatusWnd.setStatus(info);
@@ -2386,7 +2412,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         for (const member of members.values()) {
             if (member.objectId === selfId) continue;
 
-            const position = positions.get(member.objectId);
+            const object = this.manNetwork.actors.objects.get(member.objectId);
+            const position = object && object.actor ? object.actor.position : positions.get(member.objectId);
 
             arrMembers.push({ objectId: member.objectId, name: member.name, x: position ? position.x : -1, y: position ? position.y : -1, z: position ? position.z : -1 });
         }
@@ -2708,6 +2735,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "forceAttackKey":
                     if (value !== "ctrl" && value !== "alt" && value !== "shift") throw new Error(`Invalid game option '${key}'.`);
                     break;
+                case "windowKeyBindings":
+                    validateWindowKeyBindings(value as GameOptions_T["windowKeyBindings"]);
+                    break;
                 case "skillEffectLighting":
                     if (value !== "all" && value !== "pawnOnly" && value !== "none") throw new Error(`Invalid game option '${key}'.`);
                     break;
@@ -2717,7 +2747,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         const asset = this.manNetwork.getParent().getComponent("asset");
 
-        this.options.game = { ...asset.userConfig.game, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", ...options };
+        this.options.game = { ...asset.userConfig.game, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
+        this.nwindow.setWindowKeyBindings(this.options.game.windowKeyBindings);
+        for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd])
+            if (wnd) wnd.updateKeyBindings();
         asset.playerController.isEnterChatting = this.options.game.enterChatting;
         this.manGame.getComponent("input").setInvertMouseWheel(this.options.game.invertMouseWheel);
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
@@ -2762,7 +2795,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public isQuestArrowEnabled() { return this.options.game.arrowMode; }
 
-    public getGameOptions() { return { ...this.options.game }; }
+    public getGameOptions() { return { ...this.options.game, windowKeyBindings: { ...this.options.game.windowKeyBindings } }; }
 
     protected applyAudioOptions(options: Partial<AudioConfig_T>) {
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error(`Invalid audio options.`);

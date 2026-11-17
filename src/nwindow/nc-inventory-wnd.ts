@@ -88,6 +88,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected readonly layer: NDomLayer;
     protected readonly folded: HTMLDivElement;
     protected readonly caption: HTMLDivElement;
+    protected readonly foldedCaptionBack: HTMLDivElement;
+    protected readonly foldedCaptionText: HTMLDivElement;
     protected readonly trash: HTMLDivElement;
     protected readonly crystal: HTMLDivElement;
     protected readonly equipment: HTMLDivElement;
@@ -150,14 +152,14 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
 
         const captionText = layer.getManager().getSysString(SysString_T.InventoryAltV), canvas = layer.getManager().canvas;
-        const captionWidth = layer.measureText(captionText), captionHeight = canvas.getLineHeight();
+        const captionWidth = Math.ceil(layer.measureText(captionText)), captionHeight = canvas.getLineHeight();
         const texture = canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, captionWidth, captionHeight, this.folded);
         this.caption.hidden = true;
         this.caption.style.pointerEvents = "none";
-        layer.tile(this.caption, 0, 0, captionWidth, captionHeight, 0, 0, texture.width, texture.height, TEX_CAPTION);
-        layer.text(this.caption, captionText, 0xffdcdcdc, FontType_T.SMALL, 0, 0);
+        this.foldedCaptionBack = layer.tile(this.caption, 0, 0, captionWidth, captionHeight, 0, 0, texture.width, texture.height, TEX_CAPTION);
+        this.foldedCaptionText = layer.text(this.caption, captionText, 0xffdcdcdc, FontType_T.SMALL, 0, 0);
         this.folded.addEventListener("mousedown", event => { // NWindow 0x1001dd10 / 0x1001dd50 / 0x100356e0.
             if (event.button !== 0) return;
 
@@ -417,6 +419,16 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     }
 
     public getItemOwner(item: InventoryEntry_T) { return item.slot >= 0 ? this.equipment : this.arrBags[Number(item.isQuest)]; }
+    public updateKeyBindings() {
+        const manager = this.layer.getManager(), text = manager.getSysString(SysString_T.InventoryAltV), canvas = manager.canvas;
+        const width = Math.ceil(this.layer.measureText(text)), height = canvas.getLineHeight(), texture = canvas.getTexture(TEX_CAPTION);
+
+        this.folded.setAttribute("aria-label", text);
+        this.layer.place(this.caption, 0, 32, width, height);
+        this.layer.setTile(this.foldedCaptionBack, width, height, 0, 0, texture.width, texture.height, TEX_CAPTION);
+        this.layer.renderText(this.foldedCaptionText, text, 0xffdcdcdc);
+        this.placeCaption();
+    }
     public setVisible(isVisible: boolean) {
         if (!isVisible) this.search.close(false);
         this.folded.hidden = true;

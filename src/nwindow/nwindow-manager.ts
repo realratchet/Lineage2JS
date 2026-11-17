@@ -5,6 +5,8 @@ import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import fetchAsset from "../assets/asset-source";
 import type SkinTextures from "./skin-textures";
 import SysString_T, { CLASS_NAME_OFFSET } from "./sys-string";
+import { getDefaultWindowKeyBindings, replaceWindowKeyBindings } from "../game/window-key-bindings";
+import type { WindowKeyBindings_T } from "../game/window-key-bindings";
 
 const SNAP_DISTANCE = 10;
 
@@ -25,6 +27,7 @@ export class NWindowManager {
     protected readonly dockedWindows = new Map<DockWindow_T, Set<DockWindow_T>[]>();
     protected isDirty = true;
     protected isReady = false;
+    protected windowKeyBindings = getDefaultWindowKeyBindings();
     public readonly ready: Promise<void>;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
@@ -265,7 +268,9 @@ export class NWindowManager {
         return row || null;
     }
 
-    public getSysString(id: number): string { return this.strings.sysStrings[id] ?? ""; } // GL2GameData+0x9871c+id*12 in NWindow is the sysstring-e.dat table.
+    public setWindowKeyBindings(bindings: WindowKeyBindings_T) { this.windowKeyBindings = { ...bindings }; }
+    public formatWindowKeyText(text: string) { return replaceWindowKeyBindings(text, this.windowKeyBindings); }
+    public getSysString(id: number): string { return this.formatWindowKeyText(this.strings.sysStrings[id] ?? ""); } // GL2GameData+0x9871c+id*12 in NWindow is the sysstring-e.dat table.
     public getSystemMessage(id: number): string { return this.strings.systemMessages[id] ?? ""; }
 
     public filterText(value: string) {

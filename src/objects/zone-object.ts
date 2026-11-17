@@ -1420,7 +1420,10 @@ export class SectorObject extends GameObject {
             return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
         }
 
-        if (topLevelOnly) {
+        if (topLevelOnly && frustumCullingEnabled)
+            activeZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, (1n << 64n) - 1n, true);
+
+        if (topLevelOnly && (!frustumCullingEnabled || !(activeZoneMask & ~this.outdoorZoneMask))) {
             if (this.topLevelBSPResult) return this.topLevelBSPResult;
 
             for (let nodeIndex = 0; nodeIndex < this.bspNodes.length; nodeIndex++) {
@@ -1619,7 +1622,7 @@ export class SectorObject extends GameObject {
         }
 
         if (frustumCullingEnabled) {
-            currentZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, currentZoneMask);
+            currentZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, currentZoneMask, topLevelOnly);
             if (this.zoneVisibility.active) visibleNodes.forEach(nodeIndex => {
                 const node = this.bspNodes[nodeIndex];
                 const mask = (1n << BigInt(node.zones[0])) | (1n << BigInt(node.zones[1]));
@@ -2084,9 +2087,9 @@ export class SectorObject extends GameObject {
                 }
             });
 
-            if (!auxiliary && zoneChanged && bspAmbientColor) {
-                console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
-            }
+            // if (!auxiliary && zoneChanged && bspAmbientColor) {
+            //     console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
+            // }
 
             this.sortTranslucentBSP(cameraPosition);
 
@@ -2097,7 +2100,7 @@ export class SectorObject extends GameObject {
                         finalActiveZones.push(i);
                     }
                 }
-                console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
+                // console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
             }
         }
 
@@ -2322,7 +2325,7 @@ export class SectorObject extends GameObject {
             }
 
             if (!auxiliary && leafIndex !== null && leafIndex >= 0 && leafIndex !== this.lastLoggedStaticMeshLeaf) {
-                console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
+                // console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
                 this.lastLoggedStaticMeshLeaf = leafIndex;
             }
         }
