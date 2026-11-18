@@ -1,6 +1,6 @@
 import NCStoreWnd from "./nc-store-wnd";
 import { WarehouseType_T, type GMViewWarehouseWithdrawList_T, type ShopItem_T } from "../network/game-packets";
-import type { default as NDomLayer, NDomButton_T } from "./ndom";
+import type NDomLayer from "./ndom";
 import SysString_T from "./sys-string";
 
 export class NCGMStoreWnd extends NCStoreWnd {
@@ -19,11 +19,7 @@ export class NCGMStoreWnd extends NCStoreWnd {
         this.drawTotal();
         this.okButton.setEnabled(false);
         this.cancelButton.setEnabled(false);
-        for (const child of this.element.children) {
-            const button = child as NDomButton_T;
-
-            if (parseFloat(button.style.top) === 194 && (parseFloat(button.style.left) === 112 || parseFloat(button.style.left) === 130)) button.setEnabled(false);
-        }
+        this.transferButtons.forEach(button => button.setEnabled(false));
         this.onMove = (side, item) => {
             const consumeType = layer.getManager().strings.itemInfos[item.itemId].consumeType;
 

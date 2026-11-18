@@ -32,7 +32,6 @@ const TEX_WEIGHT = "L2UI.WindowIcon.Weight";
 const TEX_TRASH = "L2UI_CH3.InventoryWnd.Inventory_trash";
 const TEX_CRYSTAL = "L2UI_CH3.InventoryWnd.Inventory_recipe";
 const arrWeightBars = [1, 2, 3, 4, 5].map(index => `L2UI_CH3.PlayerStatusWnd.PS_weightbar${index}`);
-const arrTooltipSlices = Array.from({ length: 9 }, (_, i) => `L2UI_ch3.Tooltip.Tooltip${i + 1}`);
 const arrWeaponPAtk = [[0, 2, 3, 3, 4, 5], [0, 2, 4, 4, 5, 6], [0, 4, 6, 6, 8, 10]]; // 0x100741b0: one-handed 0x101af218, two-handed 0x101af248, bow 0x101af278.
 const arrWeaponMAtk = [0, 2, 3, 3, 3, 4]; // 0x10074250: 0x10242790, 0x102427c0 and 0x102427f0 are identical.
 const arrDefenceBonus = [0, 1, 1, 1, 1, 1]; // 0x100742f0: 0x101af2a8.
@@ -74,7 +73,7 @@ function getWeaponTable(weaponType: number, bodyPart: number) { // 0x100741b0 ju
 }
 
 export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 0x10099a60, OnPaint 0x10095870.
-    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, TEX_HENNA, TEX_DISABLED, ...arrWeightBars, ...arrTooltipSlices, ...TEX_TOOLTIP_SLICES, "L2UI.NWindow.Number", ...NCItemSearch.getTextures(), ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, TEX_HENNA, TEX_DISABLED, ...arrWeightBars, ...TEX_TOOLTIP_SLICES, "L2UI.NWindow.Number", ...NCItemSearch.getTextures(), ...NDOM_SCROLL_TEXTURES]; }
 
     public readonly element: HTMLDivElement;
     public onUse: (item: InventoryEntry_T, isRight: boolean) => void = null;
@@ -86,6 +85,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     public onDropItem: (objectId: number, clientX: number, clientY: number, item: InventoryEntry_T) => boolean = null;
     public onHideBag: (owner: HTMLElement) => void = null;
     protected readonly layer: NDomLayer;
+    protected frame: HTMLElement;
     protected readonly folded: HTMLDivElement;
     protected readonly caption: HTMLDivElement;
     protected readonly foldedCaptionBack: HTMLDivElement;
@@ -132,7 +132,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.element.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.Inventory));
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
 
-        const frame = layer.createWindow(0, 0, 256, 20, this.element);
+        const frame = this.frame = layer.createWindow(0, 0, 256, 20, this.element);
 
         layer.tile(frame, 0, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME_LEFT);
         layer.tile(frame, 16, 0, 224, 20, 0, 0, 32, 20, TEX_FRAME_MID);
@@ -1076,7 +1076,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         this.tooltip.replaceChildren();
 
-        const w = width + 10, h = height + 10, [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9] = arrTooltipSlices;
+        const w = width + 10, h = height + 10, [tex1, tex2, tex3, tex4, tex5, tex6, tex7, tex8, tex9] = TEX_TOOLTIP_SLICES;
 
         layer.tile(this.tooltip, 0, 0, 8, 8, 0, 0, 8, 8, tex1);
         layer.tile(this.tooltip, 8, 0, w - 16, 8, 0, 0, 8, 8, tex2);

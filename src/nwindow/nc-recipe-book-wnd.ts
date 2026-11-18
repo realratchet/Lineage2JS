@@ -1,5 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { bindWheelScroll, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeBook_T } from "../network/game-packets";
@@ -53,12 +53,7 @@ export class NCRecipeBookWnd {
         this.trashDrag = layer.tile(this.trash, 0, 0, 32, 32, 0, 0, 32, 32, TEX_TRASH_DRAG);
         this.trashDrag.hidden = true;
         layer.tooltip(this.element, this.trash, layer.getManager().getSysString(SysString_T.Destruction));
-        this.list.addEventListener("wheel", event => {
-            event.stopImmediatePropagation();
-            const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
-
-            this.list.setScroll(this.list.getScroll() - delta * 35);
-        }, true);
+        bindWheelScroll(this.list, 35);
         this.list.addEventListener("mousedown", event => {
             if (event.button !== 0 && event.button !== 2) return;
             if (event.target !== this.list && !this.list.content.contains(event.target as Node)) return;

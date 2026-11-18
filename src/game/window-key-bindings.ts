@@ -60,9 +60,9 @@ export function formatWindowKeyChord(chord: string) {
 }
 
 export function replaceWindowKeyBindings(text: string, bindings: WindowKeyBindings_T) {
-    return text.replace(/\bAlt\s*\+\s*([ITKCUNVMXGOBR])\b/gi, (original, key: string) => {
-        const action = WINDOW_ACTIONS.find(action => action.key === `Alt+Key${key.toUpperCase()}`)!;
+    return text.replace(/\bAlt\s*\+\s*([A-Z])\b/gi, (original, key: string) => {
+        const action = WINDOW_ACTIONS.find(action => action.key === `Alt+Key${key.toUpperCase()}`);
 
-        return bindings[action.id] === action.key ? original : formatWindowKeyChord(bindings[action.id]);
+        return !action || bindings[action.id] === action.key ? original : formatWindowKeyChord(bindings[action.id]);
     });
 }

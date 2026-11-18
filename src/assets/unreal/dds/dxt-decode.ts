@@ -1,13 +1,6 @@
-import type { DecodeLibrary } from "../decode-library";
-import type { ITextureDecodeInfo, IDataTextureDecodeInfo, IAnimatedSpriteDecodeInfo } from "../un-texture";
+import { DDSConstants } from "./dds-constants";
 
-/**
- * Software DXT/S3TC decompression. Kept free of three.js (and DOM) imports so the
- * decode worker can convert "dds" material entries to ready RGBA buffers before
- * transferring the library to the main thread.
- */
-
-export function dxt1ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
+function dxt1ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
@@ -91,7 +84,7 @@ export function dxt1ToRgba(width: number, height: number, input: Uint8Array): Ui
     return rgba;
 }
 
-export function dxt3ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
+function dxt3ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
@@ -161,7 +154,7 @@ export function dxt3ToRgba(width: number, height: number, input: Uint8Array): Ui
     return rgba;
 }
 
-export function dxt5ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
+function dxt5ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
@@ -246,53 +239,37 @@ export function dxt5ToRgba(width: number, height: number, input: Uint8Array): Ui
     return rgba;
 }
 
-/**
- * Rewrites a "dds" texture decode info into the "rgba" form decodeRGBA consumes
- * (pixel-identical output). Unsupported FourCCs keep the "dds" type and fall back
- * to the main-thread DDSLoader path in decodeDDS.
- */
-export function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
-    if (info.textureType !== "dds") return false;
-
-    const header = new Int32Array(info.buffer, 0, 31);
-    const height = header[3];
-    const width = header[4];
-    const fourCC = header[21];
-    const input = new Uint8Array(info.buffer, 128); // data starts after the DDS header
-
-    let rgba: Uint8Array | null = null;
-
-    if (fourCC === 0x31545844) rgba = dxt1ToRgba(width, height, input);        // DXT1
-    else if (fourCC === 0x33545844) rgba = dxt3ToRgba(width, height, input);   // DXT3
-    else if (fourCC === 0x35545844) rgba = dxt5ToRgba(width, height, input);   // DXT5
-
-    if (!rgba) return false;
-
-    const dataInfo = info as IDataTextureDecodeInfo;
-
-    dataInfo.textureType = "rgba";
-    dataInfo.buffer = rgba.buffer as ArrayBuffer;
-    dataInfo.width = width;
-    dataInfo.height = height;
-    dataInfo.format = "rgba";
-
-    return true;
+export function decodeDXT(fourCC: number, width: number, height: number, input: Uint8Array): Uint8Array | null {
+    switch (fourCC) {
+        case DDSConstants.FOURCC_DXT1: return dxt1ToRgba(width, height, input);
+        case DDSConstants.FOURCC_DXT3: return dxt3ToRgba(width, height, input);
+        case DDSConstants.FOURCC_DXT5: return dxt5ToRgba(width, height, input);
+        default: return null;
+    }
 }
 
-export function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
-    for (const [id, info] of Object.entries(library.materials)) {
-        if (!info || info.materialType !== "sprite" && (info as ITextureDecodeInfo).textureType !== "dds") continue;
-
-        const textures = info.materialType === "sprite" ? (info as IAnimatedSpriteDecodeInfo).sprites.map(texture => Object.assign({}, texture)) : [Object.assign({}, info) as ITextureDecodeInfo];
-
-        library.materials[id] = info.materialType === "sprite" ? Object.assign({}, info, { sprites: textures }) : textures[0];
-
-        for (const texture of textures) {
-            try {
-                convertDDSTextureInfo(texture);
-            } catch (e) {
-                console.warn(`[DXT] Failed to convert texture '${texture.name}' to RGBA:`, e);
-            }
-        }
+export function getDXTMipSize(fourCC: number, width: number, height: number): number {
+    const blocks = Math.ceil(width / 4) * Math.ceil(height / 4);
+    switch (fourCC) {
+        case DDSConstants.FOURCC_DXT1: return blocks * 8;
+        case DDSConstants.FOURCC_DXT3:
+        case DDSConstants.FOURCC_DXT5: return blocks * 16;
+        default: return 0;
     }
+}
+
+export function readDXTRed(fourCC: number, width: number, data: Uint8Array, offset: number): number {
+    const isDxt1 = fourCC === DDSConstants.FOURCC_DXT1;
+    const x = offset % width, y = Math.floor(offset / width);
+    const block = ((x >> 2) + (y >> 2) * ((width + 3) >> 2)) * (isDxt1 ? 8 : 16) + (isDxt1 ? 0 : 8);
+    const index = (data[block + 4 + (y & 3)] >> ((x & 3) * 2)) & 3;
+    const c0 = data[block] | (data[block + 1] << 8), c1 = data[block + 2] | (data[block + 3] << 8);
+    const r0 = (c0 >> 11) & 0x1f, r1 = (c1 >> 11) & 0x1f;
+    const red0 = (r0 << 3) | (r0 >> 2), red1 = (r1 << 3) | (r1 >> 2);
+
+    if (index === 0) return red0;
+    if (index === 1) return red1;
+    if (isDxt1 && c0 <= c1) return index === 2 ? Math.floor((red0 + red1) / 2) : 0;
+
+    return index === 2 ? Math.floor((2 * red0 + red1) / 3) : Math.floor((red0 + 2 * red1) / 3);
 }

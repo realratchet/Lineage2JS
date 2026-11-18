@@ -32,7 +32,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
         this.domElement = domElement;
         this.domElement.style.touchAction = "none"; // disable touch scroll
 
-        // Set to false to disable this control
         this.enabled = true;
 
         // "target" sets the location of focus, where the object orbits around
@@ -56,38 +55,30 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
         this.minAzimuthAngle = -Infinity; // radians
         this.maxAzimuthAngle = Infinity; // radians
 
-        // Set to true to enable damping (inertia)
         // If damping is enabled, you must call controls.update() in your animation loop
         this.enableDamping = false;
         this.dampingFactor = 0.05;
 
         // This option actually enables dollying in and out; left as "zoom" for backwards compatibility.
-        // Set to false to disable zooming
         this.enableZoom = true;
         this.zoomSpeed = 1.0;
 
-        // Set to false to disable rotating
         this.enableRotate = true;
         this.rotateSpeed = 1.0;
 
-        // Set to false to disable panning
         this.enablePan = true;
         this.panSpeed = 1.0;
         this.screenSpacePanning = true; // if false, pan orthogonal to world-space direction camera.up
         this.keyPanSpeed = 7.0;	// pixels moved per arrow key push
 
-        // Set to true to automatically rotate around the target
         // If auto-rotate is enabled, you must call controls.update() in your animation loop
         this.autoRotate = false;
         this.autoRotateSpeed = 2.0; // 30 seconds per orbit when fps is 60
 
-        // The four arrow keys
         this.keys = { LEFT: "ArrowLeft", UP: "ArrowUp", RIGHT: "ArrowRight", BOTTOM: "ArrowDown" };
 
-        // Mouse buttons
         this.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN };
 
-        // Touch fingers
         this.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
 
         // for reset
@@ -95,7 +86,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
         this.position0 = this.object.position.clone();
         this.zoom0 = this.object.zoom;
 
-        // the target DOM element for key events
         this.domElementKeyEvents = null;
         this.nativeLike = false;
 
@@ -206,8 +196,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 }
 
-                // restrict theta to be between desired limits
-
                 let min = scope.minAzimuthAngle;
                 let max = scope.maxAzimuthAngle;
 
@@ -231,7 +219,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 }
 
-                // restrict phi to be between desired limits
                 spherical.phi = Math.max(scope.minPolarAngle, Math.min(scope.maxPolarAngle, spherical.phi));
 
                 spherical.makeSafe();
@@ -239,10 +226,7 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 spherical.radius *= scale;
 
-                // restrict radius to be between desired limits
                 spherical.radius = Math.max(scope.minDistance, Math.min(scope.maxDistance, spherical.radius));
-
-                // move target to panned location
 
                 if (scope.enableDamping === true) {
 
@@ -455,7 +439,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 if (scope.object.isPerspectiveCamera) {
 
-                    // perspective
                     const position = scope.object.position;
                     offset.copy(position).sub(scope.target);
                     let targetDistance = offset.length();
@@ -469,13 +452,11 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 } else if (scope.object.isOrthographicCamera) {
 
-                    // orthographic
                     panLeft(deltaX * (scope.object.right - scope.object.left) / scope.object.zoom / element.clientWidth, scope.object.matrix);
                     panUp(deltaY * (scope.object.top - scope.object.bottom) / scope.object.zoom / element.clientHeight, scope.object.matrix);
 
                 } else {
 
-                    // camera neither orthographic nor perspective
                     console.warn("WARNING: OrbitControls.js encountered an unknown camera type - pan disabled.");
                     scope.enablePan = false;
 
@@ -1252,8 +1233,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
         scope.domElement.addEventListener("pointerdown", onPointerDown);
         scope.domElement.addEventListener("pointercancel", onPointerCancel);
         scope.domElement.addEventListener("wheel", onMouseWheel, { passive: false });
-
-        // force an update at start
 
         this.update();
 

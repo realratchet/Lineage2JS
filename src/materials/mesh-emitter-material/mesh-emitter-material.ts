@@ -2,7 +2,7 @@ import VERTEX_SHADER from "./shader/mesh-emitter.vs";
 import FRAGMENT_SHADER from "./shader/mesh-emitter.fs";
 import { ShaderMaterial, Uniform, Color, DoubleSide } from "three";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { getPartcileBlendingSettings } from "../particle-material/particle-material";
+import { getPartcileBlendingSettings } from "../particle-blending";
 import type { ParticleBlendModes_T } from "@l2js/engine/contracts/emitter";
 
 export type MeshEmitterMaterialParameters = {
@@ -51,15 +51,7 @@ export default class MeshEmitterMaterial extends ShaderMaterial {
             this.isUpdatable = true;
         }
 
-        this.applyBlending(info.blendingMode || "normal");
-    }
-
-    protected applyBlending(mode: ParticleBlendModes_T) {
-        const { isAdditive, ...settings } = getPartcileBlendingSettings(mode);
-
-        Object.assign(this, settings);
-        delete this.defines.USE_ADDITIVE_FOG;
-        if (isAdditive) this.defines.USE_ADDITIVE_FOG = "";
+        Object.assign(this, getPartcileBlendingSettings(info.blendingMode || "normal", this.defines));
         this.needsUpdate = true;
     }
 

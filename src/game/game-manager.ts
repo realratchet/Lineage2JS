@@ -1,4 +1,5 @@
-import AssetManager, { AssetList_T } from "../assets/asset-manager";
+import AssetManager from "../assets/asset-manager";
+import type { AssetList_T } from "../assets/asset-source";
 import AudioManager from "../audio/audio-manager";
 import { IEngineComponent } from "./components";
 import PhysicsManager from "../physics/physics-manager";

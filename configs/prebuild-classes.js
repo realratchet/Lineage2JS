@@ -3,10 +3,12 @@ const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
 const webpack = require("webpack");
+const extensions = require("../src/assets/unreal/asset-extensions.json");
 const { execFileSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
 const output = path.join(root, "build/prebuilt-classes.js");
+const packageFile = new RegExp("\\.(" + extensions.packages.join("|") + ")$", "i");
 let pending;
 let dependencies = [];
 
@@ -16,7 +18,7 @@ function walk(dir) {
 
 async function generate() {
     const dirAssets = path.join(root, "assets-c4");
-    const files = Object.fromEntries((fs.existsSync(dirAssets) ? walk(dirAssets) : []).filter(file => /\.(u|unr|utx|usx|uax|ukx|usk)$/i.test(file)).map(file => [path.relative(dirAssets, file), file]));
+    const files = Object.fromEntries((fs.existsSync(dirAssets) ? walk(dirAssets) : []).filter(file => packageFile.test(file)).map(file => [path.relative(dirAssets, file), file]));
     const cabinet = process.env.CLASS_CABINET_SOURCE ? path.resolve(process.env.CLASS_CABINET_SOURCE) : null;
     if (!Object.keys(files).length && !cabinet) throw new Error(`No assets available for class generation.`);
     const cabinetFiles = cabinet ? fs.readdirSync(cabinet).filter(file => /^data\d+\.(cab|hdr)$/i.test(file)).sort().map(file => path.join(cabinet, file)) : [];

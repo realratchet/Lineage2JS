@@ -3,7 +3,8 @@ import type * as THREE from "three";
 import type { ScriptHost_T } from "../ue-script/vm";
 import type Terrain from "./terrain";
 import type BSPCollider from "./bsp-collider";
-import type { IBSPNodeSurfaceDecodeInfo_T } from "@l2js/engine/contracts/mesh";
+import type { CollisionModel_T } from "../physics/collision-model";
+import type { CollisionTriangleIndex_T } from "../physics/triangle-index";
 
 export function getScriptActor(actor: ICollidable | null): ScriptHost_T | null {
     if (!actor) return null;
@@ -41,39 +42,6 @@ export type ICollidable = THREE.Object3D & {
     addBasedActor?(actor: ICollidable): void;
     removeBasedActor?(actor: ICollidable): void;
 };
-
-export type CollisionHull_T = {
-    planes: [number, number, number, number, number][];
-    boxPlanes: [number, number, number, number, number][];
-    bounds: THREE.Box3;
-};
-
-export type CollisionModel_T = {
-    planes: Float32Array;
-    children: Int32Array;
-    isCsg: Uint8Array;
-    hullIndices: Int32Array;
-    hulls: CollisionHull_T[];
-    rootOutside: boolean;
-    bounds: THREE.Box3;
-    surfaces?: IBSPNodeSurfaceDecodeInfo_T[];
-};
-
-export type CollisionTriangleIndex_T = {
-    minX: number;
-    minY: number;
-    cellSizeX: number;
-    cellSizeY: number;
-    sizeX: number;
-    sizeY: number;
-    offsets: Uint32Array;
-    triangleIndices: Uint32Array;
-    triangleBounds?: Float32Array;
-    marks: Uint16Array | Uint32Array;
-    queryTag: number;
-};
-
-
 
 type CollisionPrimitiveUnion_T = {
     bounds: THREE.Box3;

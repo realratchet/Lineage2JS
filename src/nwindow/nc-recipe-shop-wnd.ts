@@ -1,5 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { bindWheelScroll, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeShopManageList_T, RecipeShopListEntry_T } from "../network/game-packets";
@@ -47,12 +47,7 @@ export class NCRecipeShopWnd {
             const list = layer.scrollPane(this.element, 9, y, 239, 139, 35);
 
             this.lists.push(list);
-            list.addEventListener("wheel", event => {
-                event.stopImmediatePropagation();
-                const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
-
-                list.setScroll(list.getScroll() - delta * 35);
-            }, true);
+            bindWheelScroll(list, 35);
             list.content.addEventListener("mousedown", event => {
                 if (event.button !== 0) return;
 
@@ -112,7 +107,7 @@ export class NCRecipeShopWnd {
             const drag = this.drag, target = document.elementFromPoint(event.clientX, event.clientY), destination = this.lists[1 - drag.side];
 
             this.endDrag();
-            if (!this.isVisible() || !target || !(destination.content.contains(target) || target === destination && (destination.children[1] as HTMLElement).hidden)) return;
+            if (!this.isVisible() || !destination.isDropTarget(target)) return;
             if (this.getItemIndex(drag.side, event) >= 0) return;
 
             this.move(drag.side, drag.item);

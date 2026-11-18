@@ -1032,6 +1032,10 @@ export class DecodeWorkerClient {
         return request;
     }
 
+    protected resolvePending(requestId: number, value?: any): void {
+        this.settlePending(requestId)?.resolve(value);
+    }
+
     protected onMessage(workerIndex: number, msg: WorkerToMainMessage_T) {
         switch (msg.type) {
             case "loadingProgress": {
@@ -1061,13 +1065,7 @@ export class DecodeWorkerClient {
                 void this.processBinaryDecodeQueue();
                 break;
             }
-            case "precached": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.result);
-                break;
-            }
+            case "precached": this.resolvePending(msg.requestId, msg.result); break;
             case "decodeError": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
@@ -1079,116 +1077,28 @@ export class DecodeWorkerClient {
                 request.reject(error);
                 break;
             }
-            case "envDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.info);
-                break;
-            }
-            case "musicInfoDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.music);
-                break;
-            }
-            case "memoryStatsDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.stats);
-                break;
-            }
+            case "envDecoded": this.resolvePending(msg.requestId, msg.info); break;
+            case "musicInfoDecoded": this.resolvePending(msg.requestId, msg.music); break;
+            case "memoryStatsDecoded": this.resolvePending(msg.requestId, msg.stats); break;
             case "npcBundlePrecached":
             case "packagePrecached":
-            case "charactersPrecached": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(undefined);
-                break;
-            }
+            case "charactersPrecached": this.resolvePending(msg.requestId); break;
             case "sectorPackagesReady": {
                 const request = this.pending.get(msg.ready.requestId);
                 if (request?.packagesReady) request.packagesReady(msg.ready.packages);
                 break;
             }
-            case "sectorPackagesListed": {
-                const request = this.settlePending(msg.requestId);
-                if (request) request.resolve(msg.packages);
-                break;
-            }
-            case "clientConfigDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.config);
-                break;
-            }
-            case "scriptLocalizationDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.properties);
-                break;
-            }
-            case "l2TextDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.text);
-                break;
-            }
-            case "charGroupsDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.groups);
-                break;
-            }
-            case "npcResolved": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.npc);
-                break;
-            }
-            case "npcsListed": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.npcs);
-                break;
-            }
-            case "uiTexturesDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.textures);
-                break;
-            }
-            case "matineeScenesDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.scenes);
-                break;
-            }
-            case "gameStringsDecoded": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.strings);
-                break;
-            }
-            case "playerSkillsListed": {
-                const request = this.settlePending(msg.requestId);
-                if (!request) break;
-
-                request.resolve(msg.skills);
-                break;
-            }
+            case "sectorPackagesListed": this.resolvePending(msg.requestId, msg.packages); break;
+            case "clientConfigDecoded": this.resolvePending(msg.requestId, msg.config); break;
+            case "scriptLocalizationDecoded": this.resolvePending(msg.requestId, msg.properties); break;
+            case "l2TextDecoded": this.resolvePending(msg.requestId, msg.text); break;
+            case "charGroupsDecoded": this.resolvePending(msg.requestId, msg.groups); break;
+            case "npcResolved": this.resolvePending(msg.requestId, msg.npc); break;
+            case "npcsListed": this.resolvePending(msg.requestId, msg.npcs); break;
+            case "uiTexturesDecoded": this.resolvePending(msg.requestId, msg.textures); break;
+            case "matineeScenesDecoded": this.resolvePending(msg.requestId, msg.scenes); break;
+            case "gameStringsDecoded": this.resolvePending(msg.requestId, msg.strings); break;
+            case "playerSkillsListed": this.resolvePending(msg.requestId, msg.skills); break;
         }
 
         releaseDisposedTextures();

@@ -38,7 +38,7 @@ export class UGlowPass extends Pass {
         this.renderTargetBlurV = new WebGLRenderTarget(resX, resY, pars);
         this.renderTargetBlurV.texture.name = "UGlowPass.blurV";
 
-        // 1. Bright Pass Shader (GlowType=2: RGB Cutoff)
+        // GlowType=2: RGB Cutoff
         this.materialBright = new ShaderMaterial({
             uniforms: {
                 tDiffuse: { value: null },
@@ -64,8 +64,7 @@ export class UGlowPass extends Pass {
             `
         });
 
-        // 2. Blur Shaders (Using 16-sample-ish kernel logic from DownFilter16/BlurRender)
-        // Simplified Gaussian for Three.js implementation
+        // DownFilter16/BlurRender approximated by a Gaussian kernel.
         this.materialBlurH = new ShaderMaterial({
             uniforms: {
                 tDiffuse: { value: null },
@@ -84,7 +83,6 @@ export class UGlowPass extends Pass {
             fragmentShader: this.getBlurFragmentShader(false)
         });
 
-        // 3. Combine Shader
         this.materialCombine = new ShaderMaterial({
             uniforms: {
                 tDiffuse: { value: null },
@@ -106,18 +104,14 @@ export class UGlowPass extends Pass {
                     vec4 bloom = texture2D(tBloom, vUv);
                     
                     if (debugMode == 1) {
-                        // Visualize Bright Pass (via Bloom texture)
-                        // If we see pixels here, the threshold passed.
                         if (length(bloom.rgb) > 0.01) {
-                            gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0); // Solid GREEN for bloom
+                            gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
                         } else {
                             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                         }
                     } else if (debugMode == 2) {
-                        // Visualize Mix
                         gl_FragColor = mix(base, bloom * bloomScale, 0.5);
                     } else {
-                        // Additive mix
                         // Apply bloomScale here to avoid clamping in byte buffers
                         gl_FragColor = base + (bloom * bloomScale * opacity);
                     }
@@ -166,28 +160,24 @@ export class UGlowPass extends Pass {
         // const oldLogarithmicDepthBuffer = renderer.capabilities.logarithmicDepthBuffer;
         // Post-processing doesn't need logarithmic depth
 
-        // 1. Bright Pass
         this.materialBright.uniforms.tDiffuse.value = readBuffer.texture;
         renderer.setRenderTarget(this.renderTargetBright);
         renderer.clear(); // Explicit clear
         this.fsQuad.material = this.materialBright;
         this.fsQuad.render(renderer);
 
-        // 2. Blur Horizontal
         this.materialBlurH.uniforms.tDiffuse.value = this.renderTargetBright.texture;
         renderer.setRenderTarget(this.renderTargetBlurH);
         renderer.clear(); // Explicit clear
         this.fsQuad.material = this.materialBlurH;
         this.fsQuad.render(renderer);
 
-        // 3. Blur Vertical
         this.materialBlurV.uniforms.tDiffuse.value = this.renderTargetBlurH.texture;
         renderer.setRenderTarget(this.renderTargetBlurV);
         renderer.clear(); // Explicit clear
         this.fsQuad.material = this.materialBlurV;
         this.fsQuad.render(renderer);
 
-        // 4. Combine
         this.materialCombine.uniforms.tDiffuse.value = readBuffer.texture;
         this.materialCombine.uniforms.tBloom.value = this.renderTargetBlurV.texture;
         this.materialCombine.uniforms.bloomScale.value = this.materialBright.uniforms.bloomScale.value; // Sync param

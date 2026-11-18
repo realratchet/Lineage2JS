@@ -1,8 +1,9 @@
 import type RAPIER from "@dimforge/rapier3d";
 import { Box3, Vector3 } from "three";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../objects/objects";
-import { pointPrimitive, queryPrimitive, sweptBounds, sweptIntersectsBox, type PrimitiveHit_T } from "./collision-primitive";
+import { pointPrimitive, queryPrimitive, type PrimitiveHit_T } from "./collision-primitive";
 import buildCollisionModel, { findCoplanarSurface } from "./collision-model";
+import { sweptBounds, sweptIntersectsBox } from "./collision-bounds";
 import CollisionOctree from "./collision-octree";
 import type { DecodeLibrary } from "@l2js/engine";
 import type PhysicsVolume from "../objects/physics-volume";

@@ -24,7 +24,7 @@ import { type LobbyPawnLabel_T } from "./nc-lobby-wnd";
 import { type PawnCreateSelection_T } from "./nc-pawn-create-wnd";
 import { type InventoryEntry_T } from "./nc-inventory-wnd";
 import { type GMClanInfo_T } from "./nc-gm-detail-status-wnd";
-import { convertDDSTextureInfo } from "../assets/unreal/dds/dxt-decode";
+import { decodeCrest } from "../network/crest-decoder";
 import { type MenuButton_T } from "./nc-menu-wnd";
 import { type MainTab_T } from "./nc-main-wnd";
 import { type MapPartyMember_T } from "./nc-map-wnd";
@@ -2350,33 +2350,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public setPledgeCrest(crestId: number, data: Uint8Array): HTMLCanvasElement {
         if (crestId <= 0 || !data.length || this.cacheCrests.has(crestId)) return null;
 
-        if (data.length < 128) throw new Error(`Invalid crest DDS length ${data.length}`);
-        const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
-        const height = header.getUint32(12, true), width = header.getUint32(16, true), fourCC = header.getUint32(84, true);
-        const blockSize = fourCC === 0x31545844 ? 8 : fourCC === 0x33545844 || fourCC === 0x35545844 ? 16 : 0;
-
-        if (header.getUint32(0, true) !== 0x20534444 || !(header.getUint32(8, true) & 0x80000) || !width || !height || width & (width - 1) || height & (height - 1) || !blockSize)
-            throw new Error(`Invalid crest DDS ${crestId}`);
-        const mipCount = header.getUint32(28, true) || 1;
-        let mipWidth = width, mipHeight = height, remaining = data.length - 128;
-
-        if (mipCount > remaining / blockSize) throw new Error(`Invalid crest DDS mip count ${crestId}`);
-        for (let index = 0; index < mipCount; index++) {
-            const size = Math.max(4, mipWidth) * Math.max(4, mipHeight) * blockSize / 16;
-
-            if (size > remaining) throw new Error(`Truncated crest DDS mip ${crestId}`);
-            remaining -= size;
-            mipWidth = Math.ceil(mipWidth / 2);
-            mipHeight = Math.ceil(mipHeight / 2);
-        }
-        const info = { textureType: "dds", buffer: data.slice().buffer } as any;
-
-        if (!convertDDSTextureInfo(info)) throw new Error(`Unsupported crest DDS ${crestId}`);
+        const { width, height, rgba } = decodeCrest(crestId, data);
         const canvas = document.createElement("canvas");
 
-        canvas.width = info.width;
-        canvas.height = info.height;
-        canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(info.buffer), info.width, info.height), 0, 0);
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, rgba.byteLength), width, height), 0, 0);
         this.cacheCrests.set(crestId, canvas);
         return canvas;
     }

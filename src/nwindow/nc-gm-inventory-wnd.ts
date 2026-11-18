@@ -9,8 +9,8 @@ export class NCGMInventoryWnd extends NCInventoryWnd {
     public constructor(layer: NDomLayer) {
         super(layer);
 
-        this.element.children[1].remove();
-        NCFrameCtrl.createDOM(layer, this.element, 256, "", false, () => this.setVisible(false));
+        this.frame.remove();
+        this.frame = NCFrameCtrl.createDOM(layer, this.element, 256, "", false, () => this.setVisible(false)).parentElement;
         this.folded.remove();
         this.crystal.hidden = this.trash.hidden = true;
         this.weightBar.parentElement.hidden = true;

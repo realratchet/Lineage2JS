@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { AAssetLoader, UObject, ObjectFlags_T, UProperty, UClass } from "@l2js/core";
 import * as Library from "../src/assets/unreal/un-package";
+import getPackageSignature from "../src/assets/unreal/package-signature";
+import { packageFile } from "../src/assets/unreal/package-files";
 import InstallShieldCabinet from "../src/assets/install-shield-cabinet";
 import templateClass from "!!raw-loader!./templates/prebuilt-class.js";
 import templateClassTag from "!!raw-loader!./templates/prebuilt-class-tag.js";
@@ -14,12 +16,6 @@ class AssetLoader extends AAssetLoader {
 }
 
 function reference(object) { return [object.pkg.name, object.exp.index + 1]; }
-
-function signature(pkg) {
-    const header = pkg.header;
-
-    return [header.version, Array.from(new Uint8Array(header.guid.value.buffer, header.guid.value.byteOffset, header.guid.value.byteLength)), header.nameCount, header.exportCount, header.importCount];
-}
 
 async function scan(source) {
     let files = source.files;
@@ -35,7 +31,7 @@ async function scan(source) {
             if (match) volumes.set(Number(match[1]), await fs.openAsBlob(path.join(source.cabinet, name)));
         }
         cabinet = await InstallShieldCabinet.open(await fs.openAsBlob(path.join(source.cabinet, header)), volumes);
-        entries = new Map(cabinet.files.filter(file => /\.(u|unr|utx|usx|uax|ukx|usk)$/i.test(file.path)).map(file => [file.path, file]));
+        entries = new Map(cabinet.files.filter(file => packageFile.test(file.path)).map(file => [file.path, file]));
         files = Object.fromEntries(Array.from(entries.keys(), file => [file, file]));
     }
 
@@ -56,7 +52,7 @@ async function scan(source) {
     for (const file of packages) await loader.getPackage(file).decode();
 
     for (const pkg of [native, ...packages.map(file => loader.getPackage(file))]) {
-        if (pkg !== native) signatures[pkg.name] = JSON.stringify(signature(pkg));
+        if (pkg !== native) signatures[pkg.name] = getPackageSignature(pkg);
 
         for (const exp of pkg.exports) {
             const type = exp.idClass === 0 ? "Class" : pkg.getPackageName(exp.idClass);

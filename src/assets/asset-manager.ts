@@ -27,7 +27,7 @@ import { AnimationClip, MathUtils, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM, { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import ConfigCache from "../ue-script/config-cache";
-import { getAssetSourceId } from "./asset-source";
+import { getAssetSourceId, type AssetList_T } from "./asset-source";
 import PlayerController from "../objects/player-controller";
 import { IEngineComponent } from "../game/components";
 import type { GameManager } from "../game/game-manager"
@@ -74,7 +74,6 @@ const tmpCameraMovement = new Vector3();
 
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, steps: Generator<void, void> };
 type BuildSteps_T = { steps: Generator<void, unknown>, resolve: (value: any) => void, reject: (error: unknown) => void };
-export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
 function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo | null {
     const lowerName = name.toLowerCase();

@@ -11,7 +11,8 @@ import GMath from "./un-gmath";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 import { TextureMapAxis_T, UTerrainLayer } from "./un-terrain-layer";
-import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dds/dxt-decode";
+import { decodeDXT, getDXTMipSize, readDXTRed } from "./dds/dxt-decode";
+import DDSConstants from "./dds/dds-constants";
 import type { UDecoLayer } from "./un-deco-layer";
 import type { FTIntMap } from "./un-tint-map";
 import type { UTerrainSector } from "./un-terrain-sector";
@@ -29,6 +30,11 @@ type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: I
 
 // const MAP_SIZE_X = 128 * 256;
 // const MAP_SIZE_Y = 128 * 256;
+const dxtFourCC: Record<number, number> = {
+    [ETextureFormat.TEXF_DXT1]: DDSConstants.FOURCC_DXT1,
+    [ETextureFormat.TEXF_DXT3]: DDSConstants.FOURCC_DXT3,
+    [ETextureFormat.TEXF_DXT5]: DDSConstants.FOURCC_DXT5
+};
 const cacheTextureRgba = new WeakMap<object, Uint8Array>();
 const cacheTextureData = new WeakMap<object, Uint8Array>();
 
@@ -57,15 +63,8 @@ function getTerrainFaceNormal(a: FVector, b: FVector, c: FVector, normal: Vector
 function getTextureRgba(texture: any): Uint8Array {
     if (cacheTextureRgba.has(texture)) return cacheTextureRgba.get(texture);
 
-    const data = texture.data;
-    let rgba: Uint8Array;
-
-    switch (texture.format) {
-        case ETextureFormat.TEXF_DXT1: rgba = dxt1ToRgba(texture.width, texture.height, data); break;
-        case ETextureFormat.TEXF_DXT3: rgba = dxt3ToRgba(texture.width, texture.height, data); break;
-        case ETextureFormat.TEXF_DXT5: rgba = dxt5ToRgba(texture.width, texture.height, data); break;
-        default: return null;
-    }
+    const rgba = decodeDXT(dxtFourCC[texture.format], texture.width, texture.height, texture.data);
+    if (!rgba) return null;
 
     cacheTextureRgba.set(texture, rgba);
 
@@ -75,27 +74,16 @@ function getTextureRgba(texture: any): Uint8Array {
 function getTextureRed(texture: any, offset: number): number {
     if (!(offset >= 0 && offset < texture.width * texture.height)) return undefined;
 
-    const isDxt1 = texture.format === ETextureFormat.TEXF_DXT1;
+    const fourCC = dxtFourCC[texture.format];
     let data = cacheTextureData.get(texture);
 
     if (!data) {
         data = texture.data;
-        if (data.length < ((texture.width + 3) >> 2) * ((texture.height + 3) >> 2) * (isDxt1 ? 8 : 16)) throw new Error(`Truncated DXT terrain map '${texture.name}'.`);
+        if (data.length < getDXTMipSize(fourCC, texture.width, texture.height)) throw new Error(`Truncated DXT terrain map '${texture.name}'.`);
         cacheTextureData.set(texture, data);
     }
 
-    const x = offset % texture.width, y = Math.floor(offset / texture.width);
-    const block = ((x >> 2) + (y >> 2) * ((texture.width + 3) >> 2)) * (isDxt1 ? 8 : 16) + (isDxt1 ? 0 : 8);
-    const index = (data[block + 4 + (y & 3)] >> ((x & 3) * 2)) & 3;
-    const c0 = data[block] | (data[block + 1] << 8), c1 = data[block + 2] | (data[block + 3] << 8);
-    const r0 = (c0 >> 11) & 0x1f, r1 = (c1 >> 11) & 0x1f;
-    const red0 = (r0 << 3) | (r0 >> 2), red1 = (r1 << 3) | (r1 >> 2);
-
-    if (index === 0) return red0;
-    if (index === 1) return red1;
-    if (isDxt1 && c0 <= c1) return index === 2 ? Math.floor((red0 + red1) / 2) : 0;
-
-    return index === 2 ? Math.floor((2 * red0 + red1) / 3) : Math.floor((red0 + 2 * red1) / 3);
+    return readDXTRed(fourCC, texture.width, data, offset);
 }
 
 export enum ETerrainRenderMethod_T {

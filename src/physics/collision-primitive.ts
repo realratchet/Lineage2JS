@@ -1,5 +1,8 @@
 import { Box3, Matrix3, Matrix4, Vector3 } from "three";
-import type { CollisionModel_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "../objects/objects";
+import type { CollisionPrimitive_T } from "../objects/objects";
+import type { CollisionModel_T } from "./collision-model";
+import { sweptBounds } from "./collision-bounds";
+import { buildTriangleBounds, collectPointTriangles, traceTriangleIndex } from "./triangle-index";
 
 const CYLINDER_TANGENT_TOLERANCE = Math.fround(-0.1);
 const CYLINDER_HIT_TIME_BIAS = Math.fround(0.001);
@@ -65,12 +68,9 @@ let bspHitItem = -1;
 let terrainPrimitive: Extract<CollisionPrimitive_T, { kind: "terrain" }> = null;
 let terrainBestTime = 1;
 let terrainBestItem = -1;
-let gridClipT0 = 0;
-let gridClipT1 = 1;
 
 export type PrimitiveHit_T = { time: number, normal: Vector3, item: number, skinIndex?: number };
 type ClipState_T = { t0: number, t1: number, normal: Vector3, item: number, hit: boolean };
-type GridCellVisitor_T = (x: number, y: number) => number; // returns the best hit time so far
 type HullPlane_T = [number, number, number, number, number];
 
 function resetClip(maxTime: number, item: number) {
@@ -292,98 +292,6 @@ function transformVertex(primitive: Extract<CollisionPrimitive_T, { kind: "stati
     return target.set(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]).applyMatrix4(primitive.matrixWorld);
 }
 
-function clipGridAxis(start: number, delta: number, min: number, max: number): boolean {
-    if (Math.abs(delta) < 1e-12) return start >= min && start <= max;
-
-    let a = (min - start) / delta, b = (max - start) / delta;
-
-    if (a > b) [a, b] = [b, a];
-
-    gridClipT0 = Math.max(gridClipT0, a);
-    gridClipT1 = Math.min(gridClipT1, b);
-
-    return gridClipT0 <= gridClipT1;
-}
-
-export function sweptIntersectsBox(start: Vector3, end: Vector3, extent: Vector3, bounds: Box3): boolean {
-    gridClipT0 = 0;
-    gridClipT1 = 1;
-
-    if (!clipGridAxis(start.x, end.x - start.x, bounds.min.x - extent.x, bounds.max.x + extent.x)) return false;
-    if (!clipGridAxis(start.y, end.y - start.y, bounds.min.y - extent.y, bounds.max.y + extent.y)) return false;
-
-    return clipGridAxis(start.z, end.z - start.z, bounds.min.z - extent.z, bounds.max.z + extent.z);
-}
-
-// segment walk; the swept-AABB cell box it replaces grows with the square of the segment length
-function walkGridCells(startX: number, startY: number, endX: number, endY: number, padX: number, padY: number, minCellX: number, minCellY: number, maxCellX: number, maxCellY: number, visit: GridCellVisitor_T) {
-    gridClipT0 = 0;
-    gridClipT1 = 1;
-
-    if (!clipGridAxis(startX, endX - startX, minCellX - padX, maxCellX + 1 + padX)) return;
-    if (!clipGridAxis(startY, endY - startY, minCellY - padY, maxCellY + 1 + padY)) return;
-
-    const fromX = startX + (endX - startX) * gridClipT0, fromY = startY + (endY - startY) * gridClipT0;
-    const toX = startX + (endX - startX) * gridClipT1, toY = startY + (endY - startY) * gridClipT1;
-    const stepX = Math.sign(toX - fromX), stepY = Math.sign(toY - fromY);
-    const rateX = stepX !== 0 ? 1 / Math.abs(toX - fromX) : Infinity;
-    const rateY = stepY !== 0 ? 1 / Math.abs(toY - fromY) : Infinity;
-    const lastX = Math.min(maxCellX + padX, Math.floor(toX)), lastY = Math.min(maxCellY + padY, Math.floor(toY));
-    const maxSteps = (maxCellX - minCellX + 2 * padX) + (maxCellY - minCellY + 2 * padY) + 8;
-
-    let cellX = Math.min(maxCellX + padX, Math.floor(fromX)), cellY = Math.min(maxCellY + padY, Math.floor(fromY));
-    let nextX = stepX > 0 ? (cellX + 1 - fromX) * rateX : stepX < 0 ? (fromX - cellX) * rateX : Infinity;
-    let nextY = stepY > 0 ? (cellY + 1 - fromY) * rateY : stepY < 0 ? (fromY - cellY) * rateY : Infinity;
-
-    let bestTime = Infinity;
-
-    for (let steps = 0; steps <= maxSteps; steps++) {
-        const x0 = Math.max(minCellX, cellX - padX), x1 = Math.min(maxCellX, cellX + padX);
-        const y0 = Math.max(minCellY, cellY - padY), y1 = Math.min(maxCellY, cellY + padY);
-
-        for (let y = y0; y <= y1; y++)
-            for (let x = x0; x <= x1; x++) bestTime = visit(x, y);
-
-        if (cellX === lastX && cellY === lastY) return;
-        if (gridClipT0 + Math.min(nextX, nextY) * (gridClipT1 - gridClipT0) >= bestTime) return; // cells come in ray order, nothing further along can be nearer
-
-        if (nextX <= nextY) {
-            if (nextX > 1) return;
-
-            cellX += stepX;
-            nextX += rateX;
-        } else {
-            if (nextY > 1) return;
-
-            cellY += stepY;
-            nextY += rateY;
-        }
-    }
-
-    throw new Error(`Grid walk exceeded ${maxSteps} steps over cells (${minCellX}, ${minCellY})-(${maxCellX}, ${maxCellY}).`);
-}
-
-function walkIndexCells(index: CollisionTriangleIndex_T, visit: GridCellVisitor_T) {
-    const startX = (tmpLocalStart.x - index.minX) / index.cellSizeX, startY = (tmpLocalStart.y - index.minY) / index.cellSizeY;
-    const endX = (tmpLocalEnd.x - index.minX) / index.cellSizeX, endY = (tmpLocalEnd.y - index.minY) / index.cellSizeY;
-    const extentX = tmpLocalExtent.x / index.cellSizeX, extentY = tmpLocalExtent.y / index.cellSizeY;
-    const minCellX = Math.max(0, Math.floor(Math.min(startX, endX) - extentX)), maxCellX = Math.min(index.sizeX - 1, Math.floor(Math.max(startX, endX) + extentX));
-    const minCellY = Math.max(0, Math.floor(Math.min(startY, endY) - extentY)), maxCellY = Math.min(index.sizeY - 1, Math.floor(Math.max(startY, endY) + extentY));
-
-    if (minCellX > maxCellX || minCellY > maxCellY) return;
-
-    walkGridCells(startX, startY, endX, endY, Math.ceil(extentX), Math.ceil(extentY), minCellX, minCellY, maxCellX, maxCellY, visit); // cells outside the swept box only hold triangles the box cells hold too
-}
-
-function beginIndexQuery(index: CollisionTriangleIndex_T) {
-    index.queryTag++;
-
-    if (index.queryTag === 0xffff) {
-        index.queryTag = 1;
-        index.marks.fill(0);
-    }
-}
-
 function loadStaticVertex(index: number, target: Vector3): Vector3 {
     const vertices = staticPrimitive.vertices;
 
@@ -541,8 +449,6 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
         Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z
     );
 
-    beginIndexQuery(index);
-
     staticPrimitive = primitive;
     staticStart = tmpLocalStart;
     staticEnd = tmpLocalEnd;
@@ -553,25 +459,11 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     staticBestTime = maxTime;
     staticBestItem = -1;
 
-    if (!index.triangleBounds) {
-        const vertices = primitive.vertices, indices = primitive.indices;
-        const triangleBounds = new Float32Array(indices.length * 2);
-
-        for (let i = 0; i < indices.length; i += 3) {
-            const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
-
-            for (let axis = 0; axis < 3; axis++) {
-                triangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
-                triangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
-            }
-        }
-
-        index.triangleBounds = triangleBounds;
-    }
+    if (!index.triangleBounds) index.triangleBounds = buildTriangleBounds(primitive.vertices, primitive.indices);
 
     sweptBounds(staticStart, staticEnd, staticExtent, tmpIndexBounds);
 
-    walkIndexCells(index, visitStaticIndexCell);
+    traceTriangleIndex(index, tmpLocalStart, tmpLocalEnd, tmpLocalExtent, visitStaticIndexCell);
     staticPrimitive = null;
 
     if (staticBestItem < 0) return null;
@@ -582,16 +474,11 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     return tmpBestHit;
 }
 
-function visitStaticIndexCell(x: number, y: number) {
-    const index = staticPrimitive.index, bounds = index.triangleBounds;
-    const cell = y * index.sizeX + x;
+function visitStaticIndexCell(triangles: number[], count: number) {
+    const bounds = staticPrimitive.index.triangleBounds;
 
-    for (let i = index.offsets[cell]; i < index.offsets[cell + 1]; i++) {
-        const triangle = index.triangleIndices[i];
-
-        if (index.marks[triangle] === index.queryTag) continue;
-
-        index.marks[triangle] = index.queryTag;
+    for (let i = 0; i < count; i++) {
+        const triangle = triangles[i];
 
         const offset = triangle * 6;
         if (bounds[offset] > tmpIndexBounds.max.x || bounds[offset + 3] < tmpIndexBounds.min.x
@@ -623,13 +510,11 @@ function queryTerrainIndex(primitive: Extract<CollisionPrimitive_T, { kind: "ter
         Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z
     );
 
-    beginIndexQuery(primitive.index);
-
     terrainPrimitive = primitive;
     terrainBestTime = maxTime;
     terrainBestItem = -1;
 
-    walkIndexCells(primitive.index, visitTerrainIndexCell);
+    traceTriangleIndex(primitive.index, tmpLocalStart, tmpLocalEnd, tmpLocalExtent, visitTerrainIndexCell);
 
     if (terrainBestItem < 0) return null;
 
@@ -641,17 +526,11 @@ function queryTerrainIndex(primitive: Extract<CollisionPrimitive_T, { kind: "ter
     return tmpBestHit;
 }
 
-function visitTerrainIndexCell(x: number, y: number) {
-    const index = terrainPrimitive.index;
+function visitTerrainIndexCell(triangles: number[], count: number) {
     const vertices = terrainPrimitive.vertices;
-    const cell = y * index.sizeX + x;
 
-    for (let i = index.offsets[cell]; i < index.offsets[cell + 1]; i++) {
-        const triangle = index.triangleIndices[i];
-
-        if (index.marks[triangle] === index.queryTag) continue;
-
-        index.marks[triangle] = index.queryTag;
+    for (let i = 0; i < count; i++) {
+        const triangle = triangles[i];
 
         const offset = triangle * 3;
         let vertex = terrainPrimitive.indices[offset];
@@ -1162,27 +1041,8 @@ function pointStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     const elements = tmpMatrix.elements, index = primitive.index;
     const extentX = Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z;
     const extentY = Math.abs(elements[1]) * extent.x + Math.abs(elements[5]) * extent.y + Math.abs(elements[9]) * extent.z;
-    const x0 = Math.max(0, Math.floor((tmpLocalStart.x - extentX - index.minX) / index.cellSizeX) - 1);
-    const y0 = Math.max(0, Math.floor((tmpLocalStart.y - extentY - index.minY) / index.cellSizeY) - 1);
-    const x1 = Math.min(index.sizeX - 1, Math.floor((tmpLocalStart.x + extentX - index.minX) / index.cellSizeX) + 1);
-    const y1 = Math.min(index.sizeY - 1, Math.floor((tmpLocalStart.y + extentY - index.minY) / index.cellSizeY) + 1);
 
-    beginIndexQuery(index);
-    arrPointTriangles.length = 0;
-    for (let y = y0; y <= y1; y++)
-        for (let x = x0; x <= x1; x++) {
-            const cell = y * index.sizeX + x;
-
-            for (let i = index.offsets[cell]; i < index.offsets[cell + 1]; i++) {
-                const triangle = index.triangleIndices[i];
-                if (index.marks[triangle] === index.queryTag) continue;
-
-                index.marks[triangle] = index.queryTag;
-                arrPointTriangles.push(triangle);
-            }
-        }
-
-    arrPointTriangles.sort((a, b) => a - b);
+    collectPointTriangles(index, tmpLocalStart.x, tmpLocalStart.y, extentX, extentY, arrPointTriangles);
     for (let i = 0; i < arrPointTriangles.length; i++) {
         const triangle = arrPointTriangles[i], offset = triangle * 3;
         transformVertex(primitive, primitive.indices[offset], tmpA);
@@ -1342,11 +1202,4 @@ export function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, 
     if (primitive.kind !== "bsp") return queryTriangles(primitive, start, end, extent, maxTime);
 
     return queryBsp(primitive.model, null, start, end, extent);
-}
-
-export function sweptBounds(start: Vector3, end: Vector3, extent: Vector3, target: Box3): Box3 {
-    target.min.set(Math.min(start.x, end.x) - extent.x, Math.min(start.y, end.y) - extent.y, Math.min(start.z, end.z) - extent.z);
-    target.max.set(Math.max(start.x, end.x) + extent.x, Math.max(start.y, end.y) + extent.y, Math.max(start.z, end.z) + extent.z);
-
-    return target;
 }

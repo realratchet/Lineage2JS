@@ -1,6 +1,22 @@
 import { Box3, Vector3 } from "three";
-import type { CollisionHull_T, CollisionModel_T } from "../objects/objects";
 import type { IBSPCollisionNodeDecodeInfo_T, IBSPNodeSurfaceDecodeInfo_T } from "@l2js/engine/contracts/mesh";
+
+export type CollisionHull_T = {
+    planes: [number, number, number, number, number][];
+    boxPlanes: [number, number, number, number, number][];
+    bounds: Box3;
+};
+
+export type CollisionModel_T = {
+    planes: Float32Array;
+    children: Int32Array;
+    isCsg: Uint8Array;
+    hullIndices: Int32Array;
+    hulls: CollisionHull_T[];
+    rootOutside: boolean;
+    bounds: Box3;
+    surfaces?: IBSPNodeSurfaceDecodeInfo_T[];
+};
 
 const HULL_FLIP = 0x40000000;
 

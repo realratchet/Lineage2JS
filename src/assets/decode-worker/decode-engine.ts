@@ -8,7 +8,7 @@ import { ETextureFormat } from "@l2js/engine/un-tex-format";
 import UDataFile from "@l2js/engine/datafile/un-datafile";
 import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "../decoders/batch-data";
-import { convertDDSMaterialsToRGBA, dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
+import { convertDDSMaterialsToRGBA, decodeDDSPixels } from "@l2js/engine/dds/dds-texture";
 import PackageCache from "./package-cache";
 import { startLoadingStep } from "../../loading-profile";
 import buildDecodeLibrary from "./build-decode-library";
@@ -46,7 +46,7 @@ import type { USound } from "@l2js/engine/un-sound";
 import type { UStaticMesh } from "@l2js/engine/static-mesh/un-static-mesh";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
-import fetchAsset from "../asset-source";
+import { loadAssetList } from "../asset-source";
 import { isFirefox } from "../../browser";
 
 const minPickupCollisionHeight = Math.fround(0.2);
@@ -311,8 +311,12 @@ function getCharacterRow(rows: Record<string, any>[], charIndex: number): Record
     return row;
 }
 
+function getCharacterGroupName(row: Record<string, any>): string {
+    return splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "");
+}
+
 function getCharacterArmorGroup(row: Record<string, any>): string {
-    const name = splitObjectPath(row.face_mesh[0] as string)[1].replace(/_m\d+_f$/, "").toLowerCase();
+    const name = getCharacterGroupName(row).toLowerCase();
     const group = SchemasC4.CHARACTER_ARMOR_GROUPS[name];
 
     if (!group) throw new Error(`Character armor group '${name}' does not exist.`);
@@ -408,24 +412,14 @@ function decodeTextureRGBA(info: ITextureDecodeInfo, useIntrinsicAlpha = true): 
     } else {
         if (info.textureType !== "dds") throw new Error(`UI texture '${info.name}' has unsupported type '${info.textureType}'.`);
 
-        const header = new Int32Array(info.buffer, 0, 31);
-        const fourCC = header[21], input = new Uint8Array(info.buffer, 128);
+        const dds = decodeDDSPixels(info.buffer);
+        if (!dds.rgba) throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(dds.fourCC >>> 0).toString(16)}.`);
 
-        height = header[3];
-        width = header[4];
-
-        switch (fourCC) {
-            case DDSConstants.FOURCC_DXT1: buffer = dxt1ToRgba(width, height, input).buffer as ArrayBuffer; break;
-            case DDSConstants.FOURCC_DXT3:
-                buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer;
-                hasAlpha = hasAlpha || useIntrinsicAlpha;
-                break;
-            case DDSConstants.FOURCC_DXT5:
-                buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer;
-                hasAlpha = hasAlpha || useIntrinsicAlpha;
-                break;
-            default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
-        }
+        width = dds.width;
+        height = dds.height;
+        buffer = dds.rgba.buffer as ArrayBuffer;
+        if (dds.fourCC === DDSConstants.FOURCC_DXT3 || dds.fourCC === DDSConstants.FOURCC_DXT5)
+            hasAlpha = hasAlpha || useIntrinsicAlpha;
     }
 
     if (!hasAlpha) {
@@ -508,7 +502,7 @@ export class DecodeEngine {
     }
 
     public async initialize(): Promise<void> {
-        const assetList = await (await fetchAsset("asset-list.json")).json();
+        const assetList = await loadAssetList();
 
         for (const path of assetList.unsupported) {
             if (path.toLowerCase().endsWith(".int")) this.localizationFiles.set(path.toLowerCase(), path);
@@ -720,6 +714,20 @@ export class DecodeEngine {
         return hydrateLibraryAssets(cached);
     }
 
+    protected async buildSector(sectorName: string, settings: LoadSettings_T): Promise<{ library: DecodeLibrary, packageCache: PackageCache }> {
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
+        const packageCache = await this.openPackageCache(pkg, settings);
+        const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
+
+        await this.pullSectorScriptAssets(library, settings, packageCache);
+        await packageCache.flush();
+        buildStaticMeshBatchData(library);
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
+
+        return { library, packageCache };
+    }
+
     public async precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
         this.setLoadSettings(settings);
         await this.sweepCache(settings);
@@ -728,14 +736,7 @@ export class DecodeEngine {
             return { cached: true, bytes: 0 };
 
         try {
-            const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
-            const packageCache = await this.openPackageCache(pkg, settings);
-            const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
-
-            await this.pullSectorScriptAssets(library, settings, packageCache);
-            await packageCache.flush();
-            buildStaticMeshBatchData(library);
-            prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
+            const { library, packageCache } = await this.buildSector(sectorName, settings);
             if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
             return { cached: false, bytes: await DecodeCache.storeCachedLibraryDurable(sectorName, settings, await packageCache.externalize(library)) };
@@ -759,15 +760,7 @@ export class DecodeEngine {
             return { library: cached, fromCache: true };
         }
 
-        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
-        const packageCache = await this.openPackageCache(pkg, settings);
-        const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
-
-        await this.pullSectorScriptAssets(library, settings, packageCache);
-        await packageCache.flush();
-        buildStaticMeshBatchData(library);
-
-        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
+        const { library, packageCache } = await this.buildSector(sectorName, settings);
 
         if (convertToRGBA) convertDDSMaterialsToRGBA(library);
         this.freeSector(sectorName);
@@ -792,14 +785,7 @@ export class DecodeEngine {
             return { buffer, fromCache: true };
         }
 
-        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
-        const packageCache = await this.openPackageCache(pkg, settings);
-        const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
-
-        await this.pullSectorScriptAssets(library, settings, packageCache);
-        await packageCache.flush();
-        buildStaticMeshBatchData(library);
-        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
+        const { library, packageCache } = await this.buildSector(sectorName, settings);
 
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
         if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, await packageCache.externalize(library));
@@ -2627,13 +2613,13 @@ export class DecodeEngine {
                 meshInfo.skinMaterials = await this.pullCharacterSkinMaterials(builder, meshInfo.skinNotifies, texturePaths[i], textureUuid);
             else meshInfo.skinNotifies = {};
 
-            if (i === 0) meshInfo.animationSet = characterBundleCacheName(charIndex, library.name.replace(/_m\d+_f$/, ""));
+            if (i === 0) meshInfo.animationSet = characterBundleCacheName(charIndex, getCharacterGroupName(row));
 
             library.pawnActors.push(meshInfo);
         }
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
-        await this.pullCharacterPawnEffects(library, settings, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
+        await this.pullCharacterPawnEffects(library, settings, `LineageWarrior.${getCharacterGroupName(row)}`);
         await this.pullCharacterSounds(library, builder, row, chestId, equipment?.leftHand || 0);
         await this.pullCharacterEquipment(library, builder, row, equipment, hairVariant);
 
@@ -2656,7 +2642,8 @@ export class DecodeEngine {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const [meshPaths, texturePaths] = await this.characterPartPaths(charIndex, faceVariant, hairVariant, hairColour, armor, equipment);
-        const cacheName = characterBundleCacheName(charIndex, splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, ""));
+        const name = getCharacterGroupName(row);
+        const cacheName = characterBundleCacheName(charIndex, name);
         let cached = this.cacheCharacterBundles.get(charIndex);
 
         if (!cached) {
@@ -2735,7 +2722,7 @@ export class DecodeEngine {
         }
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
-        await this.pullCharacterPawnEffects(library, settings, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
+        await this.pullCharacterPawnEffects(library, settings, `LineageWarrior.${name}`);
         await this.pullCharacterSounds(library, this.createDecodeBuilder(library, settings), row, armor.chest, equipment?.leftHand || 0, armor.boots);
         await this.pullCharacterEquipment(library, this.createDecodeBuilder(library, settings), row, equipment, hairVariant);
         const notifyEffects = await this.getStoredAssets("character_effects", `notifies:${charIndex}`, settings, async () => {
@@ -2836,7 +2823,7 @@ export class DecodeEngine {
     protected async buildCharacterBundle(settings: LoadSettings_T, charIndex: number): Promise<DecodeLibrary> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
-        const name = splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "");
+        const name = getCharacterGroupName(row);
         const cacheName = characterBundleCacheName(charIndex, name);
         const meshPaths = new Set<string>();
         const texturePaths = new Set<string>();
@@ -2992,11 +2979,11 @@ export class DecodeEngine {
 
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
-        const [packageName, faceName] = splitObjectPath(row.face_mesh[0] as string);
+        const [packageName] = splitObjectPath(row.face_mesh[0] as string);
         const [texturePackage] = splitObjectPath(row.face_tex[0] as string);
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Animation")); // reading the export table only
         const textures = await this.characterTextureNames(row.face_tex[0] as string);
-        const pattern = new RegExp(`^${faceName.replace(/_m\d+_f$/, "").toLowerCase()}_m(\\d+)_m00_(ah|bh)$`);
+        const pattern = new RegExp(`^${getCharacterGroupName(row).toLowerCase()}_m(\\d+)_m00_(ah|bh)$`);
         const styles = new Map<number, Map<number, [string, string][]>>();
 
         for (const entry of pkg.exportGroups.SkeletalMesh) {
@@ -3167,7 +3154,7 @@ export class DecodeEngine {
 
             groups.push({
                 index,
-                name: splitObjectPath(row.face_mesh[0] as string)[1].replace(/_m\d+_f$/, ""),
+                name: getCharacterGroupName(row),
                 faceVariants: (row.face_tex as string[]).length,
                 hairStyles: [...pieces.keys()].sort((a, b) => a - b),
                 hairColours: Object.fromEntries([...pieces].map(([style, colours]) => [style, [...colours.keys()].sort((a, b) => a - b)])),
@@ -3249,7 +3236,8 @@ export class DecodeEngine {
                 const assets = new DecodeLibrary();
 
                 if (part.head || part.hair) {
-                    const bundle = [...this.cacheCharacterBundles.values()].find(bundle => (bundle.library as any).characterBundle.name === splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, ""));
+                    const name = getCharacterGroupName(row);
+                    const bundle = [...this.cacheCharacterBundles.values()].find(bundle => (bundle.library as any).characterBundle.name === name);
                     const head = (await this.decodeArmorGrp()).find(row => row.id === (part.hair || part.head));
 
                     if (bundle) {

@@ -78,16 +78,7 @@ export class NCQuestWnd {
         this.list.content.style.overflow = "hidden";
         this.list.setAttribute("role", "tree");
         this.list.tabIndex = -1;
-        layer.button(this.element, 91, 306, 77, 23, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", "L2UI_CH3.BUTTON.Btn1_normal", this.strings.sysStrings[SysString_T.Abort], () => {
-            const selected = this.nodes.find(node => node.selected);
-
-            if (this.onAbort) this.onAbort(selected ? selected.info.id : -1);
-        });
-
-        this.checkbox = layer.checkbox(this.element, 10, 310, 100, 12, this.strings.sysStrings[SysString_T.QuestLocation], checked => {
-            this.isLocationChecked = checked;
-            this.updateLocation();
-        }, true);
+        this.checkbox = this.createQuestControls();
 
         const help = layer.createWindow(232, 10, 15, 15, this.element);
 
@@ -95,6 +86,21 @@ export class NCQuestWnd {
         layer.tile(help, 0, 0, 15, 15, 0, 0, 15, 15, `${TEX_PATH}QuestWndToolTipBtn`);
         help.addEventListener("mouseenter", () => this.showHelp(help));
         help.addEventListener("mouseleave", () => this.hideHelp());
+    }
+
+    protected createQuestControls(): HTMLDivElement {
+        const layer = this.layer;
+
+        layer.button(this.element, 91, 306, 77, 23, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", "L2UI_CH3.BUTTON.Btn1_normal", this.strings.sysStrings[SysString_T.Abort], () => {
+            const selected = this.nodes.find(node => node.selected);
+
+            if (this.onAbort) this.onAbort(selected ? selected.info.id : -1);
+        });
+
+        return layer.checkbox(this.element, 10, 310, 100, 12, this.strings.sysStrings[SysString_T.QuestLocation], checked => {
+            this.isLocationChecked = checked;
+            this.updateLocation();
+        }, true);
     }
 
     public setVisible(isVisible: boolean) {

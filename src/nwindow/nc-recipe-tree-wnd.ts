@@ -1,6 +1,6 @@
 import getCrystalGradeSymbol from "./item-symbol";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { bindWheelScroll, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import { ItemType2_T, type InventoryItem_T } from "../network/game-packets";
@@ -39,12 +39,7 @@ export class NCRecipeTreeWnd {
         viewport.style.overflow = "hidden";
         viewport.appendChild(this.list.content);
         layer.place(this.list.content, 0, 0, 226);
-        this.list.addEventListener("wheel", event => {
-            event.stopImmediatePropagation();
-            const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
-
-            this.list.setScroll(this.list.getScroll() - delta * 45);
-        }, true);
+        bindWheelScroll(this.list, 45);
         layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.Close), () => {
             this.root = null;
             this.list.content.replaceChildren();

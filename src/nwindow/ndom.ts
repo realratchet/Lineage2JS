@@ -44,8 +44,21 @@ function glyphHtml(x: number, y: number, w: number, h: number, u: number, v: num
 
 export type NDomCheckBox_T = HTMLDivElement & { setChecked(checked: boolean): void, getChecked(): boolean };
 export type NDomButton_T = HTMLDivElement & { setLabel(label: string): void, setEnabled(isEnabled: boolean): void, setTextures(normal: string, down: string, over?: string): void };
-export type NDomScrollPane_T = HTMLDivElement & { content: HTMLDivElement, setContentHeight(height: number, preserveScroll?: boolean): void, setHeight(height: number): void, setScroll(position: number, isClamped?: boolean): void, getScroll(): number };
+export type NDomScrollPane_T = HTMLDivElement & { content: HTMLDivElement, isDropTarget(target: Node): boolean, setContentHeight(height: number, preserveScroll?: boolean): void, setHeight(height: number): void, setScroll(position: number, isClamped?: boolean): void, getScroll(): number };
 export type NDomEdit_T = HTMLDivElement & { input: HTMLInputElement, getValue(): string, setValue(value: string): void, appendValue(value: string): void, setEnabled(isEnabled: boolean): void, setWidthLimit(width: number): void, focus(): void };
+
+export function getWheelDelta(event: WheelEvent) {
+    const delta = (event as any).wheelDelta;
+
+    return typeof delta === "number" ? Math.trunc(delta / 120) : -Math.sign(event.deltaY);
+}
+
+export function bindWheelScroll(pane: NDomScrollPane_T, step: number) {
+    pane.addEventListener("wheel", event => {
+        event.stopImmediatePropagation();
+        pane.setScroll(pane.getScroll() - getWheelDelta(event) * step);
+    }, true);
+}
 
 export class NDomLayer {
     protected readonly tooltips = new NCTooltip();
@@ -54,6 +67,7 @@ export class NDomLayer {
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
     protected readonly tileAnimations = new WeakMap<HTMLElement, Animation>();
+    protected readonly cacheCrestUrls = new WeakMap<CanvasImageSource, string>();
     protected readonly cacheWrapUrls = new Map<string, string>();
     protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
@@ -413,6 +427,12 @@ export class NDomLayer {
         return this.cacheWrapUrls.get(key);
     }
 
+    public getCrestBackground(crest: CanvasImageSource) { // NWindow 0x100131f0: 16x12 sampled from v=4.
+        if (!this.cacheCrestUrls.has(crest)) this.cacheCrestUrls.set(crest, (crest as HTMLCanvasElement).toDataURL());
+
+        return `url(${this.cacheCrestUrls.get(crest)}) 0 -4px no-repeat`;
+    }
+
     public createWindow(x: number, y: number, width: number, height: number, parent: HTMLElement = this.root): HTMLDivElement {
         const wnd = document.createElement("div");
 
@@ -761,6 +781,7 @@ export class NDomLayer {
 
         element.style.overflow = "hidden";
         element.content = content;
+        element.isDropTarget = target => content.contains(target) || target === element && thumb.hidden;
         element.getScroll = () => scroll;
         const setScroll = (position: number, isClamped = true) => {
             if (isPixel) {

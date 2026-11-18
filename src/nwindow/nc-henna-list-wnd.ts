@@ -1,5 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
+import NDomLayer, { getWheelDelta, NDOM_SCROLL_TEXTURES } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { HennaEquipEntry_T, HennaEquipList_T } from "../network/game-packets";
 import SysString_T from "./sys-string";
@@ -70,7 +70,7 @@ export class NCHennaListWnd {
         });
         this.list.addEventListener("wheel", event => {
             event.preventDefault();
-            const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
+            const delta = getWheelDelta(event);
 
             this.setScroll(this.scroll - delta);
         });

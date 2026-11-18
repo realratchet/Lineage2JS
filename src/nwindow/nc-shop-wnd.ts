@@ -1,5 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { bindWheelScroll, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { ShopItem_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -39,6 +39,7 @@ export class NCShopWnd {
     protected readonly total: HTMLDivElement;
     protected readonly money: HTMLDivElement;
     protected readonly caption: HTMLDivElement;
+    protected readonly transferButtons: NDomButton_T[];
     protected readonly okButton: NDomButton_T;
     protected readonly cancelButton: NDomButton_T;
     protected capacity = 160;
@@ -71,12 +72,7 @@ export class NCShopWnd {
             list.tabIndex = -1;
             list.style.outline = "none";
             this.lists.push(list);
-            list.addEventListener("wheel", event => {
-                event.stopImmediatePropagation();
-                const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
-
-                list.setScroll(list.getScroll() - delta * 35);
-            }, true);
+            bindWheelScroll(list, 35);
             list.addEventListener("mousemove", event => {
                 if (list.content.contains(event.target as Node) || event.target === list)
                     this.hoverItem(side, this.getItemIndex(side, event), event.buttons);
@@ -117,8 +113,10 @@ export class NCShopWnd {
                 if (this.onFocusDialog) this.onFocusDialog();
             });
         });
-        layer.button(this.element, 112, 194, 15, 15, TEX_UP, TEX_UP, null, null, () => this.moveSelected(1));
-        layer.button(this.element, 130, 194, 15, 15, TEX_DOWN, TEX_DOWN, null, null, () => this.moveSelected(0));
+        this.transferButtons = [
+            layer.button(this.element, 112, 194, 15, 15, TEX_UP, TEX_UP, null, null, () => this.moveSelected(1)),
+            layer.button(this.element, 130, 194, 15, 15, TEX_DOWN, TEX_DOWN, null, null, () => this.moveSelected(0))
+        ];
         this.okButton = layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.OK), () => {
             if (this.onConfirm) this.onConfirm(this.isSell, this.items[1]);
         });
@@ -230,7 +228,7 @@ export class NCShopWnd {
     protected dropItem(side: number, item: ShopItem_T, event: MouseEvent) {
         const target = document.elementFromPoint(event.clientX, event.clientY), list = this.lists[1 - side];
 
-        if (!target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
+        if (!list.isDropTarget(target)) return;
         if (this.onMove) this.onMove(side, item, true, true);
     }
     protected moveSelected(side: number) {

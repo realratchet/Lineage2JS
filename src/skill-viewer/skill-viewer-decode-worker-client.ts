@@ -4,10 +4,8 @@ import type DecodeLibrary from "../assets/unreal/decode-library";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";
 
-type NpcPreload_T = { library: Promise<DecodeLibrary> };
-
 export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
-    protected readonly cacheNpcPreloads = new Map<number, NpcPreload_T>();
+    protected readonly cacheNpcPreloads = new Map<number, Promise<DecodeLibrary>>();
     protected readonly arrCharacterPreloads: Promise<DecodeLibrary>[] = [];
     protected characterPoolSize = 0;
     protected characterSettings: LoadSettings_T = null;
@@ -43,7 +41,7 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 
             void reportPreloadFailure(npc, library);
 
-            this.cacheNpcPreloads.set(npc.id, { library });
+            this.cacheNpcPreloads.set(npc.id, library);
         }
     }
 
@@ -54,28 +52,15 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
         while (this.arrCharacterPreloads.length < count) this.arrCharacterPreloads.push(super.decodeCharacter(settings));
     }
 
-    public decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
         const preload = npcId === null || equipment !== null ? null : this.cacheNpcPreloads.get(npcId);
 
         if (preload) this.cacheNpcPreloads.delete(npcId);
 
-        return this.consumeSkeletalMesh(
-            preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment),
-            settings,
-            packageName,
-            meshName,
-            scriptClassPath,
-            texturePaths,
-            npcId,
-            equipment
-        );
-    }
-
-    // animations travel only with the first decode of a set, and only a consumed library reaches decodeObject3D's cache
-    protected async consumeSkeletalMesh(pending: Promise<DecodeLibrary>, settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: INpcEquipment | null): Promise<DecodeLibrary> {
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
-        let library = await pending;
+        let library = await (preload || super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment));
 
+        // animations travel only with the first decode of a set, and only a consumed library reaches decodeObject3D's cache
         if (npcId !== null && !this.consumedAnimationSets.has(animationSet) && !hasAnimations(library)) {
             revokeSounds(library);
             this.npcAnimationSets.delete(animationSet);
@@ -111,9 +96,9 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
         return library;
     }
 
-    protected async releasePreload(preload: NpcPreload_T): Promise<void> {
+    protected async releasePreload(preload: Promise<DecodeLibrary>): Promise<void> {
         try {
-            revokeSounds(await preload.library);
+            revokeSounds(await preload);
         } catch {
             return;
         }

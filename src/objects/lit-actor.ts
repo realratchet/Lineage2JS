@@ -4,12 +4,13 @@ import { SectorObject } from "./zone-object";
 import { Box3, BufferAttribute, Color, DynamicDrawUsage, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
 import { cancelStaticLighting, computeStaticLighting } from "../rendering/static-lighting";
 import SortedIndexBuffer from "../rendering/sorted-index-buffer";
-import VertexLighting, { getAffectedVertices } from "../rendering/vertex-lighting";
+import VertexLighting from "../rendering/vertex-lighting";
+import { getAffectedVertices } from "../assets/decoders/static-lighting";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
 import MeshStaticMaterial, { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
 import { GameMesh } from "../game/components";
-import type { BatchHardwareLighting_T } from "../assets/unreal/static-mesh-batch";
+import type { BatchHardwareLighting_T, BatchLightEntry_T } from "../assets/unreal/static-mesh-batch";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -23,7 +24,7 @@ const arrBakedHardwareLights = Array.from({ length: NUM_ACTOR_LIGHTS }, () => ({
 const arrPermeatingLights: string[] = [];
 const tmpHardwareBox = new Box3();
 
-type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
+type AugmentedLight_T = BatchLightEntry_T & { instance?: DynamicLight };
 type LightSets_T = { all: AugmentedLight_T[], staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[], dynamicScene: AugmentedLight_T[], dynamicEnv: AugmentedLight_T[] };
 
 export type BatchRenderGroup_T = { start: number, count: number, materialIndex: number, bounds: Box3, boundsStart: number, boundsCount: number, position: BufferAttribute | InterleavedBufferAttribute, index: BufferAttribute, positionVersion: number, indexVersion: number };
@@ -190,10 +191,11 @@ export class LitActorMesh extends GameMesh {
         const glowPerVertex = perActorAmbient ? this.getPerVertexGlow(perActorAmbient, vertexArrayLen) : null;
         const uniformGlow = this.scaledGlow;
 
-        for (const { instance: light, flags, vertexRangeStart, vertexRangeEnd, flagsOffset } of lights) {
+        for (const entry of lights) {
+            const light = entry.instance;
             if (!light) continue;
 
-            const indices = getAffectedVertices(flags, vertexArrayLen, vertexRangeStart, vertexRangeEnd, flagsOffset);
+            const indices = getAffectedVertices(entry, vertexArrayLen);
             const col = color || light.bakedColor;
 
             for (let k = 0, len = indices.length; k < len; k++) {
@@ -643,8 +645,8 @@ export class LitActorMesh extends GameMesh {
 export type MeshLight_T = {
     matrix: Matrix4,
     staticLighting?: { offsets: Uint32Array, indices: Uint16Array | Uint32Array, lights: string[], glow: Float32Array },
-    scene: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number }[],
-    environment: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number }[]
+    scene: BatchLightEntry_T[],
+    environment: BatchLightEntry_T[]
 }
 
 export default LitActorMesh;

@@ -6,7 +6,7 @@ import requestWebLock from "../web-lock";
 import { getAssetSourceId } from "../asset-source";
 import { capturePackageResolver, packageIdentity, validatePackageResolver, canReleasePackageSource } from "../unreal/package-resolver";
 import { queueConvertedAssetRelease } from "../unreal/asset-handle";
-import { convertDDSTextureInfo } from "@l2js/engine/dds/dxt-decode";
+import { convertDDSTextureInfo } from "@l2js/engine/dds/dds-texture";
 import { startLoadingStep } from "../../loading-profile";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T, type LibraryChunkRef_T } from "./library-serializer";

@@ -1,5 +1,6 @@
+import getCrystalGradeSymbol from "./item-symbol";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { bindWheelScroll, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { InventoryItem_T, RecipeItemMakeInfo_T } from "../network/game-packets";
@@ -68,12 +69,7 @@ export class NCRecipeManufactureWnd {
         this.list = layer.scrollPane(this.element, 10, 141, 238, 103, 35);
         this.list.tabIndex = -1;
         this.list.addEventListener("scroll", () => this.showMaterialTooltip());
-        this.list.addEventListener("wheel", event => {
-            event.stopImmediatePropagation();
-            const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
-
-            this.list.setScroll(this.list.getScroll() - delta * 35);
-        }, true);
+        bindWheelScroll(this.list, 35);
         this.list.addEventListener("mousedown", event => {
             if (event.button !== 0 && event.button !== 2) return;
             if (event.target !== this.list && !this.list.content.contains(event.target as Node)) return;
@@ -174,7 +170,7 @@ export class NCRecipeManufactureWnd {
         }
         this.setVisible(true);
         this.element.focus();
-        const grade = strings.itemInfos[recipe.productId].crystalType, gradeSymbol = ["", "graded", "gradec", "gradeb", "gradea", "grades"][grade];
+        const gradeSymbol = getCrystalGradeSymbol(strings.itemInfos[recipe.productId].crystalType);
 
         await this.layer.loadTextures([strings.itemIcons[recipe.productId], ...this.materials.map(material => strings.itemIcons[material.itemId]), ...(gradeSymbol ? [strings.symbols[gradeSymbol]] : [])]);
         if (generation !== this.generation) return;

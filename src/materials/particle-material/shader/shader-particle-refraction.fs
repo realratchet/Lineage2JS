@@ -1,5 +1,5 @@
 varying vec2 vUv;
-#ifdef REFRACTION_INSTANCED
+#ifdef USE_PARTICLE_INSTANCING
 varying vec4 vColor;
 #else
 uniform vec3 diffuse;
@@ -21,7 +21,7 @@ void main() {
     #include <logdepthbuf_fragment>
     if (rangeFade < 1.0 && rangeFade <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
 
-    #ifdef REFRACTION_INSTANCED
+    #ifdef USE_PARTICLE_INSTANCING
     vec4 color = vColor;
     #else
     vec4 color = vec4(diffuse, opacity);

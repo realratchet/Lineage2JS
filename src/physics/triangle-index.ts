@@ -1,4 +1,24 @@
-import type { CollisionTriangleIndex_T } from "../objects/objects";
+import { clipAxis } from "./collision-bounds";
+
+export type CollisionTriangleIndex_T = {
+    minX: number;
+    minY: number;
+    cellSizeX: number;
+    cellSizeY: number;
+    sizeX: number;
+    sizeY: number;
+    offsets: Uint32Array;
+    triangleIndices: Uint32Array;
+    triangleBounds?: Float32Array;
+    marks: Uint16Array | Uint32Array;
+    queryTag: number;
+};
+
+type IndexPosition_T = { x: number, y: number };
+const arrCellTriangles: number[] = [];
+const gridClip: [number, number] = [0, 1];
+
+export const MIN_STATIC_MESH_INDEX_COUNT = 384;
 
 export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array, buildBounds: boolean = false): CollisionTriangleIndex_T {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -75,6 +95,118 @@ export function prepareTriangleIndex(index: CollisionTriangleIndex_T): Collision
     }
 
     return index;
+}
+
+export function buildTriangleBounds(vertices: Float32Array, indices: Uint32Array): Float32Array {
+    const bounds = new Float32Array(indices.length * 2);
+
+    for (let i = 0; i < indices.length; i += 3) {
+        const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
+
+        for (let axis = 0; axis < 3; axis++) {
+            bounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+            bounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+        }
+    }
+
+    return bounds;
+}
+
+function beginIndexQuery(index: CollisionTriangleIndex_T) {
+    index.queryTag++;
+
+    if (index.queryTag === 0xffff) {
+        index.queryTag = 1;
+        index.marks.fill(0);
+    }
+}
+
+function collectCellTriangles(index: CollisionTriangleIndex_T, cell: number, triangles: number[], count: number): number {
+    for (let i = index.offsets[cell], end = index.offsets[cell + 1]; i < end; i++) {
+        const triangle = index.triangleIndices[i];
+        if (index.marks[triangle] === index.queryTag) continue;
+
+        index.marks[triangle] = index.queryTag;
+        triangles[count++] = triangle;
+    }
+
+    return count;
+}
+
+export function collectPointTriangles(index: CollisionTriangleIndex_T, localX: number, localY: number, extentX: number, extentY: number, triangles: number[]): void {
+    const x0 = Math.max(0, Math.floor((localX - extentX - index.minX) / index.cellSizeX) - 1);
+    const y0 = Math.max(0, Math.floor((localY - extentY - index.minY) / index.cellSizeY) - 1);
+    const x1 = Math.min(index.sizeX - 1, Math.floor((localX + extentX - index.minX) / index.cellSizeX) + 1);
+    const y1 = Math.min(index.sizeY - 1, Math.floor((localY + extentY - index.minY) / index.cellSizeY) + 1);
+
+    beginIndexQuery(index);
+    let count = 0;
+    for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) count = collectCellTriangles(index, y * index.sizeX + x, triangles, count);
+
+    triangles.length = count;
+    triangles.sort((a, b) => a - b);
+}
+
+// segment walk; the swept-AABB cell box it replaces grows with the square of the segment length
+export function traceTriangleIndex(index: CollisionTriangleIndex_T, start: IndexPosition_T, end: IndexPosition_T, extent: IndexPosition_T, visit: (triangles: number[], count: number) => number): void {
+    const startX = (start.x - index.minX) / index.cellSizeX, startY = (start.y - index.minY) / index.cellSizeY;
+    const endX = (end.x - index.minX) / index.cellSizeX, endY = (end.y - index.minY) / index.cellSizeY;
+    const extentX = extent.x / index.cellSizeX, extentY = extent.y / index.cellSizeY;
+    const minCellX = Math.max(0, Math.floor(Math.min(startX, endX) - extentX)), maxCellX = Math.min(index.sizeX - 1, Math.floor(Math.max(startX, endX) + extentX));
+    const minCellY = Math.max(0, Math.floor(Math.min(startY, endY) - extentY)), maxCellY = Math.min(index.sizeY - 1, Math.floor(Math.max(startY, endY) + extentY));
+
+    beginIndexQuery(index);
+    if (minCellX > maxCellX || minCellY > maxCellY) return;
+
+    let bestTime = Infinity;
+    const padX = Math.ceil(extentX), padY = Math.ceil(extentY); // cells outside the swept box only hold triangles the box cells hold too
+    gridClip[0] = 0;
+    gridClip[1] = 1;
+
+    if (!clipAxis(gridClip, startX, endX - startX, minCellX - padX, maxCellX + 1 + padX)) return;
+    if (!clipAxis(gridClip, startY, endY - startY, minCellY - padY, maxCellY + 1 + padY)) return;
+
+    const gridClipT0 = gridClip[0], gridClipT1 = gridClip[1];
+    const fromX = startX + (endX - startX) * gridClipT0, fromY = startY + (endY - startY) * gridClipT0;
+    const toX = startX + (endX - startX) * gridClipT1, toY = startY + (endY - startY) * gridClipT1;
+    const stepX = Math.sign(toX - fromX), stepY = Math.sign(toY - fromY);
+    const rateX = stepX !== 0 ? 1 / Math.abs(toX - fromX) : Infinity;
+    const rateY = stepY !== 0 ? 1 / Math.abs(toY - fromY) : Infinity;
+    const lastX = Math.min(maxCellX + padX, Math.floor(toX)), lastY = Math.min(maxCellY + padY, Math.floor(toY));
+    const maxSteps = (maxCellX - minCellX + 2 * padX) + (maxCellY - minCellY + 2 * padY) + 8;
+
+    let cellX = Math.min(maxCellX + padX, Math.floor(fromX)), cellY = Math.min(maxCellY + padY, Math.floor(fromY));
+    let nextX = stepX > 0 ? (cellX + 1 - fromX) * rateX : stepX < 0 ? (fromX - cellX) * rateX : Infinity;
+    let nextY = stepY > 0 ? (cellY + 1 - fromY) * rateY : stepY < 0 ? (fromY - cellY) * rateY : Infinity;
+
+    for (let steps = 0; steps <= maxSteps; steps++) {
+        const x0 = Math.max(minCellX, cellX - padX), x1 = Math.min(maxCellX, cellX + padX);
+        const y0 = Math.max(minCellY, cellY - padY), y1 = Math.min(maxCellY, cellY + padY);
+
+        for (let y = y0; y <= y1; y++)
+            for (let x = x0; x <= x1; x++) {
+                const count = collectCellTriangles(index, y * index.sizeX + x, arrCellTriangles, 0);
+                bestTime = visit(arrCellTriangles, count);
+            }
+
+        if (cellX === lastX && cellY === lastY) return;
+        if (gridClipT0 + Math.min(nextX, nextY) * (gridClipT1 - gridClipT0) >= bestTime) return; // cells come in ray order, nothing further along can be nearer
+
+        if (nextX <= nextY) {
+            if (nextX > 1) return;
+
+            cellX += stepX;
+            nextX += rateX;
+        } else {
+            if (nextY > 1) return;
+
+            cellY += stepY;
+            nextY += rateY;
+        }
+    }
+
+    throw new Error(`Grid walk exceeded ${maxSteps} steps over cells (${minCellX}, ${minCellY})-(${maxCellX}, ${maxCellY}).`);
 }
 
 export default buildTriangleIndex;

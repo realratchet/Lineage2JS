@@ -1,7 +1,9 @@
+import { checkPacketSize, readPacketFrame, writePacketFrame } from "./packet-frame";
+
 type PacketHandler_T = (body: Uint8Array) => void;
 type CloseHandler_T = (code: number, reason: string) => void;
 
-export class L2Socket { // Legacy packet lengths include the header; WS messages may split packets.
+export class L2Socket {
     protected socket: WebSocket = null;
     protected pending = new Uint8Array(0);
     protected isClosedByUs = false;
@@ -51,9 +53,7 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
     public isOpen() { return !!this.socket && this.socket.readyState === WebSocket.OPEN; }
 
-    public static checkPacketSize(size: number) {
-        if (size + 2 > 0xffff) throw new Error(`L2 packet body length ${size} exceeds 65533 bytes.`);
-    }
+    public static checkPacketSize = checkPacketSize;
 
     protected receive(data: ArrayBuffer | string) {
         if (typeof data === "string") throw new Error(`L2 socket received a text frame.`);
@@ -68,17 +68,12 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
         let offset = 0;
 
         try {
-            while (buffer.length - offset >= 2) {
-                const size = buffer[offset] | (buffer[offset + 1] << 8);
+            while (offset < buffer.length) {
+                const frame = readPacketFrame(buffer, offset);
 
-                if (size < 2) throw new Error(`L2 socket received invalid packet length ${size}.`);
-                if (buffer.length - offset < size) break;
-
-                const body = buffer.slice(offset + 2, offset + size);
-
-                offset += size;
-
-                if (body.length > 0) this.onPacket(body);
+                if (!frame) break;
+                offset = frame.end;
+                if (frame.body.length > 0) this.onPacket(frame.body);
                 if (this.socket !== socket) return;
             }
         } finally {
@@ -88,15 +83,7 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
     public send(body: Uint8Array) {
         if (!this.isOpen()) throw new Error(`L2 socket is not open.`);
-        L2Socket.checkPacketSize(body.length);
-
-        const frame = new Uint8Array(body.length + 2);
-
-        frame[0] = frame.length & 0xff;
-        frame[1] = (frame.length >>> 8) & 0xff;
-        frame.set(body, 2);
-
-        this.socket.send(frame);
+        this.socket.send(writePacketFrame(body));
     }
 
     public close() {

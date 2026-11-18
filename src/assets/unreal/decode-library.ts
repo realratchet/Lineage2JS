@@ -1,3 +1,4 @@
+import type { CollisionTriangleIndex_T } from "../../physics/triangle-index";
 import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 import type { StaticMeshBatchManifest_T } from "./static-mesh-batch";
 import type { BSPBrushPolygonDecodeInfo_T, IBSPNodeDecodeInfo_T } from "./bsp/un-bsp-node";
@@ -107,6 +108,7 @@ export type IGeometryDecodeInfo = {
     };
     indices?: IndexLikeArray;
     colliderIndices?: Uint32Array;
+    collisionIndex?: CollisionTriangleIndex_T;
     staticMeshCollision?: IStaticMeshCollisionDecodeInfo;
     groups?: ArrGeometryGroup[],
     bounds?: IBoundsDecodeInfo
@@ -123,8 +125,8 @@ export type ScriptObject_T = { path: string, classId: string, classParents: Reco
 export class DecodeLibrary {
     public name: string = "Untitled";
     public brightness: number = 1.0;
-    public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
-    public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
+    public loadMipmaps = true;
+    public anisotropy = -1;
     public sector: [number, number];
     public levelInfo: IBaseZoneDecodeInfo;
     public levelPackageName: string = null;
@@ -146,10 +148,10 @@ export class DecodeLibrary {
     public readonly nodeZoneMasks: bigint[] = []; // nodeIndex -> zoneMask for subtree culling
     public readonly bspRenderBounds: IBoxDecodeInfo[] = []; // iRenderBound -> bounding box (swizzled to Three.js coordinates)
     // public readonly zones: Record<string, IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
-    public readonly geometries: Record<string, IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
-    public readonly geometryInstances: Record<string, number> = {};               // a dictionary containing all geometray instance decode info
-    public materials: Record<string, IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
-    public readonly materialModifiers: Record<string, IMaterialModifier> = {};    // a dictionary containing all material modifiers
+    public readonly geometries: Record<string, IGeometryDecodeInfo> = {};
+    public readonly geometryInstances: Record<string, number> = {};
+    public materials: Record<string, IBaseMaterialDecodeInfo> = {};
+    public readonly materialModifiers: Record<string, IMaterialModifier> = {};
     public readonly leafActors: IBaseObjectOrInstanceDecodeInfo[][] = [];
     // flat (not leaf-indexed like leafActors) - emitters register at a single origin point
     // (un-emitter.ts), so gating on leaf membership on top of the zone mask double-gates them
@@ -167,11 +169,11 @@ export class DecodeLibrary {
     public readonly audioList: IAudioDecodeInfo[] = []
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
-    public readonly musicVolumes: IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
+    public readonly musicVolumes: IMusicVolumeDecodeInfo[] = [];
     public readonly waterVolumes: IWaterVolumeDecodeInfo[] = [];
     public readonly physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
     public readonly blockingVolumes: IBlockingVolumeDecodeInfo[] = [];
-    public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
+    public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = [];
     public sourceLibrary: DecodeLibrary = null;
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};
@@ -193,7 +195,7 @@ export class DecodeLibrary {
     public damageEffect: string = null;
     public heroAuraMesh: string = null;
     public npcScriptClassId: string = null;
-    public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
+    public readonly skyZoneInfos: any[] = [];
     public isSkyLevel = false;
     public readonly skyLevel: {
         skybox: string;

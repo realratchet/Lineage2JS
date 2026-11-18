@@ -4,14 +4,6 @@ import type NDomLayer from "./ndom";
 import type { UserInfo_T, GMViewCharacterInfo_T } from "../network/game-packets";
 import SysString_T from "./sys-string";
 
-const cacheCrestUrls = new WeakMap<CanvasImageSource, string>();
-
-function getCrestUrl(crest: CanvasImageSource) {
-    if (!cacheCrestUrls.has(crest)) cacheCrestUrls.set(crest, (crest as HTMLCanvasElement).toDataURL());
-
-    return cacheCrestUrls.get(crest);
-}
-
 export type GMClanInfo_T = { clanId: number, name: string, crestId: number };
 
 class NCGMDetailStatusPage extends NCDetailStatusWnd {
@@ -47,7 +39,7 @@ class NCGMDetailStatusPage extends NCDetailStatusWnd {
             if (this.crest) {
                 const crest = layer.createWindow(x, 25, 16, 12, this.values);
 
-                crest.style.background = `url(${getCrestUrl(this.crest)}) 0 -4px no-repeat`;
+                crest.style.background = layer.getCrestBackground(this.crest);
             }
             if (clan.name) super.drawText(x + (clan.crestId > 0 ? 20 : 0), 25, clan.name);
         } else super.drawText(x, 25, layer.getManager().getSysString(SysString_T.NoClan), 0xffdcdcdc);

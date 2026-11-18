@@ -1,8 +1,8 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
-import buildTriangleIndex from "../../physics/triangle-index";
-import { buildStaticLightIndices } from "./static-lighting";
-import type { DecodeLibrary, Vector3Arr, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "@l2js/engine";
+import buildTriangleIndex, { MIN_STATIC_MESH_INDEX_COUNT } from "../../physics/triangle-index";
+import { buildStaticLightIndices, mergeMeshLightFlags } from "./static-lighting";
+import type { DecodeLibrary, Vector3Arr, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
 import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
 import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, BatchHardwareLighting_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
 
@@ -231,57 +231,6 @@ function prepareActorGeometriesData(
     return { actorGeometries, materialUuids };
 }
 
-// rangeStart/rangeEnd bound the actors that actually reference this light, so
-// getAffectedVertices (lit-actor.ts) can skip scanning the rest of the batch
-function mergeMeshLightFlags(
-    totalVertices: number,
-    vertexCounts: number[],
-    flagArrays: Uint8Array[]
-): { flags: Uint8Array, rangeStart: number, rangeEnd: number, flagsOffset: number } {
-    let globalVertex = 0;
-    let rangeStart = totalVertices;
-    let rangeEnd = 0;
-
-    for (let ai = 0; ai < vertexCounts.length; ai++) {
-        if (flagArrays[ai]) {
-            rangeStart = Math.min(rangeStart, globalVertex);
-            rangeEnd = globalVertex + vertexCounts[ai];
-        }
-        globalVertex += vertexCounts[ai];
-    }
-
-    if (rangeStart > rangeEnd) {
-        rangeStart = 0;
-        rangeEnd = 0;
-    }
-
-    const flagsOffset = rangeStart >> 3;
-    const result = new Uint8Array(Math.ceil(rangeEnd / 8) - flagsOffset);
-    globalVertex = 0;
-
-    for (let ai = 0; ai < vertexCounts.length; ai++) {
-        const actorVertexCount = vertexCounts[ai];
-        const actorFlags = flagArrays[ai];
-
-        if (actorFlags) {
-            const count = Math.min(actorFlags.length, Math.ceil(actorVertexCount / 8));
-            const shift = globalVertex & 7;
-            const offset = Math.floor(globalVertex / 8) - flagsOffset;
-            const tail = actorVertexCount & 7;
-
-            for (let bi = 0; bi < count; bi++) {
-                const bits = tail && bi === Math.floor(actorVertexCount / 8) ? actorFlags[bi] & ((1 << tail) - 1) : actorFlags[bi];
-
-                result[offset + bi] |= bits << shift;
-                if (shift) result[offset + bi + 1] |= bits >>> (8 - shift);
-            }
-        }
-        globalVertex += actorVertexCount;
-    }
-
-    return { flags: result, rangeStart, rangeEnd, flagsOffset };
-}
-
 function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]) {
     let totalVertices = 0;
     let totalIndices = 0;
@@ -430,14 +379,8 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let mergedLights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null = null;
     if (hasAnyLights) {
         mergedLights = {
-            scene: Array.from(mergedSceneLights.entries()).map(([light, flagArrays]) => {
-                const { flags, rangeStart, rangeEnd, flagsOffset } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
-                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd, flagsOffset };
-            }),
-            environment: Array.from(mergedEnvLights.values()).map(({ light, flags: flagArrays }) => {
-                const { flags, rangeStart, rangeEnd, flagsOffset } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
-                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd, flagsOffset };
-            })
+            scene: Array.from(mergedSceneLights, ([light, flags]) => ({ light, ...mergeMeshLightFlags(totalVertices, vertexCounts, flags) })),
+            environment: Array.from(mergedEnvLights.values(), ({ light, flags }) => ({ light, ...mergeMeshLightFlags(totalVertices, vertexCounts, flags) }))
         };
     }
 
@@ -691,9 +634,9 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
-                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices, true) : null,
+                collisionIndex: colliderIndices && colliderIndices.length >= MIN_STATIC_MESH_INDEX_COUNT ? buildTriangleIndex(attributes.positions, colliderIndices, true) : null,
                 groups: finalGroups
-            } as IGeometryDecodeInfo;
+            };
             library.materials[batchUuid] = {
                 name: batchUuid,
                 materialType: "group",
@@ -719,7 +662,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 actors,
                 colliderIndices,
                 actorColliderIndices: mergedColliderIndices,
-                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index], true), staticMeshCollision: library.geometries[actor.instance.mesh.geometry].staticMeshCollision }] : []),
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < MIN_STATIC_MESH_INDEX_COUNT ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index], true), staticMeshCollision: library.geometries[actor.instance.mesh.geometry].staticMeshCollision }] : []),
                 lights: mergedLights,
                 staticLighting,
                 perActorAmbient,

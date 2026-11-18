@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry, GLBufferAttribute, Matrix4, WebGLRenderer } from "three";
+import { buildVertexLightIndices, type VertexLightMask_T } from "../assets/decoders/static-lighting";
 import type DynamicLight from "../objects/dynamic-light";
 import type ColorByte from "../utils/color-byte";
 import VERTEX_SOURCE from "../materials/mesh-static-material/shader/static-lighting.vs";
@@ -6,38 +7,11 @@ import { resolveShaderIncludes } from "../materials/shader-chunks/register-chunk
 
 const VERTEX_SHADER = resolveShaderIncludes(VERTEX_SOURCE.replace("#version 300 es", "#version 300 es\n#define DYNAMIC_LIGHTING"));
 const FRAGMENT_SHADER = "#version 300 es\nprecision highp float;out vec4 color;void main(){color=vec4(0.0);}";
-const cacheAffectedVertices = new WeakMap<Uint8Array, Uint32Array>();
 const cachePrograms = new WeakMap<WebGL2RenderingContext, VertexLightingProgram_T>();
 
 type VertexLightingProgram_T = { program: WebGLProgram, matrixUniform: WebGLUniformLocation };
 
-export type VertexLight_T = { flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
-
-export function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart: number = 0, rangeEnd: number = vertexCount, flagsOffset: number = 0): Uint32Array {
-    let indices = cacheAffectedVertices.get(flags);
-
-    if (!indices) {
-        let count = 0;
-        for (let vi = rangeStart; vi < rangeEnd; vi++) {
-            const byte = flags[(vi >> 3) - flagsOffset];
-
-            if (byte === 0) vi |= 7;
-            else if (byte & (1 << (vi & 7))) count++;
-        }
-
-        indices = new Uint32Array(count);
-        for (let vi = rangeStart, k = 0; vi < rangeEnd; vi++) {
-            const byte = flags[(vi >> 3) - flagsOffset];
-
-            if (byte === 0) vi |= 7;
-            else if (byte & (1 << (vi & 7))) indices[k++] = vi;
-        }
-
-        cacheAffectedVertices.set(flags, indices);
-    }
-
-    return indices;
-}
+export type VertexLight_T = VertexLightMask_T & { instance?: DynamicLight };
 
 export class VertexLighting {
     public output: GLBufferAttribute;
@@ -87,25 +61,7 @@ export class VertexLighting {
 
     protected *createTables(): Generator<void, void> {
         const lights = this.lights, count = this.geometry.getAttribute("position").count;
-        const counts = new Uint32Array(count), offsets = new Uint32Array(count + 1);
-
-        for (const entry of lights) {
-            const affected = getAffectedVertices(entry.flags, count, entry.vertexRangeStart, entry.vertexRangeEnd, entry.flagsOffset);
-
-            for (let k = 0; k < affected.length; k++) counts[affected[k]]++;
-            yield;
-        }
-
-        for (let i = 0; i < count; i++) offsets[i + 1] = offsets[i] + counts[i];
-        const indices = new Uint32Array(offsets[count]);
-        counts.set(offsets.subarray(0, count));
-        yield;
-        for (let i = 0; i < lights.length; i++) {
-            const entry = lights[i], affected = getAffectedVertices(entry.flags, count, entry.vertexRangeStart, entry.vertexRangeEnd, entry.flagsOffset);
-
-            for (let k = 0; k < affected.length; k++) indices[counts[affected[k]]++] = i;
-            yield;
-        }
+        const { offsets, indices } = yield* buildVertexLightIndices(lights, count);
 
         if (Math.max(offsets.length, indices.length, lights.length * 4) > this.width * this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE))
             throw new Error(`Vertex lighting tables exceed GPU texture limits for '${this.geometry.name}'.`);

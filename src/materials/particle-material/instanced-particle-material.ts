@@ -1,8 +1,9 @@
 import { DoubleSide, ShaderMaterial, UniformsUtils, UniformsLib, Vector3 } from "three";
 import VERTEX_SHADER from "./shader/shader-particle-instanced.vs";
-import FRAGMENT_SHADER from "./shader/shader-particle-instanced.fs";
+import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { fixParticleTextureSampling, getPartcileBlendingSettings } from "./particle-material";
+import { fixParticleTextureSampling } from "./particle-material";
+import { getPartcileBlendingSettings } from "../particle-blending";
 import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine/contracts/emitter";
 
 export class InstancedParticleMaterial extends ShaderMaterial {
@@ -20,7 +21,7 @@ export class InstancedParticleMaterial extends ShaderMaterial {
         uniforms.particleProjectionNormal = { value: projectionNormal?.clone() ?? new Vector3(0, 0, 1) };
         uniforms.rangeFade = rangeFade ?? { value: 1 };
 
-        const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
+        const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "", USE_PARTICLE_INSTANCING: "" };
 
         if (blendBetweenSubdivisions) defines.USE_SUBDIVISION_BLEND = "";
 
@@ -34,11 +35,7 @@ export class InstancedParticleMaterial extends ShaderMaterial {
             defines.USE_VELOCITY_UP = "";
             uniforms.particleViewLocation = { value: new Vector3() };
         }
-        const { isAdditive, ...blendingSettings } = getPartcileBlendingSettings(blendingMode);
-
-        if (isAdditive) {
-            defines.USE_ADDITIVE_FOG = "";
-        }
+        const blendingSettings = getPartcileBlendingSettings(blendingMode, defines);
 
         super({
             vertexShader: VERTEX_SHADER,

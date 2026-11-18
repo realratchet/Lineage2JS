@@ -3,6 +3,8 @@
         "baseUrl": ".",
         "outDir": "../bin",
         "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "allowSyntheticDefaultImports": true,
         "target": "ESNext",
         "module": "ESNext",
         // "allowJs": true,

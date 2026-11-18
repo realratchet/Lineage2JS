@@ -9,14 +9,6 @@ const TEX_BACK = "L2UI_CH3.HeroTower.herotower1_back";
 const TEX_BUTTON = SKIN_SLOTS.button;
 const TEX_DOWN = SKIN_SLOTS.buttonDown;
 
-const cacheCrestUrls = new WeakMap<CanvasImageSource, string>();
-
-function getCrestUrl(crest: CanvasImageSource) {
-    if (!cacheCrestUrls.has(crest)) cacheCrestUrls.set(crest, (crest as HTMLCanvasElement).toDataURL());
-
-    return cacheCrestUrls.get(crest);
-}
-
 class HeroListCtrl extends NCListCtrl {
     public getCrest: (crestId: number, isAlly: boolean) => CanvasImageSource = null;
     protected entries: HeroEntry_T[] = [];
@@ -58,7 +50,7 @@ class HeroListCtrl extends NCListCtrl {
             const crest = this.layer.createWindow(x, 1, width, 12, cell);
 
             crest.style.pointerEvents = "none";
-            crest.style.background = `url(${getCrestUrl(image)}) 0 -4px no-repeat`;
+            crest.style.background = this.layer.getCrestBackground(image);
             x += width;
         }
         this.layer.text(cell, row.cells[cellIndex], 0xffdcdcdc, undefined, x, 1);

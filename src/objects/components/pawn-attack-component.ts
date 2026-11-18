@@ -862,20 +862,6 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         return this.skillEffects.notify(phase, phaseTime, this.getSkillCast(skill), source as any, target, hitActor, associatedActors, impactActor as any);
     }
 
-    protected getAttackDirection(out: Vector3): Vector3 {
-        const parent = this.getParent();
-
-        if (this.target) {
-            parent.getWorldPosition(tmpNpcPosition);
-            this.target.getWorldPosition(tmpTargetPosition);
-            out.set(tmpTargetPosition.x - tmpNpcPosition.x, tmpTargetPosition.y - tmpNpcPosition.y, 0);
-
-            if (out.lengthSq() > 0) return out.normalize();
-        }
-
-        return out.set(Math.cos(parent.rotation.z + Math.PI / 2), Math.sin(parent.rotation.z + Math.PI / 2), 0);
-    }
-
     protected addAttackEffect(effect: Object3D, owner: Object3D & IObject = this.getParent()): void {
         for (let i = this.attackEffects.length - 1; i >= 0; i--)
             if (!this.attackEffects[i].parent) this.attackEffects.splice(i, 1);

@@ -54,7 +54,7 @@ export class SpriteEmitter extends BaseEmitter {
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
         const settings = { ...this.material, usesSubdivision, blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv, rangeFade: this.rangeFade };
         const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
-        if (this.refractionScale) setParticleRefraction(mesh.material, this.refractionScale, false);
+        if (this.refractionScale) setParticleRefraction(mesh.material, this.refractionScale);
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
         return mesh;
@@ -70,7 +70,7 @@ export class SpriteEmitter extends BaseEmitter {
             projectionNormal: this.projectionNormal,
             rangeFade: this.rangeFade
         });
-        if (this.refractionScale) setParticleRefraction(material, this.refractionScale, true);
+        if (this.refractionScale) setParticleRefraction(material, this.refractionScale);
         return new InstancedSpriteMesh(material, capacity);
     }
 }

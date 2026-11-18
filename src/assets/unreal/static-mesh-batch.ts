@@ -1,6 +1,7 @@
+import type { VertexLightMask_T } from "../decoders/static-lighting";
 
 import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
-import type { CollisionTriangleIndex_T } from "../../objects/objects";
+import type { CollisionTriangleIndex_T } from "../../physics/triangle-index";
 import type { IStaticMeshCollisionDecodeInfo } from "./static-mesh/un-static-mesh";
 
 export type BatchElementGroup_T = {
@@ -20,13 +21,7 @@ export type BatchElement_T = {
     projector?: { accepts: boolean, tag: string, isUnlit: boolean };
 };
 
-export type BatchLightEntry_T = {
-    light: string;
-    flags: Uint8Array;
-    vertexRangeStart?: number;
-    vertexRangeEnd?: number;
-    flagsOffset?: number;
-};
+export type BatchLightEntry_T = VertexLightMask_T & { light: string };
 
 export type BatchHardwareLighting_T = { sphere: [number, number, number, number], permeatingLights: string[], isSpecialLit: boolean };
 

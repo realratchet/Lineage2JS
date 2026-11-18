@@ -3,7 +3,7 @@ import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "./loading
 import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
-import fetchAsset from "./assets/asset-source";
+import { loadAssetList } from "./assets/asset-source";
 
 type PrecacheView_T = {
     progress: HTMLProgressElement,
@@ -43,15 +43,13 @@ function formatBytes(bytes: number): string {
 }
 
 async function buildSectorCache(view: PrecacheView_T, loadSettings: LoadSettings_T): Promise<void> {
-    const assetList = await (await fetchAsset("asset-list.json")).json();
+    const assetList = await loadAssetList();
     const sectors = Object.keys(assetList.supported)
         .filter(path => /^maps\/\d+_\d+\.unr$/.test(path))
         .map(path => path.slice("maps/".length, -".unr".length))
         .sort();
-    const activeSectors = new Set<string>();
     const failures: string[] = [];
     const startTime = performance.now();
-    let cursor = 0;
     let completed = 0;
     let cached = 0;
     let built = 0;
@@ -66,40 +64,28 @@ async function buildSectorCache(view: PrecacheView_T, loadSettings: LoadSettings
         view.cancel.textContent = "Stopping...";
     };
 
-    function updateProgress() {
+    function updateProgress(sector?: string) {
         view.progress.value = completed;
         view.summary.textContent = `${completed} / ${sectors.length} · ${built} built · ${cached} cached · ${failures.length} failed`;
-        view.detail.textContent = activeSectors.size > 0 ? `Processing ${Array.from(activeSectors).join(", ")} · ${formatDuration(performance.now() - startTime)}` : formatDuration(performance.now() - startTime);
-    }
-
-    async function getClient(): Promise<DecodeWorkerClient> {
-        if (client) return client;
-
-        client = new DecodeWorkerClient(1);
-
-        try {
-            await client.ready;
-            return client;
-        } catch (e) {
-            client.terminate();
-            client = null;
-            throw e;
-        }
+        view.detail.textContent = sector ? `Processing ${sector} · ${formatDuration(performance.now() - startTime)}` : formatDuration(performance.now() - startTime);
     }
 
     updateProgress();
 
     try {
-        while (!cancelled && cursor < sectors.length) {
-            const sector = sectors[cursor++];
+        for (const sector of sectors) {
+            if (cancelled) break;
+
             let keepWorker = false;
 
-            activeSectors.add(sector);
-            updateProgress();
+            updateProgress(sector);
 
             try {
-                const worker = await getClient();
-                const result = await worker.precacheSector(sector, loadSettings);
+                if (!client) {
+                    client = new DecodeWorkerClient(1);
+                    await client.ready;
+                }
+                const result = await client.precacheSector(sector, loadSettings);
 
                 if (result.cached) {
                     cached++;
@@ -120,7 +106,6 @@ async function buildSectorCache(view: PrecacheView_T, loadSettings: LoadSettings
                 client = null;
             }
 
-            activeSectors.delete(sector);
             completed++;
             updateProgress();
         }
@@ -152,7 +137,7 @@ export async function runSectorPrecache(loadSettings: LoadSettings_T): Promise<v
 export async function preloadStartupSectors(loadSettings: LoadSettings_T): Promise<void> {
     if (!preloadSectors.length) return;
 
-    const assetList = await (await fetchAsset("asset-list.json")).json();
+    const assetList = await loadAssetList();
     const sectors = preloadSectors.filter(sector => `maps/${sector.toLowerCase()}.unr` in assetList.supported);
     const missing = preloadSectors.filter(sector => !sectors.includes(sector));
 

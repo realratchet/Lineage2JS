@@ -3,8 +3,7 @@ import FRAGMENT_SHADER from "../materials/particle-material/shader/shader-partic
 
 export type RefractionMaterial_T = ShaderMaterial & { refractionMask: ShaderMaterial };
 
-export function setParticleRefraction(material: ShaderMaterial, scale: [number, number], instanced: boolean) {
-    if (instanced) material.defines.REFRACTION_INSTANCED = "";
+export function setParticleRefraction(material: ShaderMaterial, scale: [number, number]) {
     material.fragmentShader = FRAGMENT_SHADER;
     material.uniforms.refractionScene = { value: null };
     material.uniforms.refractionScale = { value: new Vector2(...scale) };

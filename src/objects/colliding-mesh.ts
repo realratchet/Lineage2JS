@@ -1,10 +1,10 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import type { ActorCollisionProfile_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, BufferGeometry, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from "three";
 import MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
-import buildTriangleIndex, { prepareTriangleIndex } from "../physics/triangle-index";
+import buildTriangleIndex, { MIN_STATIC_MESH_INDEX_COUNT, prepareTriangleIndex, type CollisionTriangleIndex_T } from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
@@ -88,7 +88,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.hasChangedCollisionActors = false;
         for (const { actor, indexCount, collisionIndex, staticMeshCollision } of actors) {
             if (!Number.isSafeInteger(indexCount) || indexCount <= 0 || indexCount % 3 || !source || indexOffset + indexCount > source.length) throw new Error(`Actor '${actor.name}' has invalid collision triangles.`);
-            if (indexCount >= 384 && !collisionIndex) throw new Error(`Actor '${actor.name}' has no collision triangle index.`);
+            if (indexCount >= MIN_STATIC_MESH_INDEX_COUNT && !collisionIndex) throw new Error(`Actor '${actor.name}' has no collision triangle index.`);
             prepareTriangleIndex(collisionIndex);
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
             if (collisionIndex && triangleBounds) collisionIndex.triangleBounds = triangleBounds.subarray(indexOffset * 2, (indexOffset + indexCount) * 2);
@@ -346,7 +346,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
                 indices: this.colliderIndices,
                 collisionNodes: this.collisionNodes,
                 collisionBounds: this.collisionBounds,
-                index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices, true)),
+                index: this.collisionIndex || (this.colliderIndices.length < MIN_STATIC_MESH_INDEX_COUNT ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices, true)),
                 collisionModel,
                 useSimpleLineCollision: !!collisionModel && this.staticMeshCollision.useSimpleLineCollision,
                 useSimpleBoxCollision: !!collisionModel && this.staticMeshCollision.useSimpleBoxCollision,

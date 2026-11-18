@@ -1,14 +1,14 @@
 import { cyrb53 } from "./unreal/utils/hash-cyrb";
+import { packageFile, supportedAssetExtensions } from "./unreal/package-files";
 import InstallShieldCabinet from "./install-shield-cabinet";
 import type CabinetFileReader from "./cabinet-file-reader";
 import { startLoadingStep } from "../loading-profile";
 
+export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 export type AssetFiles_T = [string, File][];
 export type ServedAssets_T = { files: Record<string, string>; version: string; };
 
 type AssetEntry_T = { path: string; file?: File; read(): Promise<Blob | Uint8Array>; open?(): Promise<CabinetFileReader>; };
-
-const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
 let assetFiles: AssetFiles_T = null;
 let assetSourceId = "http";
@@ -29,7 +29,7 @@ async function openCabinet(files: AssetFiles_T, header: [string, File]) {
 
     return cabinet.files.map(file => ({
         path: file.path,
-        read: () => cabinet.extract(file, /\.(u|unr|utx|usx|uax|ukx|usk)$/i.test(file.path) ? `${assetSourceId}/v1-${file.index}` : null),
+        read: () => cabinet.extract(file, packageFile.test(file.path) ? `${assetSourceId}/v1-${file.index}` : null),
         open: () => cabinet.openFile(file, `${assetSourceId}/v1-${file.index}`)
     }));
 }
@@ -63,7 +63,7 @@ function createAssetList(index: Map<string, AssetEntry_T>) {
     for (const path of paths.values()) {
         const ext = path.slice(path.lastIndexOf(".") + 1).toUpperCase();
 
-        if (SUPPORTED_EXTENSIONS.includes(ext)) assetList.supported[path.toLowerCase()] = path;
+        if (supportedAssetExtensions.includes(ext)) assetList.supported[path.toLowerCase()] = path;
         else assetList.unsupported.push(path);
     }
 
@@ -99,6 +99,12 @@ export async function selectAssetFiles(files: AssetFiles_T): Promise<void> {
     const sources = files.map(([path, file]) => ({ path, size: file.size, modified: file.lastModified })).sort((a, b) => a.path.localeCompare(b.path));
 
     assetSourceId = `files-${cyrb53(JSON.stringify(sources)).toString(16)}`;
+}
+
+export async function loadAssetList(): Promise<AssetList_T> {
+    if (assetIndex && !isServedAsset("asset-list.json")) return createAssetList(assetIndex);
+
+    return await (await fetchAsset("asset-list.json")).json();
 }
 
 export async function fetchAsset(path: string): Promise<Response> {

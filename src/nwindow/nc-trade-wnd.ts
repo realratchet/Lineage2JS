@@ -1,5 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { getWheelDelta, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { TradeItem_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -67,7 +67,7 @@ export class NCTradeWnd {
             list.addEventListener("wheel", event => {
                 event.stopImmediatePropagation();
                 // ponytail: deltaY fallback moves one row; verify native wheel units before extending it.
-                const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
+                const delta = getWheelDelta(event);
                 const count = this.rowCounts[mode], page = list.getScroll() / 35;
                 const next = delta > 0 ? Math.max(0, page - delta) : count >= rows ? Math.min(page - delta, count - rows) : 0;
 
@@ -168,7 +168,7 @@ export class NCTradeWnd {
             this.endDrag();
             const list = this.lists[1], target = document.elementFromPoint(event.clientX, event.clientY);
 
-            if (!focused || !item || !this.isVisible() || !target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
+            if (!focused || !item || !this.isVisible() || !list.isDropTarget(target)) return;
 
             if (this.onOffer) this.onOffer(item, true);
         }, true);

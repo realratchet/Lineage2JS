@@ -136,7 +136,6 @@ export abstract class UTerrainSector extends UObject {
             material: null
         };
 
-        // Generate triangulation data on demand
         if (!this.normals) this.generateTriangles();
 
         const vertexCount = 17 * 17;
@@ -193,8 +192,6 @@ export abstract class UTerrainSector extends UObject {
                 positions[idxVertOffset + 2] = pz - oz;
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
-
-                // Initialize vertex colors to black (lighting will be applied later)
             }
         }
 
@@ -299,10 +296,8 @@ export abstract class UTerrainSector extends UObject {
 
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
 
-                    // rebuild the world-space (Z-up) vertex via info.toWorld
                     const worldVert = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld, v);
 
-                    // Transform by the layer's texture matrix to get UVs
                     const uvVert = worldVert.applyMatrix4(layer.terrainMatrix, v);
 
                     uvs[layerOffset + idxOffset + 0] = uvVert.x;

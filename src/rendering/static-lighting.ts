@@ -1,5 +1,5 @@
 import { BufferGeometry, Matrix4, WebGLRenderer } from "three";
-import DynamicLight from "../objects/dynamic-light";
+import type DynamicLight from "../objects/dynamic-light";
 import VERTEX_SOURCE from "../materials/mesh-static-material/shader/static-lighting.vs";
 import { resolveShaderIncludes } from "../materials/shader-chunks/register-chunks";
 
@@ -10,8 +10,6 @@ type StaticLightingJob_T = { gl: WebGL2RenderingContext, output: WebGLBuffer, sy
 const cacheJobs = new WeakMap<Uint8ClampedArray, StaticLightingJob_T>();
 const cachePrograms = new WeakMap<WebGL2RenderingContext, WebGLProgram>();
 const pendingJobs = new Set<StaticLightingJob_T>();
-
-type LightEntry_T = { flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
 
 function checkError(gl: WebGL2RenderingContext, phase: string): void {
     const error = gl.getError();
@@ -118,7 +116,7 @@ export function pollStaticLighting(): void {
     }
 }
 
-export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferGeometry, matrix: Matrix4, lights: LightEntry_T[], glow: Float32Array, target: Uint8ClampedArray, prepared: { offsets: Uint32Array, indices: Uint16Array | Uint32Array }): boolean | null {
+export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferGeometry, matrix: Matrix4, lights: { instance?: DynamicLight }[], glow: Float32Array, target: Uint8ClampedArray, prepared: { offsets: Uint32Array, indices: Uint16Array | Uint32Array }): boolean | null {
     const gl = renderer.getContext() as WebGL2RenderingContext;
     if (gl.isContextLost()) return null;
 

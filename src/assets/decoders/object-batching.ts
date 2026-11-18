@@ -10,7 +10,7 @@ import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
 import type { StaticMeshBatchManifest_T, BatchElement_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
-import type { CollisionTriangleIndex_T } from "../../objects/objects";
+import type { CollisionTriangleIndex_T } from "../../physics/triangle-index";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 
@@ -172,7 +172,7 @@ export function decodeStaticMeshInstance(
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
 
-    return { geometry, materials, collider, lights, staticMeshCollision: infoGeo.staticMeshCollision, collisionIndex: (infoGeo as any).collisionIndex as CollisionTriangleIndex_T };
+    return { geometry, materials, collider, lights, staticMeshCollision: infoGeo.staticMeshCollision, collisionIndex: infoGeo.collisionIndex };
 }
 
 export function createStaticMeshBatchJob(
@@ -216,7 +216,7 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
             materials,
             lightInfo,
             batch.colliderIndices,
-            (geometryInfo as any).collisionIndex,
+            geometryInfo.collisionIndex,
             batch.actors,
             batch.perActorAmbient,
             batch.batchElements

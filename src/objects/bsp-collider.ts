@@ -1,11 +1,11 @@
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { Quaternion, Vector3 } from "three";
-import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import { GameObject } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IBSPCollisionNodeDecodeInfo_T } from "@l2js/engine/contracts/mesh";
-import buildCollisionModel from "../physics/collision-model";
+import buildCollisionModel, { type CollisionHull_T } from "../physics/collision-model";
 import type { ScriptHost_T, ScriptValue_T, default as UnScriptVM } from "../ue-script/vm";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 import Volume from "./volume";

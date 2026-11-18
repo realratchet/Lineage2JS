@@ -1,3 +1,5 @@
+import { packageFile } from "./assets/unreal/package-files";
+
 type LoadingProfile_T = { name: string, worker: string, queued: number, started: number, finished: number, active: string, packages: { kind: string, name: string }[], steps: Record<string, { ms: number, count: number }>, reported: boolean };
 
 const active = new Map<number, LoadingProfile_T>();
@@ -64,7 +66,7 @@ export function getLoadingDetail(): string {
         if (path) packages.set(path.replace(/^\/?assets\//i, "").toLowerCase(), 5);
     }
     for (const row of active.values()) for (const step of row.packages) {
-        if (!/\.(u|unr|utx|ukx|uax|usx|usk)$/i.test(step.name)) continue;
+        if (!packageFile.test(step.name)) continue;
         const stage = stages.indexOf(step.kind === "build" ? "convert" : step.kind), path = step.name.replace(/^\/?assets\//i, "").toLowerCase();
 
         if (stage >= 0 && (!packages.has(path) || stage < packages.get(path))) packages.set(path, stage);

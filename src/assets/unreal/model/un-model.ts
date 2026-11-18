@@ -691,7 +691,6 @@ export abstract class UModel extends UPrimitive {
             return sectionIndex;
         };
 
-        // Process all sections
         for (const [priority, prioritySections] of sectionMap.entries()) {
             for (const [sectionKey, sectionData] of prioritySections.entries()) {
                 createSection(priority, sectionKey, sectionData);

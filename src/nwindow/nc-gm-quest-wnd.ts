@@ -7,8 +7,6 @@ class NCGMQuestPage extends NCQuestWnd {
     public constructor(layer: NDomLayer, parent: HTMLElement) {
         super(layer, parent);
 
-        this.element.children[4].remove();
-        this.checkbox.remove();
         this.element.dataset.window = "gm-quest";
         layer.place(this.element, 0, 20, 256, 335);
     }
@@ -18,6 +16,7 @@ class NCGMQuestPage extends NCQuestWnd {
         super.clear();
     }
     public isVisible() { return !this.element.hidden; }
+    protected createQuestControls() { return null; }
     protected updateLocation() {}
 }
 

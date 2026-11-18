@@ -1,16 +1,20 @@
+const npcBundles = new Map<string, string>([
+    ["lineagemonsters", "npc_monsters"],
+    ["lineagemonsters2", "npc_monsters"],
+    ["lineagenpcs", "npc_npcs"],
+    ["lineagedecos", "npc_npcs"],
+    ["dropitems", "npc_npcs"]
+]);
+
 export function getNpcBundleName(packageName: string): string {
-    const name = packageName.toLowerCase();
+    const bundle = npcBundles.get(packageName.toLowerCase());
 
-    if (name === "lineagemonsters" || name === "lineagemonsters2") return "npc_monsters";
-    if (name === "lineagenpcs" || name === "lineagedecos" || name === "dropitems") return "npc_npcs";
-
-    throw new Error(`NPC mesh package '${packageName}' has no bundle.`);
+    if (!bundle) throw new Error(`NPC mesh package '${packageName}' has no bundle.`);
+    return bundle;
 }
 
 export function isNpcMeshPackage(packageName: string): boolean {
-    const name = packageName.toLowerCase();
-
-    return name === "lineagemonsters" || name === "lineagemonsters2" || name === "lineagenpcs" || name === "lineagedecos" || name === "dropitems";
+    return npcBundles.has(packageName.toLowerCase());
 }
 
 export default getNpcBundleName;

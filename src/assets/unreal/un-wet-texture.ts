@@ -1,6 +1,6 @@
 import UObject from "./un-object";
 import UTexture, { ETexClampMode, type ITextureDecodeInfo, type IDataTextureDecodeInfo } from "./un-texture";
-import { convertDDSTextureInfo } from "./dds/dxt-decode";
+import { convertDDSTextureInfo } from "./dds/dds-texture";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { IBaseMaterialDecodeInfo } from "./un-material";
 

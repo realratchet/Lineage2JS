@@ -1,6 +1,7 @@
 import L2Socket from "./l2-socket";
 import PacketReader from "./packet-reader";
 import PacketWriter from "./packet-writer";
+import { checkPacketSize } from "./packet-frame";
 import GameCrypt from "./l2-crypt";
 import L2ReplayFile, { type ReplayCameraInstruction_T, type ReplayPacket_T } from "./l2-replay-file";
 import L2ReplayRecorder, { isReplayPacket } from "./l2-replay-recorder";
@@ -49,7 +50,7 @@ export class GameClient {
         if (this.replayPlayback) return;
         const body = writer.toBytes();
 
-        L2Socket.checkPacketSize(body.length);
+        checkPacketSize(body.length);
         this.crypt.encrypt(body);
         this.socket.send(body);
     }

@@ -6,7 +6,7 @@ import AssetManager from "./assets/asset-manager";
 import runSectorPrecache, { preloadStartupSectors } from "./sector-precache";
 import GameManager from "./game/game-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
-import fetchAsset from "./assets/asset-source";
+import { loadAssetList } from "./assets/asset-source";
 import pickAssetSource from "./asset-source-picker";
 import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "./loading-progress";
 import loginServer from "./network/login-server";
@@ -111,7 +111,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
     if (loginServer) setLoadingProgress(null, loadingTexts.gameData(), true);
-    const assetList = await (await fetchAsset("asset-list.json")).json();
+    const assetList = await loadAssetList();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");
 

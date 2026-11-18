@@ -3,6 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
+const extensions = require("../src/assets/unreal/asset-extensions.json");
 const { initChunkerMiddleware } = require("./chunker-middleware");
 const prebuiltClasses = process.env.PREBUILT_CLASSES !== "0" && (process.env.PREBUILT_CLASSES === "1" || process.env.CLASS_CABINET_SOURCE || fs.existsSync(path.resolve(__dirname, "../assets-c4"))) ? require("./prebuild-classes") : null;
 // const { SourceMapDevToolPlugin } = require("webpack");
@@ -18,7 +19,7 @@ function* walkSync(dir) {
     }
 }
 
-const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
+const supportedAssetExtensions = [...extensions.packages, ...extensions.audio];
 
 function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats, httpAssets, defaultLoginServer, preloadSectors = [], characterCreationRaces = [0, 1, 2, 3, 4], loginExitUrl = "", clientDownloadUrl = "" }) {
@@ -99,7 +100,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 const ext = path.extname(fname).slice(1).toUpperCase();
                 const relPath = fname.replace(dirAssets, "");
 
-                if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+                if (!supportedAssetExtensions.includes(ext)) {
                     fileList.unsupported.push(relPath);
                     continue;
                 }

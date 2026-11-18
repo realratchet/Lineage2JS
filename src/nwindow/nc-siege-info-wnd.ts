@@ -20,21 +20,13 @@ const WIDTH = 256;
 const HEIGHT = 401;
 const PAGE_HEIGHT = 253;
 
-const cacheCrestUrls = new WeakMap<CanvasImageSource, string>();
-
-function getCrestUrl(crest: CanvasImageSource) {
-    if (!cacheCrestUrls.has(crest)) cacheCrestUrls.set(crest, (crest as HTMLCanvasElement).toDataURL());
-
-    return cacheCrestUrls.get(crest);
-}
-
-function drawCrest(layer: NDomLayer, parent: HTMLElement, x: number, y: number, width: number, crest: CanvasImageSource) { // NWindow 0x100131f0: 16x12 sampled from v=4
+function drawCrest(layer: NDomLayer, parent: HTMLElement, x: number, y: number, width: number, crest: CanvasImageSource) {
     if (!crest) return false;
 
     const element = layer.createWindow(x, y, width, 12, parent);
 
     element.style.pointerEvents = "none";
-    element.style.background = `url(${getCrestUrl(crest)}) 0 -4px no-repeat`;
+    element.style.background = layer.getCrestBackground(crest);
 
     return true;
 }

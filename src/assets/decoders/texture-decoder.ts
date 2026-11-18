@@ -1,12 +1,11 @@
 import { updateTextureFiltering, registerTextureLOD } from "../../materials/texture-settings";
-import { DDSConstants } from "@l2js/engine/dds/dds-constants";
 import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { TextureClampMode_T, DataTextureFormats_T, IDataTextureDecodeInfo, ITextureDecodeInfo, MapData_T } from "@l2js/engine/contracts/texture";
 import { releaseSharedTextureBuffer, restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import WetWaterTexture from "../../materials/wet-water-texture";
-import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
+import { decodeDDSPixels } from "@l2js/engine/dds/dds-texture";
 
 type TextureSource_T = { key: string, info: ITextureDecodeInfo };
 
@@ -62,27 +61,11 @@ function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THRE
         }
     }
 
-    // 1. Try Manual Software Decompression (Matches B64 Export Logic)
     try {
-        const header = new Int32Array(buffer, 0, 31);
-        const height = header[3];
-        const width = header[4];
-        const fourCC = header[21];
-        const dataOffset = 128; // DDS header size
+        const { width, height, rgba } = decodeDDSPixels(buffer);
 
-        let rgbaData: Uint8Array | null = null;
-        const input = new Uint8Array(buffer, dataOffset);
-
-        if (fourCC === DDSConstants.FOURCC_DXT1) { // DXT1
-            rgbaData = dxt1ToRgba(width, height, input);
-        } else if (fourCC === DDSConstants.FOURCC_DXT3) { // DXT3
-            rgbaData = dxt3ToRgba(width, height, input);
-        } else if (fourCC === DDSConstants.FOURCC_DXT5) { // DXT5
-            rgbaData = dxt5ToRgba(width, height, input);
-        }
-
-        if (rgbaData) {
-            const texture = new DataTexture(rgbaData, width, height, RGBAFormat);
+        if (rgba) {
+            const texture = new DataTexture(rgba, width, height, RGBAFormat);
             texture.flipY = false;
             texture.generateMipmaps = true;
             texture.minFilter = LinearMipmapLinearFilter;
@@ -94,7 +77,6 @@ function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THRE
         console.warn("[decodeDDS] Software Decode Failed, falling back to DDSLoader", e);
     }
 
-    // 2. Fallback to Original DDSLoader (CompressedTexture)
     const ddsLoader = new DDSLoader();
     const dds = ddsLoader.parse(buffer, true);
     const { mipmaps, width, height, format: _format, mipmapCount } = dds;
@@ -213,25 +195,14 @@ export function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
 
     try {
         if (info.textureType === "dds") {
-            const header = new Int32Array(info.buffer, 0, 31);
-            height = header[3];
-            width = header[4];
-            const fourCC = header[21];
-
-            const dataOffset = 128; // DDS header size
-            const input = new Uint8Array(info.buffer, dataOffset);
-
-            if (fourCC === DDSConstants.FOURCC_DXT1) { // DXT1
-                rgbaData = dxt1ToRgba(width, height, input);
-            } else if (fourCC === DDSConstants.FOURCC_DXT3) { // DXT3
-                rgbaData = dxt3ToRgba(width, height, input);
-            } else if (fourCC === DDSConstants.FOURCC_DXT5) { // DXT5
-                rgbaData = dxt5ToRgba(width, height, input);
-            } else {
-                console.warn(`Unsupported DDS FourCC for B64 decode: ${fourCC}`);
+            const dds = decodeDDSPixels(info.buffer);
+            if (!dds.rgba) {
+                console.warn(`Unsupported DDS FourCC for B64 decode: ${dds.fourCC}`);
                 return null;
             }
-
+            width = dds.width;
+            height = dds.height;
+            rgbaData = dds.rgba;
         } else if (info.textureType === "rgba") {
             const dataInfo = info as IDataTextureDecodeInfo;
             if (dataInfo.format === 'rgba' || !dataInfo.format) {

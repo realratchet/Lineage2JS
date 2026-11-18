@@ -1,6 +1,6 @@
 import getCrystalGradeSymbol from "./item-symbol";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
+import NDomLayer, { getWheelDelta, NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import type { InventoryEntry_T } from "./nc-inventory-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import { ItemType2_T, type MultiSellList_T, type MultiSellEntry_T, type MultiSellProduct_T, type MultiSellIngredient_T } from "../network/game-packets";
@@ -55,7 +55,7 @@ export class NCVIPShopWnd {
         [this.catalog, this.products, this.ingredients].forEach((pane, index) => {
             pane.addEventListener("wheel", event => {
                 event.stopImmediatePropagation();
-                const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
+                const delta = getWheelDelta(event);
 
                 pane.setScroll(pane.getScroll() - delta * (index ? 45 : 35));
                 this.inventory.hideTooltip();

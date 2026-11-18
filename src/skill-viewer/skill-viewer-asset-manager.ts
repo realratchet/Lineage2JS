@@ -1,4 +1,5 @@
-import AssetManager, { type AssetList_T } from "../assets/asset-manager";
+import AssetManager from "../assets/asset-manager";
+import type { AssetList_T } from "../assets/asset-source";
 import SkillViewerDecodeWorkerClient from "./skill-viewer-decode-worker-client";
 import { getMintedSoundUri } from "../assets/sound-uris";
 import type RenderManager from "../rendering/render-manager";

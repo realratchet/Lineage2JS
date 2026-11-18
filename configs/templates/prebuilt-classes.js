@@ -1,4 +1,5 @@
 import { makePrebuiltLayout } from "@l2js/core/unreal/un-struct";
+import getPackageSignature from "@l2js/engine/package-signature";
 const definitions = Object.create(null);
 const data = [];
 __DEFINITIONS__
@@ -31,8 +32,7 @@ function isCompatible(definition, native) {
         if (!pkg.header) return false;
         let actual = cacheSignatures.get(pkg);
         if (actual === undefined) {
-            const h = pkg.header;
-            actual = JSON.stringify([h.version, Array.from(new Uint8Array(h.guid.value.buffer, h.guid.value.byteOffset, h.guid.value.byteLength)), h.nameCount, h.exportCount, h.importCount]);
+            actual = getPackageSignature(pkg);
             cacheSignatures.set(pkg, actual);
         }
         if (actual !== expected[name]) return false;

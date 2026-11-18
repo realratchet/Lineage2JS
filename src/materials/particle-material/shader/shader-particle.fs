@@ -1,12 +1,16 @@
+#ifdef USE_PARTICLE_INSTANCING
+varying vec4 vColor;
+#else
 uniform vec3 diffuse;
 uniform float opacity;
+#include <color_pars_fragment>
+#endif
 varying vec2 vUv;
 #ifdef USE_SUBDIVISION_BLEND
 varying vec3 vSubdivisionBlend;
 #endif
 
 #include <common>
-#include <color_pars_fragment>
 #ifdef USE_MAP
 uniform sampler2D map;
 #endif
@@ -21,7 +25,11 @@ void main() {
     #include <clipping_planes_fragment>
     if (rangeFade < 1.0 && rangeFade <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
 
-    vec4 diffuseColor = vec4( diffuse, opacity );
+    #ifdef USE_PARTICLE_INSTANCING
+    vec4 diffuseColor = vColor;
+    #else
+    vec4 diffuseColor = vec4(diffuse, opacity);
+    #endif
 
     #include <logdepthbuf_fragment>
     #if defined(USE_MAP) && defined(USE_SUBDIVISION_BLEND)
@@ -31,7 +39,9 @@ void main() {
     #elif defined(USE_MAP)
     diffuseColor *= texture2D(map, vUv);
     #endif
+    #ifndef USE_PARTICLE_INSTANCING
     #include <color_fragment>
+    #endif
     #include <alphatest_fragment>
 
     gl_FragColor = diffuseColor;
