@@ -1,4 +1,8 @@
 import UObject from "./un-object";
+import FVector from "./un-vector";
+import type { APackage, UExport } from "@l2js/core";
+
+type FPoly_T = { normal: FVector, vertices: FVector[] };
 
 export enum PolyFlags_T {
     // Regular in-game flags.
@@ -165,6 +169,43 @@ export enum PolyFlags_T {
 // }
 
 export abstract class UPolys extends UObject {
+    declare protected polys: FPoly_T[];
+
+    protected doLoad(pkg: APackage, exp: UExport): void {
+        super.doLoad(pkg, exp);
+
+        const count = pkg.read("int32");
+        pkg.read("int32");
+        const version = pkg.header.getArchiveFileVersion(), licensee = pkg.header.getLicenseeVersion();
+        this.polys = new Array(count);
+
+        for (let i = 0; i < count; i++) {
+            const vertexCount = pkg.read("compat32");
+            pkg.seek(12);
+            const normal = FVector.make().load(pkg);
+            pkg.seek(24);
+
+            const vertices: FVector[] = new Array(vertexCount);
+            for (let j = 0; j < vertexCount; j++)
+                vertices[j] = FVector.make().load(pkg);
+
+            pkg.read("uint32");
+            for (let j = 0; j < 5; j++) pkg.read("compat32");
+            if (version < 78 || version >= 106) pkg.seek(4);
+            if (licensee >= 22) pkg.seek(4);
+
+            this.polys[i] = { normal, vertices };
+        }
+
+        this.readHead = pkg.tell();
+    }
+
+    public getPolygon(index: number): FPoly_T {
+        const poly = this.polys[index];
+        if (!poly) throw new Error(`Polys '${this.objectName}' has no polygon ${index}.`);
+        return poly;
+    }
+
     // protected polyList: FPoly[];
 
     // protected doLoad(pkg: UPackage, exp: UExport): this {

@@ -282,6 +282,8 @@ export class TranslucentRenderList {
             if (section) {
                 let offset = 0;
                 for (const block of section.order) {
+                    if (section.hidden && section.hidden[block]) continue;
+
                     const count = section.counts[block], node = section.nodes[block], bsp = state.nodes[node], plane = bsp.plane, start = offset;
                     offset += count;
                     // Engine 1064bd0b..1064bd27 also admits PF_Unused5 from behind.

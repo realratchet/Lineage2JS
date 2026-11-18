@@ -12,6 +12,7 @@ import type PawnFishingComponent from "./pawn-fishing-component";
 import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type NpcLifecycleComponent from "./npc-lifecycle-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import SkeletalAnimationMixer from "../skeletal-animation-mixer";
 import type { Vector3Arr } from "@l2js/engine";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
@@ -88,7 +89,7 @@ function fadeOutAction(action: AnimationAction, duration: number): boolean { // 
 export class AnimationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "animation";
     protected readonly renderManager: RenderManager;
-    protected mixer: AnimationMixer;
+    protected mixer: SkeletalAnimationMixer;
     protected meshes: Mesh[] = [];
     protected meshResources = new Set<Material | Texture>();
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
@@ -121,12 +122,17 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.mixer = renderManager.mixer;
     }
 
-    protected releaseTween(): void {
-        if (this.tweenTimeScales.size === 0 || this.isFrozen || this.simulationSuspendedAt !== null || this.mixer.time < this.animationTweenEndTime) return;
+    public releaseTween(time: number): void {
+        if (time < this.animationTweenEndTime) return;
 
-        for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
+        for (const [tweened, timeScale] of this.tweenTimeScales) {
+            tweened.setEffectiveTimeScale(timeScale);
+            // USkeletalMeshInstance::UpdateAnimation 0x94a549..0x94a586 carries the rest of the tick past the tween.
+            if (this.mixer.time < this.animationTweenEndTime) tweened.startAt(this.animationTweenEndTime);
+        }
 
         this.tweenTimeScales.clear();
+        this.mixer.setTweening(this, false);
     }
 
     public setFrozen(isFrozen: boolean): void { // APawn::CheckSameAnim 0x8c0d89..0x8c0f14 freezes channel 0 while a hold state is set
@@ -134,6 +140,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         this.isFrozen = isFrozen;
         if (isFrozen) this.freezeActions();
+        this.updateTweenRegistration();
     }
 
     protected freezeActions(): void {
@@ -145,8 +152,6 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {
-        this.releaseTween();
-
         const action = this.animationNotifyAction;
 
         if (!action) return;
@@ -181,11 +186,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public setSimulationEnabled(enabled: boolean): void {
         if (enabled === (this.simulationSuspendedAt === null)) return;
 
-        for (const mesh of this.meshes) (this.mixer as any).setRootEnabled(mesh, enabled);
+        for (const mesh of this.meshes) this.mixer.setRootEnabled(mesh, enabled);
         if (enabled) {
             if (this.tweenTimeScales.size > 0) this.animationTweenEndTime += this.mixer.time - this.simulationSuspendedAt;
             this.simulationSuspendedAt = null;
         } else this.simulationSuspendedAt = this.mixer.time;
+        this.updateTweenRegistration();
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
@@ -285,8 +291,6 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         return this.cacheAnimationNames.get(lowerName);
     }
     public isAnimating(): boolean {
-        this.releaseTween(); // polled in the frame a tween ends, before onUpdate, the action is neither tweening nor running yet
-
         const action = this.animationNotifyAction;
 
         return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.mixer.time < this.animationTweenEndTime);
@@ -666,12 +670,18 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         if (suspended) this.setSimulationEnabled(false);
     }
 
-    protected holdFirstFrame(action: AnimationAction, timeScale: number): void { // startAt() would drop the action's weight until the tween ends, blending the skeleton toward its bind pose.
+    protected holdFirstFrame(action: AnimationAction, timeScale: number): void {
         action.setEffectiveTimeScale(0);
         this.tweenTimeScales.set(action, timeScale);
+        if (this.tweenTimeScales.size === 1) this.updateTweenRegistration();
+    }
+
+    protected updateTweenRegistration(): void {
+        this.mixer.setTweening(this, this.tweenTimeScales.size > 0 && !this.isFrozen && this.simulationSuspendedAt === null);
     }
 
     public stop(): void {
+        this.mixer.setTweening(this, false);
         this.tweenTimeScales.clear();
 
         for (const mesh of this.meshes) {
@@ -707,7 +717,7 @@ export class ExtraMeshAnimationComponent extends AnimationComponent {
     public constructor(renderManager: RenderManager, mesh: LitSkinnedMesh) {
         super(renderManager);
 
-        this.mixer = new AnimationMixer(mesh);
+        this.mixer = new SkeletalAnimationMixer(mesh);
         this.mixer.addEventListener("finished", event => this.onAnimationFinished(event.action, false));
         this.setMeshAnimations(mesh);
     }

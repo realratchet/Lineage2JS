@@ -1,6 +1,7 @@
 import { ShaderChunk } from "three";
 import Chunk_L2FogFragment from "./l2_fog_fragment.glsl";
 import Chunk_ActorLight from "./actor_light.glsl";
+import Chunk_ProjectorFragment from "./projector_fragment.glsl";
 import Chunk_ProjectorReceiver from "./projector_receiver.glsl";
 import Chunk_SkillLight from "./skill_light.glsl";
 
@@ -8,6 +9,7 @@ const chunks = ShaderChunk as Record<string, string>;
 
 chunks.l2_fog_fragment = chunks.l2_fog_fragment ?? Chunk_L2FogFragment;
 chunks.actor_light = chunks.actor_light ?? Chunk_ActorLight;
+chunks.projector_fragment = chunks.projector_fragment ?? Chunk_ProjectorFragment;
 chunks.projector_receiver = chunks.projector_receiver ?? Chunk_ProjectorReceiver;
 chunks.skill_light = chunks.skill_light ?? Chunk_SkillLight;
 

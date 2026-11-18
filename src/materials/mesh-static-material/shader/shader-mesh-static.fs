@@ -604,6 +604,24 @@ vec3 getFadeColor(FadeData fade) {
     #include <projector_receiver>
 #endif
 
+#ifdef USE_AUTHORED_PROJECTOR
+    #include <projector_fragment>
+    uniform samplerCube projectorAttenuation;
+    uniform vec4 projectorPlanes[6];
+    uniform bool projectOnBackfaces;
+    varying vec4 vAuthoredProjection;
+    varying vec3 vAuthoredProjectorWorld;
+    varying vec3 vAuthoredProjectorNormal;
+
+    vec4 getAuthoredProjection(vec3 baseColor) {
+        for (int i = 0; i < 6; i++) {
+            if (dot(projectorPlanes[i], vec4(vAuthoredProjectorWorld, 1.0)) > 0.0) discard;
+        }
+        float facing = projectOnBackfaces ? 1.0 : textureCube(projectorAttenuation, vAuthoredProjectorNormal).a;
+        return getProjectorColor(vAuthoredProjection, baseColor, facing);
+    }
+#endif
+
 #ifdef USE_VERTEX_ALPHA_MASK
     varying float vVertexAlpha;
 #endif
@@ -785,6 +803,10 @@ void main() {
     }
     #ifdef USE_PROJECTOR_RECEIVER
         gl_FragColor = getProjectorShadow();
+        return;
+    #endif
+    #ifdef USE_AUTHORED_PROJECTOR
+        gl_FragColor = getAuthoredProjection(diffuseColor.rgb);
         return;
     #endif
     // #include <specularmap_fragment>

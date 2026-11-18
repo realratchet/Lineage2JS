@@ -15,6 +15,7 @@ import type PhysicsVolume from "../objects/physics-volume";
 import type Actor from "../objects/actor";
 import type Volume from "../objects/volume";
 import type MusicVolume from "../objects/music-volume";
+import type Projector from "../objects/projector";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
@@ -140,6 +141,22 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         this.unregisterSimulationObjects(pawn);
 
         return true;
+    }
+
+    public releaseSectorVolumeReferences(sector: SectorObject): void {
+        const owner = sector.levelInfoActor;
+        if (!owner) return;
+
+        for (const movement of this.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
+            const pawn = movement.getParent();
+            if (!pawn.scriptProperties) continue;
+
+            for (const name of ["PhysicsVolume", "HeadVolume", "FootVolume"]) {
+                const volume = pawn.getUnrealScriptProperty(name) as unknown as PhysicsVolume;
+                if (volume && volume.getUnrealScriptProperty("Level") === owner)
+                    pawn.setUnrealScriptProperty(name, null);
+            }
+        }
     }
 
     public async simulatePawns(count: number = 100): Promise<void> {
@@ -587,7 +604,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         for (const sector of sectors) {
             const volume = sector.getDefaultPhysicsVolume();
-            const actors = new Set([sector.levelInfoActor, ...sector.zoneInfoActors, ...sector.physicsVolumeActors, ...sector.musicVolumeActors, volume]);
+            const actors = new Set([sector.levelInfoActor, ...sector.zoneInfoActors, ...sector.physicsVolumeActors, ...sector.musicVolumeActors, ...sector.projectors, volume]);
             sector.traverse((object: any) => {
                 if (object.scriptActor) {
                     actors.add(object.scriptActor);
@@ -622,11 +639,17 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         this.collisionWorld.register(object, colliders);
     }
 
+    public registerProjectorCollision(projector: Projector): void {
+        this.registerCollider(projector);
+        this.collisionWorld.findTouchingActors(projector, projector.position);
+    }
+
     public unregisterSimulationObjects(root: Object3D): void {
         root.traverse(object => {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
                 this.collisionWorld.unregisterPhysicsVolumes(sector.physicsVolumeActors);
+                for (const projector of sector.projectors) projector.deactivateCollision();
             }
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.unregisterObjectComponents(terrain);

@@ -533,6 +533,14 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     varying float vVertexAlpha;
 #endif
 
+#ifdef USE_AUTHORED_PROJECTOR
+    uniform mat4 projectorMatrix;
+    uniform mat3 projectorNormalMatrix;
+    varying vec4 vAuthoredProjection;
+    varying vec3 vAuthoredProjectorWorld;
+    varying vec3 vAuthoredProjectorNormal;
+#endif
+
 void main() {
     #ifdef USE_VERTEX_ALPHA_MASK
         vVertexAlpha = vertexAlpha;
@@ -1011,6 +1019,12 @@ void main() {
         #endif
         vSkillLightPosition = (modelMatrix * skillLightPosition).xyz;
         vSkillLightNormal = inverseTransformDirection(transformedNormal, viewMatrix);
+    #endif
+    #ifdef USE_AUTHORED_PROJECTOR
+        vec4 projectorPosition = modelMatrix * vec4(transformed, 1.0);
+        vAuthoredProjection = projectorMatrix * projectorPosition;
+        vAuthoredProjectorWorld = projectorPosition.xyz;
+        vAuthoredProjectorNormal = projectorNormalMatrix * normalize(transformedNormal);
     #endif
     #include <project_vertex>
     #ifdef USE_TERRAIN_DECORATION_FADE

@@ -10,7 +10,7 @@ import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./component
 import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
 
-type ActorInfo_T = { uuid: string; name?: string; scriptClassId?: string; scriptProperties?: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
+export type ActorInfo_T = { uuid: string; name?: string; scriptClassId?: string; scriptProperties?: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
 export type L2GameEvent_T = { EventID: number, EventCmd: EL2EventCmd_T };
 export type StepSoundData_T = { sound: string, library: DecodeLibrary };
 type L2EventActor_T = ScriptHost_T & { l2EventShow?(value: number): void, l2EventPlay?(value: number): void };

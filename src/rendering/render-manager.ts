@@ -39,6 +39,7 @@ import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
 import LocalSpaceSkeleton from "../objects/local-space-skeleton";
 import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector, { isInShadowRange } from "../objects/shadow-projector";
+import ProjectorRenderer from "./projector-renderer";
 import PawnCrowd from "../objects/pawn-crowd";
 import boneAtlas from "../objects/bone-atlas";
 import type PawnMesh from "../objects/pawn-mesh";
@@ -429,6 +430,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.scene.add(this.getWaterEffects().underWaterEffect);
     }
     protected readonly shadowProjector = new ShadowProjector();
+    protected readonly projectorRenderer = new ProjectorRenderer(this.shadowProjector);
     protected readonly meshBounds = new MeshBounds(this.shadowProjector);
     protected readonly portalVisibility = new PortalVisibility(this.meshBounds);
     protected readonly batchAngleVisibility = new BatchAngleVisibility(this.meshBounds);
@@ -487,16 +489,25 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const render = this.renderer.render;
         this.pawnCrowd = new PawnCrowd(this.renderer);
         this.renderer.render = (scene, camera) => {
-            if (scene === this.scene) {
-                this.worldCamera = camera;
-                this.pawnCrowd.begin();
-            }
             setReversedDepth(this.renderer, camera.reversedDepth);
-            render.call(this.renderer, scene, camera);
+            if (scene !== this.scene) {
+                render.call(this.renderer, scene, camera);
+                return;
+            }
+
+            this.worldCamera = camera;
+            this.pawnCrowd.begin();
+            try {
+                this.projectorRenderer.prepare(this.arrSceneSectors, this.scene);
+                render.call(this.renderer, scene, camera);
+            } finally {
+                this.projectorRenderer.finish();
+            }
         };
         this.nameplateDepth = new NameplateDepth(this.renderer);
         this.sectorOcclusion = new SectorOcclusion(this.renderer, this.meshBounds);
         this.renderer.domElement.addEventListener("webglcontextrestored", () => {
+            this.projectorRenderer.resetUploads();
             for (const job of this.pendingSectorWarmups)
                 for (const binding of job.materialQueue) binding.program = null;
         });
@@ -507,7 +518,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (group && group.count === 0) return;
             if ((object as PawnMesh).isPawnMesh) {
                 if (scene === this.scene && this.pawnCrowd.accept(object as PawnMesh, material.transparent)) return;
-                boneAtlas.upload(this.renderer);
+                if (!boneAtlas.upload(this.renderer)) return;
             } else if (scene === this.scene &&
                 (object as LitSkinnedMesh).isLitSkinnedMesh &&
                 (object as LitSkinnedMesh).actorRenderable &&
@@ -526,6 +537,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.skillLightProbe.dispose();
             this.particleBatcher.dispose();
             this.pawnCrowd.dispose();
+            this.projectorRenderer.dispose();
             disposeStaticLighting(this.renderer);
             this.nameplateDepth.dispose();
             this.sectorOcclusion.dispose();
@@ -1679,15 +1691,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
     }
 
-    protected updatePawnVisibility(frustum = this.frustum): void {
+    protected getViewTarget(): THREE.Object3D {
+        const controller = this.manGame.getComponent("asset").playerController;
+        const target = getProperty(controller, "ViewTarget");
+        return !target || target === controller ? this.player : target as unknown as THREE.Object3D;
+    }
+
+    protected updatePawnVisibility(frustum = this.frustum, origin = this.getViewTarget().getWorldPosition(tmpPawnViewOrigin)): void {
         const network = this.manGame.getComponent("network"), inWorld = network.isInWorld(), isObserving = network.isObserving();
         const range = Math.fround(this.getPawnRange()) * CLIPPING_RANGE_SCALE;
-        const controller = this.manGame.getComponent("asset").playerController;
-        const viewTarget = getProperty(controller, "ViewTarget");
-
-        const reference = !viewTarget || viewTarget === controller ? this.player : viewTarget as unknown as THREE.Object3D;
-        reference.getWorldPosition(tmpPawnViewOrigin);
-        const originX = Math.fround(tmpPawnViewOrigin.x), originY = Math.fround(tmpPawnViewOrigin.y);
+        const originX = Math.fround(origin.x), originY = Math.fround(origin.y);
         const limit = inWorld ? this.pawnLimit : 10000;
 
         this.arrVisiblePawns.length = 0;
@@ -1714,6 +1727,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                             leafVisible = true;
                             break;
                         }
+                    if (leafVisible && state.sector.hasActiveAntiPortals && state.sector.isPawnOccluded(component.getRenderBox(), leaves)) leafVisible = false;
                 } else leafVisible = state.leafIndex !== null && state.sector.visibleLeaves.has(state.leafIndex);
 
                 pawn.visible = leafVisible && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere()));
@@ -1726,7 +1740,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
         }
         if (this.arrVisiblePawns.length > limit)
-            this.arrVisiblePawns.sort((a, b) => a.getParent().position.distanceToSquared(tmpPawnViewOrigin) - b.getParent().position.distanceToSquared(tmpPawnViewOrigin));
+            this.arrVisiblePawns.sort((a, b) => a.getParent().position.distanceToSquared(origin) - b.getParent().position.distanceToSquared(origin));
         this.arrVisiblePawns.forEach((component, index) => {
             component.getParent().visible = index < limit;
             if (index < limit) component.createSkin();
@@ -2038,6 +2052,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             : this.isCameraCut
                 ? Infinity
                 : (this.manGame.getCurrentTime() - this.sectorFadeTime) / SECTOR_FADE_MS;
+        const viewOrigin = this.getViewTarget().getWorldPosition(tmpPawnViewOrigin);
 
         if (!auxiliary)
             this.sectorFadeTime = this.manGame.getCurrentTime();
@@ -2059,6 +2074,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
 
             sector.visible = true;
+
+            if (this.frustumCullingEnabled && sector.hasBSPAntiPortals)
+                sector.setBSPAntiPortalView(viewOrigin, assetMan.userConfig.clippingRange.antiPortal * CLIPPING_RANGE_SCALE);
 
             const topLevelOnly = !isCameraInSector;
 
@@ -2089,7 +2107,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             );
         }
 
-        this.updatePawnVisibility(frustum);
+        this.updatePawnVisibility(frustum, viewOrigin);
         for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
             let sector: SectorObject = null;
             for (let parent = emitter.parent; parent; parent = parent.parent)
@@ -2758,9 +2776,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const isSoundDay = timeOfDay >= 5.999 || timeOfDay <= 0.001, isSoundNight = timeOfDay < 6.001 || timeOfDay > 23.999; // UL2NEnvManager::IsSoundDay 0x104e7360 / IsSoundNight 0x104e73a0
             const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
             const controller = this.manGame.getComponent("asset").playerController;
-            const viewTarget = getProperty(controller, "ViewTarget");
             const isFollowingPlayer = this.getInputManager().isFollowingPlayer();
-            const soundTarget = isFollowingPlayer ? !viewTarget || viewTarget === controller ? this.player : viewTarget as unknown as THREE.Object3D : this.camera;
+            const soundTarget = isFollowingPlayer ? this.getViewTarget() : this.camera;
             const pawn = getProperty(controller, "Pawn") as unknown as BaseActor;
             const listenerTarget = isFollowingPlayer && pawn ? pawn : this.camera;
 
@@ -3204,6 +3221,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 sector.addComponent(new AmbientSoundComponent(this.audioManager, info));
 
         this.shadowProjector.attachReceivers(sector);
+        this.projectorRenderer.attach(sector, this.scene);
+        this.projectorRenderer.attachStaticMeshes(sector, this.scene);
         this.updateClanHallDecorations(sector);
         retainSectorResources(sector, sector, this.cacheSectorResources.get(sector));
         this.pawnLightingStates = new WeakMap();
@@ -3254,7 +3273,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
         }
-        if (sector.staticMeshGroup) sector.hasFinishedLoading = true;
+        if (sector.staticMeshGroup) sector.finishLoading();
     }
 
     protected processSectorWarmups() {
@@ -3438,6 +3457,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
         this.shadowProjector.attachReceivers(sector.staticMeshGroup);
+        this.projectorRenderer.attachStaticMeshes(sector, this.scene);
         this.updateClanHallDecorations(sector.staticMeshGroup);
         retainSectorResources(sector, sector.staticMeshGroup, this.cacheSectorResources.get(sector.staticMeshGroup));
 
@@ -3451,7 +3471,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         setLightingGate(sector.staticMeshGroup, false);
         this.queueSectorWarmup(sector, sector.staticMeshGroup, true);
-        sector.hasFinishedLoading = true;
+        sector.finishLoading();
     }
 
     public removeSector(sector: SectorObject) {
@@ -3498,6 +3518,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public disposeSector(sector: SectorObject) {
+        this.getPhysicsManager().releaseSectorVolumeReferences(sector);
         sector.releasePhysicsVolumeActors();
         sector.releaseMusicVolumeActors();
         sector.releaseZoneInfoActors();
@@ -3689,7 +3710,10 @@ function collectCelestialResources(sector: SectorObject, target: Set<Disposable_
 
 // Retain twice safely because progressive static meshes arrive after the sector root.
 function retainSectorResources(sector: SectorObject, root: THREE.Object3D, resources = collectSectorResources(root, new Set())) {
-    if (root === sector) collectCelestialResources(sector, resources);
+    if (root === sector) {
+        collectCelestialResources(sector, resources);
+        for (const projector of sector.projectors) resources.add(projector.texture);
+    }
 
     for (const resource of resources) {
         if (sector.retainedResources.has(resource)) continue;

@@ -217,8 +217,9 @@ nativeEffectBindings.set("s_antaras_breath", { effects: ["LineageEffect.e_u046_a
 nativeEffectBindings.set("s_antaras_normal_attack_ex", { effects: ["LineageEffect.e_u049_a"], effectGroup: "antarasNormalAttackEx", soundPhases: [], pending: "native L2-event behavior and full retail parity" });
 
 // Engine.dll Init selectors 0x7a216a/0x7a2223 -> 0x79f2ca; Shot 0x7ac244: shared Chill Flame/bleed recipe.
+// Explosion selectors 0x791dab/0x791dff -> 0x791ade with a null effect pointer.
 for (const name of ["s_npc_chill_flame", "s_self_range_bleed_boss_a"])
-    nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u027_a", "LineageEffect.m_u027_b"], soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing and secondary target-list parity" });
+    nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u027_a", "LineageEffect.m_u027_b"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and secondary target-list parity" });
 
 // Engine.dll Init 0x7a229d -> 0x7a025d; Shot 0x7b1607 -> 0x7acb51 -> 0x7ac0b6.
 nativeEffectBindings.set("s_npc_strike_range", { effects: ["LineageEffect.e_u057_a", "LineageEffect.e_u057_b"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and individual NPC verification" });
@@ -411,21 +412,18 @@ nativeEffectBindings.set("s_fake_petrificiation", { effects: [], soundPhases: []
 // Engine.dll ID4620: Init0x79c74b, PreShot0x7a3de7, Shot0x7b0e38, Explosion0x791ade.
 nativeEffectBindings.set("s_paralysis_4620", { effects: [], soundPhases: [], rejectTransient: true });
 
-export function getNativeEffectBinding(id: number): NativeEffectBinding_T {
+export function getNativeEffectBinding(id: number, castStyle?: number): NativeEffectBinding_T {
     const name = nativeEffectIds.get(id), dispatch = nativeEffectDispatch.get(name);
 
+    let binding: NativeEffectBinding_T;
+
     if (dispatch) {
-        const binding = collisionBindings.get(dispatch);
+        binding = collisionBindings.get(dispatch);
 
         if (!binding) throw new Error(`Native skill '${id}' has no exported dispatch '${dispatch}'.`);
+    } else binding = nativeEffectBindings.get(name) ?? nativeEffectRecipes.get(nativeEffectHandlers.get(name));
 
-        return binding;
-    }
-
-    const binding = nativeEffectBindings.get(name);
-    if (binding) return binding;
-
-    return nativeEffectRecipes.get(nativeEffectHandlers.get(name));
+    return castStyle === 0 && binding?.transient ? binding.transient : binding;
 }
 
 export default nativeEffectBindings;

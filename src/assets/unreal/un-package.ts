@@ -11,11 +11,12 @@ import UMeshInstance from "./un-mesh-instance";
 import UClient from "./un-client";
 import UPlayer from "./un-player";
 import UViewport from "./un-viewport";
-import UController from "./un-controller";
+import UController, { ULineagePlayerController, UPlayerController } from "./un-controller";
 import UInventory from "./un-inventory";
 import UWeapon from "./un-weapon";
 import UVolume from "./un-volume";
 import UModel from "./model/un-model";
+import UPolys from "./un-polys";
 import ULevel, { ULevelBase } from "./un-level";
 import FScale from "./un-scale";
 import FVector from "./un-vector";
@@ -31,11 +32,13 @@ import UNMovableSunLight from "./un-movable-sunlight";
 import ULight from "./un-light";
 import UStaticMeshActor, { FAccessory } from "./static-mesh/un-static-mesh-actor";
 import UPlayerStart from "./un-player-start";
+import UPathNode, { UNavigationPoint } from "./un-path-node";
 import UPhysicsVolume from "./un-physics-volume";
 import UDefaultPhysicsVolume from "./un-physics";
 import UBlockingVolume from "./un-blocking-volume";
 import UMusicVolume from "./un-music-volume";
 import UConvexVolume from "./un-convex-volume";
+import UAntiPortalActor from "./un-anti-portal-actor";
 import UEmitter from "./un-emitter";
 import UMeshEmitter from "./emitters/un-mesh-emitter";
 import UVertMesh from "./un-vert-mesh";
@@ -65,6 +68,7 @@ import UBeamEmitter from "./emitters/un-beam-emitter";
 import URibbonEmitter from "./emitters/un-ribbon-emitter";
 import FRange, { FRangeVector } from "./un-range";
 import FProjectorRenderInfoPtr from "./un-projector-render-info-ptr";
+import UProjector from "./un-projector";
 import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
@@ -82,6 +86,7 @@ import * as NEnv from "./un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
+import UL2SeamlessInfo from "./un-l2-seamless-info";
 import { fetchAssetHandle, fetchPackageSource } from "./asset-handle";
 import UPawn from "./un-pawn";
 import UL2Float from "./un-l2-float";
@@ -95,6 +100,9 @@ import USceneManager, { UMatAction, UActionMoveCamera, UInterpolationPoint } fro
 export type NativeClientTypes_T =
     | NativeTypes_T
     | "Controller"
+    | "PlayerController"
+    | "NavigationPoint"
+    | "PathNode"
     | "Volume"
     | "ParticleEmitter"
     | "VertMesh"
@@ -353,6 +361,7 @@ export class UEnginePackage extends UPackage implements EnginePackage_T {
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Primitive");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Model");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Polys");
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
@@ -485,12 +494,15 @@ export class UNativePackage extends ANativePackage {
             case "Player": Constructor = UPlayer; break;
             case "Viewport": Constructor = UViewport; break;
             case "Controller": Constructor = UController; break;
+            case "PlayerController": Constructor = UPlayerController; break;
+            case "LineagePlayerController": Constructor = ULineagePlayerController; break;
             case "Inventory": Constructor = UInventory; break;
             case "Weapon": Constructor = UWeapon; break;
             case "LevelBase": Constructor = ULevelBase; break;
             case "Level": Constructor = ULevel; break;
             case "L2Float": Constructor = UL2Float; break;
             case "Model": Constructor = UModel; break;
+            case "Polys": Constructor = UPolys; break;
             case "Brush": Constructor = UBrush; break;
 
             case "LevelInfo": Constructor = ULevelInfo; break;
@@ -509,6 +521,8 @@ export class UNativePackage extends ANativePackage {
             case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
 
             case "PlayerStart": Constructor = UPlayerStart; break;
+            case "NavigationPoint": Constructor = UNavigationPoint; break;
+            case "PathNode": Constructor = UPathNode; break;
             case "ReachSpec": Constructor = UReachSpec; break;
             case "Camera": Constructor = UCamera; break;
             case "Pawn": Constructor = UPawn; break;
@@ -519,6 +533,7 @@ export class UNativePackage extends ANativePackage {
             case "BlockingVolume": Constructor = UBlockingVolume; break;
             case "MusicVolume": Constructor = UMusicVolume; break;
             case "ConvexVolume": Constructor = UConvexVolume; break;
+            case "AntiPortalActor": Constructor = UAntiPortalActor; break;
 
             case "TerrainSector": Constructor = UTerrainSector; break;
             case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
@@ -587,15 +602,12 @@ export class UNativePackage extends ANativePackage {
             case "Mover": Constructor = UMover; break;
             case "VertexColor": Constructor = UnMaterials.UVertexColor; break;
             case "L2FogInfo": Constructor = UL2FogInfo; break;
+            case "L2SeamlessInfo": Constructor = UL2SeamlessInfo; break;
+            case "Projector": Constructor = UProjector; break;
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
-            case "L2SeamlessInfo":
             case "MatObject":
             case "MatSubAction":
-            case "PathNode":
-            case "Projector":
-            case "AntiPortalActor":
-            case "LineagePlayerController":
             case "AmbientSound": Constructor = UObject; break;
 
             case "SceneManager": Constructor = USceneManager; break;
@@ -645,6 +657,7 @@ export class UNativePackage extends ANativePackage {
 
         this.registerNativeClass("Primitive", "Object");
         this.registerNativeClass("Model", "Primitive");
+        this.registerNativeClass("Polys", "Object");
         this.registerNativeClass("ConvexVolume", "Primitive");
         this.registerNativeClass("StaticMesh", "Primitive");
         this.registerNativeClass("Mesh", "Primitive");

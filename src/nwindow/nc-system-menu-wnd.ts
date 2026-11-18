@@ -52,17 +52,15 @@ export class NCSystemMenuWnd { // NCSystemMenuWnd (vtable 0x101bd030): NCConsole
     public placeOnScreen(width: number, height: number) { this.minimized.place(width - WIDTH, height - HEIGHT - 46); }
     public isVisible() { return !this.element.hidden; }
     public updateKeyBindings() {
-        const manager = this.layer.getManager();
+        const manager = this.layer.getManager(), canvas = manager.canvas, lineHeight = canvas.getLineHeight();
 
         arrLabels.forEach(([id, suffix], index) => {
             const label = manager.formatWindowKeyText(suffix ? `${manager.getSysString(id)} ${suffix}` : manager.getSysString(id));
+            const element = this.arrLabelElements[index], arrLines = canvas.wrapText(label, WIDTH - 57);
 
             this.arrButtons[index].setAttribute("aria-label", label);
-            const element = this.arrLabelElements[index], width = manager.canvas.measureText(label), wrapped = width > WIDTH - 57;
-
-            this.layer.renderText(element, label, TEXT_COLOR);
-            element.style.whiteSpace = "normal";
-            this.layer.place(element, 51, 43 + index * 37 - (wrapped ? 6 : 0), Math.min(width, WIDTH - 57), wrapped ? 26 : 13);
+            this.layer.renderText(element, arrLines.join("\n"), TEXT_COLOR);
+            this.layer.place(element, 51, 43 + index * 37 - Math.trunc((arrLines.length - 1) * lineHeight / 2));
         });
     }
     public setVisible(visible: boolean) {

@@ -240,6 +240,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly arrRemovedSectors: SectorObject[] = [];
     protected inFlightSectors = new Map<string, number>();
     protected readonly requiredSectors = new Set<string>();
+    protected readonly l2SeamlessMaps = new Set<string>();
     protected nextSectorRequest = 0;
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
@@ -777,7 +778,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!pawnLibrary) throw new Error(`Pawn '${actor.name}' has not loaded.`);
 
         const request = this.pawnSkillRequests.get(actor);
-        const existing = pawnLibrary.npcSkillAttacks.find(skill => skill.id === id && skill.level === level) || (actor.getUnrealScriptProperty("bNpc") ? pawnLibrary.npcSkillAttacks.find(skill => skill.id === id) : null);
+        const existing = pawnLibrary.npcSkillAttacks.find(skill => skill.id === id && skill.level === level);
 
         if (existing?.visual) return existing;
 
@@ -800,15 +801,24 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (!pawnLibrary) throw new Error(`Pawn '${actor.name}' has not loaded.`);
 
-        const existing = pawnLibrary.npcSkillAttacks.find(skill => skill.id === id && skill.level === level) || (actor.getUnrealScriptProperty("bNpc") ? pawnLibrary.npcSkillAttacks.find(skill => skill.id === id) : null);
+        const existing = pawnLibrary.npcSkillAttacks.find(skill => skill.id === id && skill.level === level);
 
         if (existing) return Object.assign({}, existing);
 
-        const record = this.gameStrings.skillRecords[`${id}:${level}`];
+        const npcSkill = actor.getUnrealScriptProperty("bNpc") ? pawnLibrary.npcSkillAttacks.find(skill => skill.id === id) : null;
+        const record = this.gameStrings?.skillRecords[`${id}:${level}`];
 
-        if (!record) throw new Error(`Skill '${id}:${level}' has no cast record.`);
+        if (!record) {
+            if (npcSkill) return Object.assign({}, npcSkill);
+            throw new Error(`Skill '${id}:${level}' has no cast record.`);
+        }
 
-        return Object.assign({}, record, { sounds: record.sounds.slice() });
+        const skill = Object.assign({}, record, { sounds: record.sounds.slice() });
+
+        // Engine.dll 0x72e598 looks up the packet level; 0x7977ca applies the NPC animation separately.
+        if (npcSkill) skill.animation = npcSkill.animation;
+
+        return skill;
     }
 
     protected async getPawnSkill(actor: BaseActor, pawnLibrary: DecodeLibrary, id: number, level: number, urgent: boolean = false): Promise<NpcSkillAttack_T> {
@@ -1166,6 +1176,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (isStreaming) return;
 
         this.requiredSectors.clear();
+        this.l2SeamlessMaps.clear();
         this.decodeWorker?.setActiveSector(null);
         this.decodeWorker?.cancelQueuedSectors();
 
@@ -1296,7 +1307,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
                 const [x, y] = sectorIdx.split("_").map(Number);
 
-                if (sectorDistance(renderManager.player.position, x, y) > this.getRenderDistance(renderManager)) return;
+                if (!this.l2SeamlessMaps.has(sectorIdx) && sectorDistance(renderManager.player.position, x, y) > this.getRenderDistance(renderManager)) return;
             }
 
             if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request) return;
@@ -1476,7 +1487,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             const originIdx = `${sx}_${sy}`;
             this.decodeWorker?.setActiveSector(isWorldLoading || teleportPosition ? null : originIdx);
             const sectorsLoaded = renderManager.getLoadedSectors();
-            const sectorsLoadedIds = sectorsLoaded.map(({ index }) => `${index.x}_${index.y}`)
+            const loadedSectorIds = new Set<string>();
             const isValidOrigin = this.hasSector(originIdx);
             const now = performance.now();
             const sampleDelta = now - this.lastCameraSampleTime;
@@ -1499,11 +1510,21 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.lastCameraSampleTime = now;
             network.actors.updateWorldLevel();
 
+            this.l2SeamlessMaps.clear();
+            const pawnSector = renderManager.getSector(renderManager.player.position);
+
+            if (pawnSector && !pawnSector.isRetired)
+                pawnSector.collectL2SeamlessMaps(renderManager.player, this.l2SeamlessMaps);
+
             for (const sector of sectorsLoaded) {
-                if (sector.neverUnload || !sector.index || sector === renderManager.getLevel()) continue;
-                if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= renderDistance || sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= renderDistance) {
+                const sectorIdx = `${sector.index.x}_${sector.index.y}`;
+
+                loadedSectorIds.add(sectorIdx);
+                if (sector.neverUnload || sector === renderManager.getLevel()) continue;
+
+                if (this.l2SeamlessMaps.has(sectorIdx) || sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= renderDistance || sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= renderDistance) {
                     sector.lastInRangeTime = now;
-                    if (sector.isRetired) this.requestSector(renderManager, `${sector.index.x}_${sector.index.y}`);
+                    if (sector.isRetired) this.requestSector(renderManager, sectorIdx);
                     continue;
                 }
 
@@ -1521,6 +1542,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             const sectorsToLoad: string[] = [];
 
+            for (const map of this.l2SeamlessMaps)
+                if (map !== originIdx && this.hasSector(map) && !loadedSectorIds.has(map)) sectorsToLoad.push(map);
+
             const ring = Math.ceil(renderDistance / SECTOR_WORLD_SIZE);
             const [psx, psy] = renderManager.getSectorId(tmpPrefetchPosition);
             const neighbours: { idx: string, dist: number, prefetchDist: number }[] = [];
@@ -1530,9 +1554,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
                     const levelIdx = `${x}_${y}`;
 
                     if (levelIdx === originIdx || !this.hasSector(levelIdx))
-                        continue; // skip origin and invalid sectors
+                        continue;
 
-                    if (sectorsLoadedIds.includes(levelIdx)) continue;
+                    if (this.l2SeamlessMaps.has(levelIdx) || loadedSectorIds.has(levelIdx)) continue;
 
                     const dist = sectorDistance(cameraPosition, x, y);
                     const prefetchDist = sectorDistance(tmpPrefetchPosition, x, y);
@@ -1551,7 +1575,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             this.decodeWorker?.cancelQueuedSectors(sectorsToLoad, originIdx);
 
-            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx)) {
+            if (isValidOrigin && !loadedSectorIds.has(originIdx)) {
                 this.requestSector(renderManager, originIdx, maxConcurrentDecodes, !isWorldLoading);
 
                 if (!isWorldLoading) return;

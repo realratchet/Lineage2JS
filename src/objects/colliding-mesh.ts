@@ -402,16 +402,21 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
     public getCollisionRadius(): number { return this.collisionProfile.collisionRadius; }
     public getCollisionHeight(): number { return this.collisionProfile.collisionHeight; }
-    public syncCollisionTransform(): void {
-        this.updateMatrix();
-        Object3D.prototype.updateMatrixWorld.call(this, true);
-        this.getCollisionPrimitive();
+    public syncCollisionTransform(updateLocation: boolean = true): void {
+        if (updateLocation || !this.matrixAutoUpdate) this.updateMatrix();
+        if (updateLocation) Object3D.prototype.updateMatrixWorld.call(this, true);
+        this.updateWorldMatrix(true, false);
+        this.updateCollisionBounds();
         if (!this.rigidbody) return;
 
-        this.rigidbody.setTranslation(this.getWorldPosition(tmpPosition), true);
-        this.rigidbody.setNextKinematicTranslation(tmpPosition);
-        this.collider.setTranslation(tmpPosition);
-        this.rigidbody.setRotation(this.getWorldQuaternion(tmpQuaternion), true);
+        this.matrixWorld.decompose(tmpPosition, tmpQuaternion, tmpScale);
+        if (updateLocation) {
+            this.rigidbody.setTranslation(tmpPosition, true);
+            this.rigidbody.setNextKinematicTranslation(tmpPosition);
+            this.collider.setTranslation(tmpPosition);
+        }
+
+        this.rigidbody.setRotation(tmpQuaternion, true);
         this.rigidbody.setNextKinematicRotation(tmpQuaternion);
         this.collider.setRotation(tmpQuaternion);
     }
@@ -421,16 +426,18 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     public getCollisionPrimitive(): CollisionPrimitive_T | null {
         if (!this.analyticalPrimitive) return null;
 
+        this.updateWorldMatrix(true, false);
+        this.updateCollisionBounds();
+        return this.analyticalPrimitive;
+    }
+
+    protected updateCollisionBounds(): void {
+        if (!this.analyticalPrimitive) return;
         if (this.analyticalPrimitive.kind === "cylinder") {
-            this.getWorldPosition(this.analyticalCenter);
+            this.analyticalCenter.setFromMatrixPosition(this.matrixWorld);
             this.analyticalBounds.min.set(this.analyticalCenter.x - this.analyticalPrimitive.radius, this.analyticalCenter.y - this.analyticalPrimitive.radius, this.analyticalCenter.z - this.analyticalPrimitive.halfHeight);
             this.analyticalBounds.max.set(this.analyticalCenter.x + this.analyticalPrimitive.radius, this.analyticalCenter.y + this.analyticalPrimitive.radius, this.analyticalCenter.z + this.analyticalPrimitive.halfHeight);
-        } else {
-            this.updateWorldMatrix(true, false);
-            this.analyticalBounds.copy(this.localColliderBounds).applyMatrix4(this.matrixWorld);
-        }
-
-        return this.analyticalPrimitive;
+        } else this.analyticalBounds.copy(this.localColliderBounds).applyMatrix4(this.matrixWorld);
     }
 }
 

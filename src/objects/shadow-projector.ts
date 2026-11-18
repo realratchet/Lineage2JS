@@ -79,7 +79,7 @@ export class ShadowProjector {
     protected readonly blurMaterial = new ShaderMaterial({ vertexShader: BLUR_VERTEX, fragmentShader: BLUR_FRAGMENT, depthTest: false, depthWrite: false, blending: NoBlending, uniforms: { tSource: { value: null } } });
     protected readonly camera = new PerspectiveCamera();
     protected readonly silhouette = new MeshBasicMaterial({ color: 0x000000 });
-    protected readonly attenuation = createAttenuationCube();
+    public readonly attenuation = createAttenuationCube();
     protected readonly targets: ShadowTarget_T[] = [];
     protected readonly shadowTextures: ShadowTexture_T[] = [];
     protected readonly projectors: PawnProjector_T[] = [];

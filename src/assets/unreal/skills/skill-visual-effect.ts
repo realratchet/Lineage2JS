@@ -2,6 +2,7 @@ import FireCrackerAction from "./firecracker-action";
 import SkillEffectPlacement from "./skill-effect-placement";
 import FVector from "../un-vector";
 import { EPhysics_T } from "../un-aactor";
+import { getNativeEffectBinding } from "./native-effect-bindings";
 import type { SkillActor_T, SkillEffectHost_T, SkillScriptHost_T } from "./skill-effect-host";
 import type { NativeSkillEffect_T } from "./native-effects";
 import type { NpcSkillAttack_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T, NpcSkillSound_T } from "../un-pawn";
@@ -506,7 +507,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             frame.projectileExplosion = false;
             return;
         }
-        if (skill.visual.soundPhases.includes(phase))
+        const native = skill.visual.soulshot ? null : getNativeEffectBinding(skill.id, skill.castStyle);
+        if ((native?.soundPhases ?? skill.visual.soundPhases).includes(phase))
             for (const sound of skill.sounds) {
                 if (sound.phase !== phase) continue;
                 if (frame.dueTime > this.lastTime) this.pendingSounds.push({ dueTime: frame.dueTime, sound, pawn: soundPawn, assets: skill.assets });

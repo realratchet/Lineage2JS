@@ -180,6 +180,9 @@ export class LocalSpaceSkeleton extends Skeleton {
     }
 
     protected getBonePose(index: number, target: Matrix4): void {
+        evaluateDeferredPose(this.mesh);
+        if (this.rootBoneSource) evaluateDeferredPose(getBoneMesh(this.rootBoneSource));
+
         let isLazy = false;
 
         for (let bone = this.bones[index]; bone.isBone && !isLazy; bone = bone.parent as Bone) {
@@ -187,9 +190,9 @@ export class LocalSpaceSkeleton extends Skeleton {
             isLazy = (bone as any).isPoseRequired === false;
         }
 
-        evaluateDeferredPose(this.mesh, isLazy);
-        if (this.rootBoneSource) evaluateDeferredPose(getBoneMesh(this.rootBoneSource), isLazy);
         if (isLazy) { // posed exactly now, and every frame after
+            evaluateDeferredPose(this.mesh, true);
+            if (this.rootBoneSource) evaluateDeferredPose(getBoneMesh(this.rootBoneSource), true);
             this.requireBone(index);
             if (this.rootBoneSource) requireBonePose(this.rootBoneSource);
         }

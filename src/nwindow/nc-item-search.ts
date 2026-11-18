@@ -45,7 +45,7 @@ export class NCItemSearch {
     protected timer: number = null;
 
     public constructor(protected readonly layer: NDomLayer, protected readonly owner: HTMLElement, panes: NDomScrollPane_T[], protected readonly onChange: () => void) {
-        this.arrPanes = panes.map(pane => ({ pane, x: parseFloat(pane.style.left), y: parseFloat(pane.style.top), height: parseFloat(pane.style.height), order: [] }));
+        this.arrPanes = panes.map<SearchPane_T>(pane => ({ pane, x: parseFloat(pane.style.left), y: parseFloat(pane.style.top), height: parseFloat(pane.style.height), order: [] }));
         const first = this.arrPanes[0], width = parseFloat(first.pane.style.width);
 
         this.element = layer.createWindow(first.x, first.y, width, 29, owner);

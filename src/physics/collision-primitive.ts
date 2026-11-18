@@ -1197,6 +1197,17 @@ function pointStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
 }
 
 export function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+    if (primitive.kind === "projector") {
+        const { min, max } = primitive.bounds;
+
+        if (location.x < min.x - extent.x || location.x > max.x + extent.x || location.y < min.y - extent.y || location.y > max.y + extent.y || location.z < min.z - extent.z || location.z > max.z + extent.z) return null;
+        for (const { normal, constant } of primitive.planes)
+            if (normal.dot(location) + constant > boxPushOut(normal.x, normal.y, normal.z, extent)) return null;
+
+        tmpPointHit.normal.copy(primitive.direction);
+        tmpPointHit.item = 0;
+        return tmpPointHit;
+    }
     if (primitive.kind === "cylinder") {
         const dz = primitive.center.z - location.z;
         const dx = primitive.center.x - location.x;
@@ -1309,6 +1320,22 @@ function clipBspHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], start: Vec
 
 export function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number = 1): PrimitiveHit_T | null {
     tmpBestHit.skinIndex = -1;
+    if (primitive.kind === "projector") {
+        resetClip(maxTime, 0);
+        for (const { normal, constant } of primitive.planes)
+            if (!clipLine(normal.x, normal.y, normal.z, -constant, 0, start, end, extent)) return null;
+
+        const { min, max } = primitive.bounds;
+        if (!clipLine(-1, 0, 0, -min.x, 0, start, end, extent) || !clipLine(1, 0, 0, max.x, 0, start, end, extent) ||
+            !clipLine(0, -1, 0, -min.y, 0, start, end, extent) || !clipLine(0, 1, 0, max.y, 0, start, end, extent) ||
+            !clipLine(0, 0, -1, -min.z, 0, start, end, extent) || !clipLine(0, 0, 1, max.z, 0, start, end, extent)) return null;
+
+        if (clipState.t0 < 0) tmpBestHit.normal.copy(start).sub(end).normalize();
+        else tmpBestHit.normal.copy(clipState.normal);
+        tmpBestHit.time = Math.max(0, clipState.t0);
+        tmpBestHit.item = 0;
+        return tmpBestHit;
+    }
     if (primitive.kind === "cylinder") return queryCylinder(primitive, start, end, extent, maxTime);
     if (primitive.kind === "staticMesh" && primitive.collisionModel && (extent.lengthSq() === 0 ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
         return queryBsp(primitive.collisionModel, primitive.matrixWorld, start, end, extent);

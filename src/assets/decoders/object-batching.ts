@@ -182,8 +182,7 @@ export function createStaticMeshBatchJob(
     fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
     decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D
 ): StaticMeshBatchJob_T {
-    const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
-
+    const manifest: StaticMeshBatchManifest_T = library.staticMeshBatches ?? buildStaticMeshBatchData(library);
     return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, batchBuild: null, prepareBounds: null, boundsBuild: null };
 }
 
@@ -203,6 +202,14 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
             ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
             : null;
 
+        if (library.projectors?.length) batch.batchElements.forEach((element, i) => {
+            const actor = batch.actors[i], properties = actor.scriptProperties, defaults = actor.sharedScriptProperties;
+            element.projector = {
+                accepts: !!(properties?.bAcceptsProjectors ?? defaults?.bAcceptsProjectors),
+                tag: String(properties?.Tag ?? defaults?.Tag),
+                isUnlit: !!actor.ambient?.isUnlit
+            };
+        });
         const batchObject = createBatchObject(
             batch.name,
             geometry,

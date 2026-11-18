@@ -1,8 +1,8 @@
 import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
-import FBSPNode, { BspNodeFlags_T, type IBSPNodeCollisionInfo_T, type IBSPNodeDecodeInfo_T, type IBSPNodeSurfaceDecodeInfo_T } from "../bsp/un-bsp-node";
+import FBSPNode, { BspNodeFlags_T, type BSPBrushPolygonDecodeInfo_T, type IBSPNodeCollisionInfo_T, type IBSPNodeDecodeInfo_T, type IBSPNodeSurfaceDecodeInfo_T } from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
-import { PolyFlags_T, UPolys } from "../un-polys";
+import { PolyFlags_T, type UPolys } from "../un-polys";
 import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
 import FZoneProperties, { type IBSPZoneDecodeInfo_T } from "../un-zone-properties";
 import FLeaf, { type IBSPLeafDecodeInfo_T } from "../un-leaf";
@@ -137,7 +137,7 @@ export abstract class UModel extends UPrimitive {
     declare protected lightmaps: FArray<FLightmapIndex>;
     declare protected multiLightmaps: FArray<FMultiLightmapTexture>;
     declare protected numSharedSides: number;
-    declare protected polys: UPolys;
+    declare protected polysId: number;
     declare protected zones: FZoneProperties[];
     declare protected bounds: FBoxArray;
     declare protected leafHulls: FPrimitiveArray<"int32">;
@@ -175,7 +175,6 @@ export abstract class UModel extends UPrimitive {
         this.bspSection = new FArray(FBSPSection);
         this.lightmaps = new FArray(FLightmapIndex);
         this.multiLightmaps = new FArray(FMultiLightmapTexture);
-        this.polys = null;
         this.zones = [];
         this.bounds = new FBoxArray();
         this.leafHulls = new FPrimitiveArray(BufferValue.int32);
@@ -215,11 +214,8 @@ export abstract class UModel extends UPrimitive {
         // debugger;
 
         this.readHead = pkg.tell();
-        const polysId = pkg.read("compat32");
-        const polyExp = pkg.exports[polysId - 1];
-        const className = pkg.getPackageName(polyExp.idClass)
-
-        console.assert(className === "Polys");
+        const polysId = this.polysId = pkg.read("compat32");
+        if (polysId > 0) console.assert(pkg.getPackageName(pkg.exports[polysId - 1].idClass) === "Polys");
 
         // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
         //     this.polys = await pkg.fetchObject<UPolys>(polysId);
@@ -392,7 +388,7 @@ export abstract class UModel extends UPrimitive {
     public getDecodeInfo(builder: DecodeLibraryBuilder, uLevelInfo: ULevelInfo): ModelDecodeResult_T {
         const library = builder.library;
         const result: ModelDecodeResult_T = Object.assign(this.getZoneDecodeInfo(library, uLevelInfo), {
-            bspRootOutside: this.isRootOutside, bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
+            bspRootOutside: this.isRootOutside, bspNodes: [], bspAntiPortals: {}, bspPortalPolygons: {}, bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
         });
 
         this.multiLightmaps.forEach((lm: FMultiLightmapTexture) => lm.textures.forEach(texture => builder.pullStaticLightmap(texture.staticLightmap)));
@@ -414,6 +410,8 @@ export abstract class UModel extends UPrimitive {
             result.bspRenderBounds[i] = this.bounds.getElem(i, _box).getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
 
         const sectionMap = new Map<PriorityGroups_T, Map<string, ObjectsForSection_T>>();
+        const brushPolygons = new Map<number, BSPBrushPolygonDecodeInfo_T | null>();
+        const hasAntiPortals = this.bspSurfs.some(surf => !!(surf.flags & PolyFlags_T.PF_AntiPortal));
         const portalPosition = FVector.make();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
@@ -426,6 +424,23 @@ export abstract class UModel extends UPrimitive {
             nodeInfo.zoneMask = result.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
             result.bspNodes.push(nodeInfo);
+
+            const isAntiPortal = !!(surf.flags & PolyFlags_T.PF_AntiPortal);
+            const isZonePortal = hasAntiPortals && !!(surf.flags & PolyFlags_T.PF_Portal) && node.iZone[0] !== node.iZone[1];
+            if (isAntiPortal || isZonePortal) {
+                const surface = node.iSurf;
+                if (!brushPolygons.has(surface)) brushPolygons.set(surface, this.getBrushPolygon(surface, surf));
+                const polygon = brushPolygons.get(surface);
+
+                if (polygon && isAntiPortal) {
+                    result.bspAntiPortals[surface] = polygon;
+                    nodeInfo.antiPortal = surface;
+                }
+                if (polygon && isZonePortal) {
+                    result.bspPortalPolygons[surface] = polygon;
+                    nodeInfo.portalPolygon = surface;
+                }
+            }
 
             if (surf.flags & PolyFlags_T.PF_Portal) {
                 nodeInfo.portalVertices = [];
@@ -686,6 +701,22 @@ export abstract class UModel extends UPrimitive {
 
         return result;
     }
+
+    protected getBrushPolygon(surface: number, surf: FBSPSurf): BSPBrushPolygonDecodeInfo_T | null {
+        const actor = surf.actor?.loadSelf();
+        const brush = actor?.brush?.loadSelf();
+        if (!brush || !brush.polysId) return null;
+
+        const polys = brush.pkg.fetchObject<UPolys>(brush.polysId).loadSelf();
+        const { normal, vertices } = polys.getPolygon(surf.iBrushPoly);
+        const matrix = actor.localToWorld();
+
+        return {
+            surface,
+            normal: matrix.transformNormal(normal).getElements(),
+            vertices: vertices.map(vertex => matrix.transformVector(vertex).getElements())
+        };
+    }
 }
 
 export default UModel;
@@ -696,7 +727,7 @@ function boxPushOut(normal: FVector | FPlane, size: FVector) {
 
 type PriorityGroups_T = "opaque" | "transparent";
 type ModelZoneDecodeResult_T = { bspLeaves: IBSPLeafDecodeInfo_T[], bspZones: IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
-type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspRootOutside: boolean, bspNodes: IBSPNodeDecodeInfo_T[], bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
+type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspRootOutside: boolean, bspNodes: IBSPNodeDecodeInfo_T[], bspAntiPortals: Record<number, BSPBrushPolygonDecodeInfo_T>, bspPortalPolygons: Record<number, BSPBrushPolygonDecodeInfo_T>, bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
 type ObjectsForSection_T = {
     material: string,  // material UUID
     lightmap: string | null,  // lightmap UUID

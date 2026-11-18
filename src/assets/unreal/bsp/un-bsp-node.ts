@@ -5,6 +5,7 @@ import type { IBoxDecodeInfo } from "../un-box";
 
 export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo, boxPlanes?: Vector4Arr[] };
 export type IBSPNodeSurfaceDecodeInfo_T = { vertices: Float32Array, normal: Vector3Arr, material: string | null, nextCoplanar: number };
+export type BSPBrushPolygonDecodeInfo_T = { surface: number, normal: Vector3Arr, vertices: Vector3Arr[] };
 export type IBSPNodeDecodeInfo_T = {
     children: [number, number],
     plane: Vector4Arr,
@@ -13,6 +14,8 @@ export type IBSPNodeDecodeInfo_T = {
     surfFlags: number,
     surface?: IBSPNodeSurfaceDecodeInfo_T,
     portalVertices?: number[],
+    portalPolygon?: number,
+    antiPortal?: number,
     iPlane: number,
     isCsg: boolean,
     iRenderBound: number,

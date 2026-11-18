@@ -192,6 +192,14 @@ function fetchMapTexture(library: DecodeLibrary, info: MaterialContracts.IBaseMa
     return decodeParameter(library, info)?.uniforms?.map ?? null;
 }
 
+export function decodeProjectorTexture(library: DecodeLibrary, id: string): THREE.Texture {
+    const info = library.materials[id];
+    const map = info && fetchMapTexture(library, info);
+    if (!map || !map.texture || (map.texture as THREE.CubeTexture).isCubeTexture)
+        throw new Error(`Projector material '${id}' has no bitmap texture.`);
+    return map.texture;
+}
+
 function decodeCubemap(library: DecodeLibrary, info: MaterialContracts.ICubemapDecodeInfo): MapData_T {
     if (info.faces.length !== 6)
         throw new Error(`Cubemap '${info.name}' has ${info.faces.length} faces.`);

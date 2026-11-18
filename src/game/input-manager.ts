@@ -1167,9 +1167,13 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected updateAutoTrackingPawn(target: Vector3, manualYaw: number): void {
-        if (cameraVelocity.lengthSq() === 0 || manualYaw !== 0 || !this.manGame.getComponent("network").ui.isAutoTrackingPawnEnabled()) return;
+        if (cameraVelocity.lengthSq() === 0 || manualYaw !== 0) return;
 
-        const controller = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const asset = this.manGame.getComponent("asset"), ui = this.manGame.getComponent("network").ui;
+
+        if (!(ui ? ui.isAutoTrackingPawnEnabled() : asset.userConfig.game.autoTrackingPawn)) return;
+
+        const controller = asset.playerController.scriptProperties;
         const speed = controller.get("AutoTrackingPawnSpeed") as number;
 
         if (!controller.get("bUseAutoTrackingPawn") || speed === 0 || controller.get("bUseHoldCamera") ||
