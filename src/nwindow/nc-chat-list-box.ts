@@ -9,8 +9,37 @@ const TEXT_X = 23;
 const TEXT_Y = 14;
 const INDENT = 12;
 
-type ChatLine_T = { text: string, color: number, indent: number };
+type ChatLine_T = { text: string, color: number, indent: number, separator: string };
 type ChatEntry_T = { text: string, color: number };
+
+function copyChat(event: ClipboardEvent) {
+    const target = event.target;
+
+    if (target instanceof HTMLElement && (target.matches("input, textarea") || target.isContentEditable)) return;
+
+    const selection = document.getSelection();
+
+    if (!event.clipboardData || !selection || selection.isCollapsed) return;
+
+    const range = selection.getRangeAt(0), parent = range.commonAncestorContainer;
+
+    if (!(parent instanceof HTMLElement) || !parent.classList.contains("ndom-chat-text")) return;
+
+    let text = "", separator = "";
+
+    for (const row of range.cloneContents().children) {
+        if (text) separator += (row as HTMLElement).dataset.separator;
+        if (!row.textContent) continue;
+
+        text += separator + row.textContent;
+        separator = "";
+    }
+
+    if (!text) return;
+
+    event.clipboardData.setData("text/plain", text);
+    event.preventDefault();
+}
 
 export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a520(200, 9, 15); scroll column on the left at (5,10).
     public readonly element: HTMLDivElement;
@@ -33,7 +62,8 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
         this.element.style.overflow = "hidden";
         if (isSystem) this.back = layer.tile(this.element, 0, 0, width, height, 0, 0, width, 128, TEX_SYSTEM);
         this.text = layer.createWindow(0, 0, width, height, this.element);
-        this.text.classList.add("ndom-selectable");
+        this.text.classList.add("ndom-selectable", "ndom-chat-text");
+        document.addEventListener("copy", copyChat);
         this.scrollBar = new NCScrollBar(layer, this.element, 5, isSystem ? 5 : 10, isSystem ? height - 9 : height - 10); // NCChatSystemMsgWnd (vtable 0x101aca78): OnCreate 0x100540f0 scroll column (5,5)..(5,H-19), paint 0x10056900.
         this.scrollBar.onScroll = position => {
             this.scrollTop = position;
@@ -102,8 +132,10 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
         for (const entry of this.pending) {
             if (!entry.text) continue;
 
-            canvas.wrapText(entry.text, this.getWrapWidth(), this.getWrapWidth() - INDENT).forEach((text, index) => {
-                this.pushLine({ text, color: entry.color, indent: index ? INDENT : 0 });
+            const arrSeparators = ["\n"];
+
+            canvas.wrapText(entry.text, this.getWrapWidth(), this.getWrapWidth() - INDENT, arrSeparators).forEach((text, index) => {
+                this.pushLine({ text, color: entry.color, indent: index ? INDENT : 0, separator: arrSeparators[index] });
             });
         }
 
@@ -134,7 +166,9 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
         for (let row = 0; row < this.rows && this.scrollTop + row < this.lines.length; row++) {
             const line = this.lines[this.scrollTop + row];
 
-            this.layer.text(this.text, line.text, line.color, FontType_T.SMALL, TEXT_X + line.indent, TEXT_Y + row * ROW_HEIGHT);
+            const element = this.layer.text(this.text, line.text, line.color, FontType_T.SMALL, TEXT_X + line.indent, TEXT_Y + row * ROW_HEIGHT);
+
+            element.dataset.separator = line.separator;
         }
     }
 }
