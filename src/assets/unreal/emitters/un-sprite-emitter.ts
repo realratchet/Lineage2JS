@@ -5,6 +5,7 @@ import type { DecodeLibraryBuilder } from "../decode-library-builder";
 export type ISpriteEmitterDecodeInfo = IEmitterDecodeInfo & {
     type: "SpriteEmitter",
     texture: string,
+    refractionScale?: [number, number],
     spriteDirection?: SpriteDirections_T,
     projectionNormal?: [number, number, number]
 };
@@ -16,6 +17,7 @@ export abstract class USpriteEmitter extends UParticleEmitter {
     declare protected realProjectionNormal: FVector;
     declare protected spriteDirection: EParticleDirectionUsage_T; // Here you can specify how the 2D image should be displayed. See EParticleDirectionUsage enum below for details.
 
+    declare protected refraction: number;
     declare protected refrUScale: number;
     declare protected refrVScale: number;
 
@@ -24,6 +26,7 @@ export abstract class USpriteEmitter extends UParticleEmitter {
             "ProjectionNormal": "projectionNormal",
             "UseDirectionAs": "spriteDirection",
             "RealProjectionNormal": "realProjectionNormal",
+            "Refraction": "refraction",
             "RefrUScale": "refrUScale",
             "RefrVScale": "refrVScale",
         });
@@ -34,6 +37,7 @@ export abstract class USpriteEmitter extends UParticleEmitter {
 
         return Object.assign(super.getDecodeInfo(builder), {
             type: "SpriteEmitter",
+            refractionScale: this.refraction ? [this.refrUScale, this.refrVScale] as [number, number] : undefined,
             spriteDirection: directionNames[this.spriteDirection],
             projectionNormal: this.projectionNormal ? this.projectionNormal.getElements() : [0, 0, 1],
             texture: builder.pullMaterial(this.texture)

@@ -3,6 +3,7 @@ import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomButton_T, typ
 import type { SkillEntry_T } from "../network/game-packets";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
 import SysString_T from "./sys-string";
+import NCItemSearch from "./nc-item-search";
 
 const TEX_BACK = "L2UI_CH3.SkillWnd.Skill_Back";
 const TEX_TAB = "L2UI_CH3.SkillWnd.Skill_Tab2";
@@ -13,7 +14,7 @@ const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_TOGGLE = "L2_SkillTime.ToggleEffect.ToggleEffect001";
 
 export class NCSkillWnd {
-    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, TEX_TOGGLE, ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, TEX_TOGGLE, ...NCItemSearch.getTextures(), ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
     public onShow: () => void = null;
     public onUse: (id: number, ctrl: boolean, shift: boolean) => void = null;
@@ -28,6 +29,7 @@ export class NCSkillWnd {
     protected readonly coolTimeIcons = new Map<string, HTMLDivElement>();
     protected readonly toggleIcons = new Map<string, HTMLDivElement>();
     protected activeSkills = new Set<string>();
+    protected readonly search: NCItemSearch;
 
     public constructor(layer: NDomLayer, protected readonly coolTimes: Map<string, NCCoolTimeIcon>, parent: HTMLElement) {
         this.layer = layer;
@@ -38,6 +40,10 @@ export class NCSkillWnd {
         this.list.setAttribute("role", "tabpanel");
         this.list.tabIndex = -1;
         for (const type of ["wheel", "mousedown"]) this.list.addEventListener(type, () => this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove()));
+        this.search = new NCItemSearch(layer, this.element, [this.list], () => {
+            this.clearSelection();
+            this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+        });
 
         [SysString_T.Active, SysString_T.Passive].forEach((id, index) => {
             const label = layer.getManager().getSysString(id);
@@ -57,6 +63,8 @@ export class NCSkillWnd {
     public isVisible() { return !this.element.hidden && !this.element.parentElement.hidden; }
     public setVisible(visible: boolean) {
         if (visible && !this.element.hidden) return;
+
+        if (!visible) this.search.close(false);
 
         this.pendingSkills = this.skills = [];
         this.list.setScroll(0);
@@ -144,6 +152,7 @@ export class NCSkillWnd {
             const info = NCTooltip.skill(strings, skill.id, skill.level);
 
             button.setAttribute("aria-label", info.title);
+            button.dataset.searchName = strings.skillInfos[`${skill.id}:${skill.level}`]?.name || strings.skillNames[skill.id];
             layer.tooltip(this.element, button, info);
             layer.place(button, index % 6 * 37, Math.trunc(index / 6) * 35, index % 6 === 5 ? 38 : 37, 35);
             const selection = layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, TEX_SELECTED);
@@ -191,7 +200,7 @@ export class NCSkillWnd {
             });
             this.list.content.appendChild(button);
         });
-
+        this.search.refresh();
     }
 }
 

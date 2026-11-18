@@ -1,6 +1,6 @@
 import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 import type { StaticMeshBatchManifest_T } from "./static-mesh-batch";
-import type { IBSPNodeDecodeInfo_T } from "./bsp/un-bsp-node";
+import type { BSPBrushPolygonDecodeInfo_T, IBSPNodeDecodeInfo_T } from "./bsp/un-bsp-node";
 import type { IBoxDecodeInfo } from "./un-box";
 import type { IBSPLeafDecodeInfo_T } from "./un-leaf";
 import type { IBSPZoneDecodeInfo_T } from "./un-zone-properties";
@@ -14,6 +14,8 @@ import type { IMusicVolumeDecodeInfo } from "./un-music-volume";
 import type { IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "./un-physics-volume";
 import type { IBlockingVolumeDecodeInfo } from "./un-blocking-volume";
 import type { IAmbientSoundObjectDecodeInfo } from "./un-ambient-sound";
+import type { ProjectorDecodeInfo_T } from "./un-projector";
+import type { AntiPortalDecodeInfo_T } from "./un-anti-portal-actor";
 import type { IScriptClassDecodeInfo, IScriptFunctionDecodeInfo, IScriptStateDecodeInfo, ScriptPropertyValue_T } from "./script-dump-loader";
 import type { QuaternionArr, Vector3Arr, EulerArr, ArrGeometryGroup, IndexLikeArray } from "./library-types";
 import type { EmitterConfig_T } from "./emitters/un-particle-emitter";
@@ -132,6 +134,8 @@ export class DecodeLibrary {
     public bspRootOutside: boolean;
     public helpersZoneBounds = false;
     public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
+    public readonly bspAntiPortals: Record<number, BSPBrushPolygonDecodeInfo_T> = {};
+    public readonly bspPortalPolygons: Record<number, BSPBrushPolygonDecodeInfo_T> = {};
     public readonly bspColliders: IBoxDecodeInfo[] = [];
     public readonly bspLeaves: IBSPLeafDecodeInfo_T[] = [];
     public readonly bspZones: IBSPZoneDecodeInfo_T[] = [];
@@ -158,6 +162,8 @@ export class DecodeLibrary {
     // (leaf-baked at decode time) - no decode-time leaf/zone export, see RenderManager.updatePawnVisibility
     public readonly pawnActors: ISkinnedMeshObjectDecodeInfo[] = [];
     public readonly lightActors: (ILightDecodeInfo | ISunLightDecodeInfo)[] = [];
+    public readonly projectors: ProjectorDecodeInfo_T[] = [];
+    public readonly antiPortals: AntiPortalDecodeInfo_T[] = [];
     public readonly audioList: IAudioDecodeInfo[] = []
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors

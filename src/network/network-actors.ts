@@ -21,6 +21,7 @@ import type { ScriptComponent } from "../game/script-component";
 import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import type { CollisionQuery_T } from "../physics/collision-world";
+import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 
 const MIN_ACTOR_DELTA = Math.fround(0.0005);
 const MAX_ACTOR_DELTA = Math.fround(0.4);
@@ -49,6 +50,8 @@ export type NetObject_T = {
     isRemoved: boolean;
     position: Vector3;
     destination: Vector3;
+    moveTime: number;
+    moveOffset: number;
     heading: number;
     name: string;
     title: string;
@@ -127,6 +130,7 @@ export class NetworkActors {
     public userInfo: GamePackets.UserInfo_T = null;
     public inWorld = false;
     public worldLevel: SectorObject = null;
+    public missingSector: string = null;
     public teleportGeneration = 0;
     public teleportInfoPending = false;
     public userAppearanceLoad: Promise<void> = null;
@@ -265,7 +269,7 @@ export class NetworkActors {
 
         if (object && object.kind === "user" || this.network.movement.riders.get(this.userId) === actor) {
             actor.setUnrealScriptProperty("CanIngnoreCollision", false);
-            if (actor === this.network.getParent().getComponent("render").player) asset.playerController.setPawn(actor);
+            if (!this.missingSector && actor === this.network.getParent().getComponent("render").player) asset.playerController.setPawn(actor);
         }
 
         if (object) {
@@ -291,14 +295,23 @@ export class NetworkActors {
         const physics = this.network.getParent().getComponent("physics");
         const generation = this.teleportGeneration;
         const [x, y] = render.getSectorId(render.player.position);
+        const sectorName = `${x}_${y}`;
 
         asset.setStreaming(render, false);
-        const loading = asset.setAlwaysLoaded(render, `${x}_${y}`);
+        if (!asset.hasSector(sectorName) && !this.network.session.game.isPlayingReplay()) {
+            this.missingSector = sectorName;
+            render.player.visible = false;
+            await this.loadAppearance(entry, render.player);
+            if (generation === this.teleportGeneration) this.sendEnterWorld();
+            return;
+        }
+
+        const loading = asset.setAlwaysLoaded(render, sectorName);
         asset.setStreaming(render, true);
         const level = await loading;
 
         if (generation !== this.teleportGeneration) {
-            asset.unloadAlwaysLoaded(render, `${x}_${y}`, level);
+            asset.unloadAlwaysLoaded(render, sectorName, level);
             return;
         }
 
@@ -320,12 +333,36 @@ export class NetworkActors {
         if (generation !== this.teleportGeneration) return;
 
         asset.playerController.call("Possess", [render.player]);
+        this.sendEnterWorld();
+    }
+
+    protected sendEnterWorld(): void {
         this.userAppearanceLoad = null;
         if (this.network.session.game.isPlayingReplay()) this.network.items.skillListLoad = this.network.items.resolveSkillList = null;
         else this.network.items.skillListLoad = new Promise(resolve => this.network.items.resolveSkillList = resolve);
         this.network.session.game.enterWorld();
         this.network.session.game.requestSkillList();
         this.network.session.game.requestSkillCoolTime();
+    }
+
+    public resumeWorld(level: SectorObject): void {
+        const game = this.network.getParent(), render = game.getComponent("render"), player = render.player;
+        const controller = game.getComponent("asset").playerController, physics = game.getComponent("physics");
+
+        this.worldLevel = level;
+        render.setLevel(level);
+        player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
+        controller.setPawn(player);
+        physics.setPawnZone(player, false, true);
+        physics.setPawnVolumes(player);
+        controller.call("Possess", [player]);
+        this.missingSector = null;
+        player.visible = true;
+    }
+
+    public showMissingSector(): void {
+        this.network.ui.showWorld();
+        this.network.ui.showMessage(`Map ${this.missingSector} is missing. Use /unstuck, a Scroll of Escape, or To Village if dead.`);
     }
 
     public updateWorldLevel(): void {
@@ -367,6 +404,8 @@ export class NetworkActors {
             isRemoved: false,
             position: setVector(new Vector3(), info),
             destination: null,
+            moveTime: this.network.getParent().getCurrentTime(),
+            moveOffset: 0,
             heading: info.heading,
             name: info.name,
             title: info.title,
@@ -547,6 +586,11 @@ export class NetworkActors {
         const asset = this.network.getParent().getComponent("asset");
         const generation = this.teleportGeneration;
 
+        if (this.missingSector) {
+            this.showMissingSector();
+            return;
+        }
+
         setLoadingProgress(0.1, loadingTexts.playerAppearance());
         await this.userAppearanceLoad;
         if (!this.inWorld || generation !== this.teleportGeneration) return;
@@ -564,6 +608,11 @@ export class NetworkActors {
         }
 
         if (!this.inWorld || generation !== this.teleportGeneration) return;
+
+        if (!this.network.session.game.isPlayingReplay() && !this.network.movement.isMounted) {
+            const player = render.player, movement = player.getComponent<PawnMovementComponent>("pawnMovement");
+            movement.adjustSpawnLocation(setVector(new Vector3(), this.userInfo));
+        }
 
         render.setZoneMusicEnabled(true);
         this.network.items.requestManorList(); // NConsole 0x1006fa20 -> 0x1006db90 on the switch into the game console
@@ -641,7 +690,8 @@ export class NetworkActors {
         this.updateHero(object, info.isHero);
         this.network.combat.updateTeam(object, info.team);
 
-        void this.spawnPlayer(object, info);
+        if (this.missingSector) object.resolveActor(null);
+        else void this.spawnPlayer(object, info);
     }
 
     public spawnSimulatedPlayer(info: GamePackets.CharInfo_T): NetObject_T {
@@ -843,7 +893,8 @@ export class NetworkActors {
         created.isSummon = info.isSummon;
         created.isAttackable = info.isAttackable;
 
-        void this.spawnNpc(created, info.npcId, info);
+        if (this.missingSector) created.resolveActor(null);
+        else void this.spawnNpc(created, info.npcId, info);
 
         return created;
     }
@@ -906,6 +957,7 @@ export class NetworkActors {
         const questMark = npc.questMark, user = this.userInfo;
 
         object.hasQuestMark = !!questMark && !!user && user.level >= questMark.minLevel && user.level <= questMark.maxLevel && (!questMark.classIds.length || questMark.classIds.includes(user.classId));
+        this.network.movement.advancePendingMovement(object);
         this.attachActor(object, actor, this.findNpcSpawnLocation(object, actor, object.environment ?? (info as GamePackets.PetInfo_T).environment));
         if (info.spawnType === 2 && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
     }
@@ -953,6 +1005,7 @@ export class NetworkActors {
     }
 
     protected attachActor(object: NetObject_T, actor: BaseActor, position: Vector3 = null) {
+        if (!position) this.network.movement.advancePendingMovement(object);
         object.actor = actor;
 
         actor.setUnrealScriptProperty("CreatureID", object.objectId);
@@ -997,6 +1050,8 @@ export class NetworkActors {
     }
 
     public async onDice(info: GamePackets.Dice_T): Promise<void> {
+        if (this.missingSector) return;
+
         const render = this.network.getParent().getComponent("render"), asset = this.network.getParent().getComponent("asset");
         const generation = this.teleportGeneration, owner = this.objects.get(info.objectId);
         const origin = owner && owner.actor ? owner.actor.getWorldPosition(new Vector3()) : null;
@@ -1013,6 +1068,8 @@ export class NetworkActors {
     }
 
     public async onSpawnItem(packet: PacketReader, dropped: boolean) {
+        if (this.missingSector) return;
+
         const ownerId = dropped ? packet.d() : 0;
 
         const objectId = packet.d(), itemId = packet.d();

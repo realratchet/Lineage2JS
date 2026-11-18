@@ -278,7 +278,7 @@ export class BoneAtlas {
         return false;
     }
 
-    public upload(renderer: WebGLRenderer): void {
+    public upload(renderer: WebGLRenderer): boolean {
         this.uploadRows(renderer, this.clipTexture, this.clip, CLIP_ATLAS_WIDTH, this.clipDirtyStart, this.clipDirtyEnd);
         this.clipDirtyStart = Infinity;
         this.clipDirtyEnd = -1;
@@ -286,11 +286,12 @@ export class BoneAtlas {
         if (this.uploadRows(renderer, this.poseTexture, this.pose, BONE_ATLAS_WIDTH, this.dirtyStart, this.dirtyEnd)) {
             this.dirtyStart = 0;
             this.dirtyEnd = this.rows - 1;
-        } else if (this.dirtyEnd < 0) return;
+        } else if (this.dirtyEnd < 0) return true;
 
         const depth = renderer.state.buffers.depth, isReversed = depth.getReversed();
         const target = renderer.getRenderTarget(), face = renderer.getActiveCubeFace(), level = renderer.getActiveMipmapLevel();
         const autoClear = renderer.autoClear, autoReset = renderer.info.autoReset;
+        const calls = renderer.info.render.calls;
 
         this.target.scissor.set(0, this.dirtyStart, BONE_ATLAS_WIDTH, this.dirtyEnd - this.dirtyStart + 1);
 
@@ -299,8 +300,11 @@ export class BoneAtlas {
             renderer.info.autoReset = false;
             renderer.setRenderTarget(this.target);
             this.quad.render(renderer);
+            if (renderer.info.render.calls === calls) return false;
+
             this.dirtyStart = Infinity;
             this.dirtyEnd = -1;
+            return true;
         } finally {
             renderer.setRenderTarget(target, face, level);
             renderer.autoClear = autoClear;

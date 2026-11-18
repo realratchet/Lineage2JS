@@ -30,6 +30,8 @@ import type { UEmitter } from "./un-emitter";
 import type { UPawn } from "./un-pawn";
 import type { UStaticMeshActor } from "./static-mesh/un-static-mesh-actor";
 import type { ULight } from "./un-light";
+import type UProjector from "./un-projector";
+import type UAntiPortalActor from "./un-anti-portal-actor";
 import type { UMusicVolume } from "./un-music-volume";
 import type { UBlockingVolume } from "./un-blocking-volume";
 import type { UAmbientSoundObject } from "./un-ambient-sound";
@@ -367,6 +369,8 @@ export class DecodeLibraryBuilder {
 
         this.library.bspRootOutside = result.bspRootOutside;
         this.library.bspNodes.push(...result.bspNodes);
+        Object.assign(this.library.bspAntiPortals, result.bspAntiPortals);
+        Object.assign(this.library.bspPortalPolygons, result.bspPortalPolygons);
         this.library.bspColliders.push(...result.bspColliders);
         this.library.leafActors.push(...result.leafActors);
         this.library.nodeToSection.push(...result.nodeToSection);
@@ -517,6 +521,22 @@ export class DecodeLibraryBuilder {
             }
 
             switch (actor.constructor.friendlyName) {
+                case "AntiPortalActor": {
+                    const antiPortal = actor.loadSelf() as UAntiPortalActor;
+                    if (antiPortal.isDeleteMe) break;
+                    const info = antiPortal.getDecodeInfo(level.getModel());
+
+                    if (info) this.library.antiPortals.push(info);
+                    break;
+                }
+                case "Projector": {
+                    const projector = actor.loadSelf() as UProjector;
+                    if (projector.isDeleteMe) break;
+                    const info = projector.getDecodeInfo(this);
+
+                    if (info) this.library.projectors.push(info);
+                    break;
+                }
                 case "TerrainInfo": {
                     if (this.settings.loadTerrain !== false)
                         this.pullTerrainInfo(actor.loadSelf() as ATerrainInfo);

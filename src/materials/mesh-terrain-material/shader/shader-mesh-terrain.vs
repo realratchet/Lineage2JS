@@ -1,3 +1,10 @@
+#ifndef USE_PROJECTOR_RECEIVER
+#define USE_SKILL_LIGHTS
+#endif
+#ifdef USE_SKILL_LIGHTS
+varying vec3 vSkillLightPosition;
+varying vec3 vSkillLightNormal;
+#endif
 #include <common>
 #ifdef USE_PROJECTOR_RECEIVER
     varying vec3 vProjectorNormal;
@@ -129,7 +136,7 @@ void main() {
     // #endif
 
     #include <color_vertex>
-    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING )
+    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined(USE_SKILL_LIGHTS)
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
@@ -145,6 +152,17 @@ void main() {
         #endif
         vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
         vProjectorNormal = normalize(normalMatrix * normal);
+    #endif
+    #ifdef USE_SKILL_LIGHTS
+        vec4 skillLightPosition = vec4(transformed, 1.0);
+        #ifdef USE_BATCHING
+            skillLightPosition = batchingMatrix * skillLightPosition;
+        #endif
+        #ifdef USE_INSTANCING
+            skillLightPosition = instanceMatrix * skillLightPosition;
+        #endif
+        vSkillLightPosition = (modelMatrix * skillLightPosition).xyz;
+        vSkillLightNormal = inverseTransformDirection(transformedNormal, viewMatrix);
     #endif
     #include <project_vertex>
     #include <logdepthbuf_vertex>

@@ -1,6 +1,7 @@
 import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 import { Mesh, PlaneGeometry, Vector3, Matrix4, type BufferGeometry, type WebGLRenderer, type Scene, type Camera } from "three";
+import { setParticleRefraction } from "../../rendering/particle-refraction";
 import BaseEmitter from "./base-emitter";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
@@ -25,6 +26,7 @@ const tmpNormal = new Vector3();
 const tmpMatrix = new Matrix4();
 
 export class SpriteEmitter extends BaseEmitter {
+    protected refractionScale: [number, number];
     public spriteDirection: SpriteDirections_T;
     public projectionNormal: Vector3;
 
@@ -35,6 +37,7 @@ export class SpriteEmitter extends BaseEmitter {
 
     protected initSettings(config: SpriteEmitterConfig_T): void {
         this.isSpriteEmitter = true;
+        this.refractionScale = config.refractionScale;
         this.material = config.material;
         this.spriteDirection = config.spriteDirection || "camera";
         // USpriteEmitter::Initialize 0x106a9e99 forces UniformSize for PTDU_None.
@@ -51,6 +54,7 @@ export class SpriteEmitter extends BaseEmitter {
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
         const settings = { ...this.material, usesSubdivision, blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv, rangeFade: this.rangeFade };
         const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
+        if (this.refractionScale) setParticleRefraction(mesh.material, this.refractionScale, false);
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
         return mesh;
@@ -58,14 +62,16 @@ export class SpriteEmitter extends BaseEmitter {
 
     protected createInstancedMesh(capacity: number): InstancedSpriteMesh {
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
-        return new InstancedSpriteMesh(new InstancedParticleMaterial({
+        const material = new InstancedParticleMaterial({
             ...this.material,
             usesSubdivision,
             blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv,
             spriteDirection: this.spriteDirection,
             projectionNormal: this.projectionNormal,
             rangeFade: this.rangeFade
-        }), capacity);
+        });
+        if (this.refractionScale) setParticleRefraction(material, this.refractionScale, true);
+        return new InstancedSpriteMesh(material, capacity);
     }
 }
 
@@ -174,6 +180,7 @@ class ParticleMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParti
 
 type SpriteEmitterConfig_T = EmitterConfig_T & {
     material: ParticleMaterialInitSettings_T | null;
+    refractionScale?: [number, number];
     spriteDirection?: SpriteDirections_T;
     projectionNormal?: [number, number, number];
 };

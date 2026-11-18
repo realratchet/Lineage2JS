@@ -271,7 +271,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         return Math.max(...text.split("\n").map(line => this.textContext.measureText(line).width));
     }
 
-    public wrapText(text: string, width: number, continuationWidth = width): string[] {
+    public wrapText(text: string, width: number, continuationWidth = width, arrSeparators?: string[]): string[] {
         const lines: string[] = [];
         const tokens = text.replace(/[\x00-\x09\x0b-\x1f]/g, "").match(/[^ \n]+| +|\n/g) || [];
         let line = "", lineWidth = 0;
@@ -279,6 +279,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         for (const token of tokens) {
             if (token === "\n") {
                 lines.push(line);
+                if (arrSeparators) arrSeparators.push(" ");
                 line = "";
                 lineWidth = 0;
                 continue;
@@ -287,7 +288,10 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
             const advance = this.measureText(token);
 
             if (token[0] !== " " && line.trim().length && lineWidth + advance > (lines.length ? continuationWidth : width)) {
-                lines.push(line.trimEnd());
+                const trimmed = line.trimEnd();
+
+                lines.push(trimmed);
+                if (arrSeparators) arrSeparators.push(line.slice(trimmed.length));
                 line = "";
                 lineWidth = 0;
             }

@@ -1,4 +1,5 @@
 import { Color, Fog, Frustum, LinearFilter, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer, WebGLRenderTarget } from "three";
+import ZoneVisibility from "./zone-visibility";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 
 const TAN_HALF_FOV = Math.tan(Math.PI / 6);
@@ -13,6 +14,7 @@ type ViewObjectState_T = {
     values: Record<string, any>,
     buffers: Record<string, any>,
     vectors: Record<string, Vector3>,
+    zoneVisibility?: ZoneVisibility,
     batchGroupPool?: any[],
     batchRenderGroups?: any[],
     visibleBatchGroups?: any[],
@@ -20,7 +22,7 @@ type ViewObjectState_T = {
 };
 type ViewMaterialState_T = { material: THREE.Material, visible: boolean };
 
-const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "lastLoggedZone", "lastLoggedLeaf", "lastLoggedStaticMeshLeaf"];
+const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "occludedBSPNodes", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "lastLoggedZone", "lastLoggedLeaf", "lastLoggedStaticMeshLeaf"];
 const arrBatchProperties = ["visibleGroupKey", "needsRelightPass"];
 const arrBatchBuffers = ["elemVisibility", "elemDistances", "elemRelight"];
 
@@ -121,6 +123,9 @@ export class ViewportWindow {
                 state.indexData.set(source);
             }
             if (node.isSectorObject) {
+                state.values.zoneVisibility = node.zoneVisibility;
+                if (!state.zoneVisibility) state.zoneVisibility = new ZoneVisibility();
+                node.zoneVisibility = state.zoneVisibility;
                 for (const name of arrSectorProperties) state.values[name] = node[name];
                 saveBuffer(state, "visibilityCachePlanes", node.visibilityCachePlanes);
                 saveVector(state, "visibilityCachePosition", node.visibilityCachePosition);

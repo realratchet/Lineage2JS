@@ -14,7 +14,7 @@ import type BaseActor from "../../base-actor";
 import type Vehicle from "../../objects/vehicle";
 import type RenderManager from "../../rendering/render-manager";
 import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "../../objects/objects";
-import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
+import type { CheckResult_T, CollisionQuery_T, CollisionOverlapQuery_T } from "../collision-world";
 import { getLatentAction, getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
@@ -65,6 +65,10 @@ const tmpCrouchLocation = new Vector3();
 const tmpCrouchDelta = new Vector3();
 const tmpCrouchExtent = new Vector3();
 const tmpVehicleDestination = new Vector3();
+const tmpSpawnStart = new Vector3();
+const tmpSpawnLocation = new Vector3();
+const tmpSpawnDelta = new Vector3();
+const tmpSpawnExtent = new Vector3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 const arrMoveTemps = [tmpPosition, tmpBodyPosition, tmpStepPosition, tmpStepNormal, tmpRemaining, tmpNormal, tmpStepUp];
 let moveActorDepth = 0;
@@ -1170,9 +1174,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     protected getWaterVolume(position: Vector3): IWaterVolumeDecodeInfo | null {
         if (this.hasStartedPhysics && position.equals(this.getPosition()))
-            return this.getWaterVolumeData(this.getParent().getUnrealScriptProperty("HeadVolume") as unknown as PhysicsVolume);
+            return this.getWaterVolumeData(this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume);
 
-        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
+        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
 
         return this.getWaterVolumeAt(tmpWaterPosition);
     }
@@ -1792,6 +1796,50 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public resetPhysicInit() { this.isPhysicInit = false; }
+
+    public adjustSpawnLocation(position: Vector3): boolean {
+        if ((this.getBaseActor() as Vehicle)?.isVehicle || this.getParent().getUnrealScriptProperty("bPlayedDeath")) return false;
+        if (this.physicsMode !== "walking" && this.physicsMode !== "falling" || this.getWaterVolume(position)) return false;
+
+        const world = this.physicsManager;
+        tmpSpawnStart.copy(position).setZ(position.z + this.collisionHeight);
+        tmpSpawnExtent.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
+        const overlap: CollisionOverlapQuery_T = { location: tmpSpawnStart, extent: tmpSpawnExtent, sourceCollider: this.collider, sourceBody: this.rigidbody, sourceIsPlayer: true, onlyWorldGeometry: true };
+        const blocker = world.overlapCheck(overlap);
+        if (!blocker) return false;
+
+        const query: CollisionQuery_T = { location: tmpSpawnLocation, delta: tmpSpawnDelta, extent: tmpSpawnExtent, sourceActor: this.getParent(), sourceProfile: this.collisionProfile, sourceCollider: this.collider, sourceBody: this.rigidbody, sourceIsPlayer: true, onlyWorldGeometry: true, ignorePawns: true };
+        const step = Math.max(16, this.collisionRadius * 2);
+
+        for (let radius = 0; radius <= 128; radius += step) {
+            const count = radius ? Math.ceil(2 * Math.PI * radius / step) : 1;
+
+            for (let i = 0; i < count; i++) {
+                const angle = i * 2 * Math.PI / count;
+                tmpSpawnLocation.set(tmpSpawnStart.x + radius * Math.cos(angle), tmpSpawnStart.y + radius * Math.sin(angle), tmpSpawnStart.z + MAX_STEP_HEIGHT);
+                tmpSpawnDelta.set(0, 0, -(MAX_STEP_HEIGHT + 64));
+                const floor = world.singleLineCheck(query);
+                if (!floor || floor.normal.z < MIN_FLOOR_Z) continue;
+
+                tmpSpawnLocation.copy(floor.location).setZ(floor.location.z + FLOOR_DISTANCE);
+                const height = tmpSpawnLocation.z - tmpSpawnStart.z;
+                if (height > MAX_STEP_HEIGHT || height < -64) continue;
+
+                overlap.location = tmpSpawnLocation;
+                if (world.overlapCheck(overlap)) continue;
+
+                tmpSpawnDelta.subVectors(tmpSpawnStart, tmpSpawnLocation);
+                const obstruction = world.singleLineCheck(query);
+                if (obstruction && obstruction.actor !== blocker) continue;
+                if (!this.physicsManager.farMoveActor(this.getParent(), tmpSpawnLocation)) continue;
+
+                this.adjustLocation(this.getPosition(), false);
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public teleportTo(position: Vector3, adjustToFloor: boolean = false, base: ICollidable = null) {
         this.vehicleId = 0;

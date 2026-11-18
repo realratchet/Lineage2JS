@@ -286,7 +286,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
     public getRenderSphere(): Sphere { return this.getComponent<PawnRenderableComponent>("pawnRenderable").getRenderSphere(); }
 
-    public setMeshes(meshes: Mesh[]): void { this.getAnimationComponent().setMeshes(meshes); }
+    public setMeshes(meshes: Mesh[], preserveAnimation: boolean = false): void { this.getAnimationComponent().setMeshes(meshes, preserveAnimation); }
 
     public setAnimations(animations: Record<string, AnimationClip>): void { this.getAnimationComponent().setAnimations(animations); }
     public getAnimationNames(): string[] { return this.getAnimationComponent().getAnimationNames(); }

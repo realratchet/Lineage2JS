@@ -1,5 +1,6 @@
 import { AnimationMixer, AnimationAction, KeyframeTrack, Object3D, NormalAnimationBlendMode, AdditiveAnimationBlendMode, InterpolateLinear, LinearInterpolant, Quaternion, QuaternionLinearInterpolant } from "three";
 
+type Tweening_T = { releaseTween(time: number): void };
 type RootState_T = { object: Object3D, skeleton: ClipPosed_T, poseRequirements: PoseRequirements_T, frame: number, count: number, checkedFrame: number, deferredFrame: number, appliedFrame: number, activeBindings: number, constantState: ActionState_T, constantFrame: number, constantVersion: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindingVersion: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
 type PoseRequirements_T = { version: number };
 type BindingState_T = { root: RootState_T, target: Object3D, frame: number, wasFast: boolean, isLazyBone: boolean, lazyVersion: number };
@@ -112,6 +113,7 @@ function isLazy(binding: any, state: BindingState_T, frame: number): boolean { /
 
 export class SkeletalAnimationMixer extends AnimationMixer {
     protected readonly suspendedRoots = new WeakMap<Object3D, number>();
+    protected readonly tweening = new Set<Tweening_T>();
     protected readonly rootStates = new WeakMap<Object3D, RootState_T>();
     protected readonly actionStates = new WeakMap<AnimationAction, ActionState_T>();
     protected readonly bindingStates = new WeakMap<object, BindingState_T>();
@@ -126,6 +128,11 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     protected cachedBindingVersion: number = -1;
     protected frame: number = 0;
     protected direction: number = 0;
+
+    public setTweening(component: Tweening_T, tweening: boolean): void {
+        if (tweening) this.tweening.add(component);
+        else this.tweening.delete(component);
+    }
 
     public setRootEnabled(root: Object3D, enabled: boolean): void {
         const suspendedAt = this.suspendedRoots.get(root);
@@ -253,6 +260,12 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     }
 
     public update(deltaTime: number): this {
+        deltaTime *= this.timeScale;
+        const time = this.time + deltaTime;
+
+        if (this.tweening.size)
+            for (const component of this.tweening) component.releaseTween(time);
+
         const mixer = this as any, actions = mixer._actions, count = mixer._nActiveActions;
         const frame = ++this.frame;
         let fast = !mixer._listeners?.loop?.length;
@@ -272,9 +285,9 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         }
 
         this.getBindingStates();
-        deltaTime *= this.timeScale;
         const bindingVersion = this.bindingVersion;
-        const time = this.time += deltaTime, direction = this.direction = Math.sign(deltaTime), accuIndex = mixer._accuIndex ^= 1;
+        const direction = this.direction = Math.sign(deltaTime), accuIndex = mixer._accuIndex ^= 1;
+        this.time = time;
 
         for (let i = 0; i < count; i++) {
             const action = actions[i], object = action.getRoot(), state = action.enabled ? this.getActionState(action) : null;

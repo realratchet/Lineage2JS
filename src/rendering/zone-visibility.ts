@@ -1,13 +1,21 @@
 import { Plane, Vector3 } from "three";
 import { PolyFlags_T } from "../assets/unreal/un-polys";
+import type { BSPBrushPolygonDecodeInfo_T } from "../assets/unreal/bsp/un-bsp-node";
+import type { AntiPortalActor, ActorAntiPortalVolume_T } from "../objects/anti-portal-actor";
 import type { SectorObject } from "../objects/zone-object";
+import { BSPAntiPortalVolume, getPolygonArea, planesContainBounds } from "./anti-portal-volume";
 
 type Rect_T = { minX: number, minY: number, maxX: number, maxY: number };
 type Portal_T = { node: SectorObject["bspNodes"][number], rect: Rect_T, source: number, target: number, visible: boolean };
+type PortalPolygon_T = { vertices: Vector3[], area: number };
 const arrZoneBits = Array.from({ length: 64 }, (_, index) => 1n << BigInt(index));
 const arrMin = [0, 0, 0], arrMax = [0, 0, 0];
 const tmpVertex = new Vector3();
 const tmpIntersection = new Vector3();
+
+function portalDistance(node: Portal_T["node"], position: Vector3): number {
+    return node.plane.x * position.x + node.plane.y * position.y + node.plane.z * position.z - node.plane.w;
+}
 
 export class ZoneVisibility {
     protected nodes: SectorObject["bspNodes"];
@@ -18,13 +26,117 @@ export class ZoneVisibility {
     protected readonly zones: number[] = [];
     protected readonly queued = new Uint8Array(64);
     protected mask = 0n;
-    protected cameraZone = -1;
+    protected cameraMask = 0n;
+    protected readonly antiPortals: ActorAntiPortalVolume_T[] = [];
+    protected readonly cacheActorVolumes = new WeakMap<AntiPortalActor, ActorAntiPortalVolume_T>();
+    protected readonly bspAntiPortals: BSPAntiPortalVolume[] = [];
+    protected readonly cacheBSPAntiPortals = new WeakMap<BSPBrushPolygonDecodeInfo_T, BSPAntiPortalVolume>();
+    protected readonly cacheBSPPortalPolygons = new WeakMap<BSPBrushPolygonDecodeInfo_T, PortalPolygon_T>();
+    protected readonly bspPortalVisibility = new Map<number, boolean>();
+    protected antiPortalMask = 0n;
     public active = false;
+    public get hasAntiPortals() { return this.antiPortals.length !== 0 || this.bspAntiPortals.length !== 0; }
+    public get hasActorAntiPortals() { return this.antiPortals.length !== 0; }
+    public get hasBSPAntiPortals() { return this.bspAntiPortals.length !== 0; }
 
-    public prepare(sector: SectorObject, position: THREE.Vector3, frustum: THREE.Frustum, mask: bigint): bigint {
+    public reset(): void {
+        this.active = false;
+        this.antiPortals.length = 0;
+        for (const portal of this.bspAntiPortals) portal.zoneMask = 0n;
+        this.bspAntiPortals.length = 0;
+        this.bspPortalVisibility.clear();
+    }
+
+    public addBSPAntiPortal(info: BSPBrushPolygonDecodeInfo_T, position: Vector3, rangeOrigin: Vector3, range: number, sphere: THREE.Sphere, zoneMask: bigint): void {
+        if (!zoneMask) return;
+        let portal = this.cacheBSPAntiPortals.get(info);
+        if (!portal) {
+            portal = new BSPAntiPortalVolume(info);
+            this.cacheBSPAntiPortals.set(info, portal);
+        }
+
+        if (!portal.zoneMask && portal.extrude(position, rangeOrigin, range, sphere, zoneMask))
+            this.bspAntiPortals.push(portal);
+    }
+
+    public isBSPSphereOccluded(zoneMask: bigint, sphere: THREE.Sphere): boolean {
+        for (const portal of this.bspAntiPortals)
+            if (portal.zoneMask & zoneMask && portal.containsSphere(sphere)) return true;
+        return false;
+    }
+
+    public clipBSPPortal(info: BSPBrushPolygonDecodeInfo_T, source: bigint, target: bigint): boolean {
+        const seen = this.bspPortalVisibility.get(info.surface);
+        if (seen !== undefined) return seen;
+        this.bspPortalVisibility.set(info.surface, true);
+
+        if (!this.hasBSPAntiPortals) return true;
+        let polygon = this.cacheBSPPortalPolygons.get(info);
+        if (!polygon) {
+            const vertices = info.vertices.map(vertex => new Vector3().fromArray(vertex));
+            polygon = { vertices, area: getPolygonArea(vertices) };
+            this.cacheBSPPortalPolygons.set(info, polygon);
+        }
+
+        // Engine.dll 0x91c83c clips the original brush polygon in camera-side occluders.
+        for (let i = this.bspAntiPortals.length - 1; i >= 0; i--) {
+            const portal = this.bspAntiPortals[i];
+            if (!(portal.zoneMask & source)) continue;
+
+            const area = portal.clipPolygon(polygon.vertices, polygon.area);
+            if (area >= polygon.area) {
+                this.bspPortalVisibility.set(info.surface, false);
+                return false;
+            }
+            if (area > 0) portal.zoneMask |= target;
+        }
+        return true;
+    }
+
+    public hideBSPPortal(info: BSPBrushPolygonDecodeInfo_T): void { this.bspPortalVisibility.set(info.surface, false); }
+
+    public prepareAntiPortals(sector: SectorObject, position: THREE.Vector3, frustum: THREE.Frustum, mask: bigint): void {
+        this.antiPortalMask = mask;
+        if (!sector.antiPortals.length) return;
+
+        const dot = frustum.planes[2].normal.dot(frustum.planes[3].normal);
+        const tanHalfFov = Math.sqrt((1 + dot) / (1 - dot));
+        for (const portal of sector.antiPortals) {
+            if (!(portal.zoneMask & mask) || !this.intersectsBox(portal.zoneMask, portal.bounds, false)) continue;
+
+            let volume = this.cacheActorVolumes.get(portal);
+            if (!volume) {
+                volume = portal.createVolume();
+                this.cacheActorVolumes.set(portal, volume);
+            }
+            if (portal.extrude(position, frustum, tanHalfFov, volume)) this.antiPortals.push(volume);
+        }
+    }
+
+    public isOccluded(mask: bigint, min: ArrayLike<number>, max: ArrayLike<number>, includeBSP = true): boolean {
+        if (!this.hasAntiPortals) return false;
+        mask &= this.antiPortalMask;
+        if (!mask) return false;
+
+        for (const portal of this.antiPortals) {
+            if (!(mask & portal.zoneMask) || !planesContainBounds(portal.planes, min, max)) continue;
+
+            mask &= ~portal.zoneMask;
+            if (!mask) return true;
+        }
+        if (includeBSP) for (const portal of this.bspAntiPortals) {
+            if (!(mask & portal.zoneMask) || !portal.containsBounds(min, max)) continue;
+
+            mask &= ~portal.zoneMask;
+            if (!mask) return true;
+        }
+        return false;
+    }
+
+    public prepare(sector: SectorObject, position: THREE.Vector3, frustum: THREE.Frustum, mask: bigint, exterior = false): bigint {
         const cameraZone = sector.findPositionZone(position);
         this.active = false;
-        if (cameraZone === null || cameraZone <= 0 || cameraZone >= 64 || sector.outdoorZoneMask & (1n << BigInt(cameraZone))) return mask;
+        if (!exterior && (cameraZone === null || cameraZone <= 0 || cameraZone >= 64 || sector.outdoorZoneMask & (1n << BigInt(cameraZone)))) return mask;
 
         if (this.nodes !== sector.bspNodes) {
             this.nodes = sector.bspNodes;
@@ -39,15 +151,27 @@ export class ZoneVisibility {
             }
         }
 
+        if (exterior) {
+            let visible = false;
+            for (const { node } of this.portals) {
+                const distance = portalDistance(node, position);
+                const source = node.zones[distance > 0 ? 1 : 0], target = node.zones[distance > 0 ? 0 : 1];
+                if (!(sector.outdoorZoneMask & arrZoneBits[source]) || sector.outdoorZoneMask & arrZoneBits[target]) continue;
+                if (frustum.intersectsSphere(node.exclusiveSphereBound)) { visible = true; break; }
+            }
+            if (!visible) return sector.outdoorZoneMask;
+        }
+
         const planes = frustum.planes, near = planes[5];
         for (const portal of this.portals) {
             const node = portal.node, vertices = node.portalVertices, rect = portal.rect;
-            const distance = node.plane.x * position.x + node.plane.y * position.y + node.plane.z * position.z - node.plane.w;
+            const distance = portalDistance(node, position);
             portal.source = node.zones[distance > 0 ? 1 : 0];
             portal.target = node.zones[distance > 0 ? 0 : 1];
             rect.minX = rect.minY = 0;
             rect.maxX = rect.maxY = 1;
-            portal.visible = true;
+            portal.visible = (!node.portalPolygon || this.bspPortalVisibility.get(node.portalPolygon.surface) !== false) && (!exterior || frustum.intersectsSphere(node.exclusiveSphereBound));
+            if (!portal.visible) continue;
             if (!vertices || vertices.length < 9 || Math.abs(distance) < 1) continue;
 
             rect.minX = rect.minY = Infinity;
@@ -78,14 +202,18 @@ export class ZoneVisibility {
             rect.minX = rect.minY = Infinity;
             rect.maxX = rect.maxY = -Infinity;
         }
-        const view = this.rects[cameraZone];
-        view.minX = view.minY = 0;
-        view.maxX = view.maxY = 1;
         this.queue.length = 0;
-        this.queue.push(cameraZone);
         this.queued.fill(0);
-        this.queued[cameraZone] = 1;
-        this.mask = 1n << BigInt(cameraZone);
+        this.cameraMask = exterior ? sector.outdoorZoneMask : 1n << BigInt(cameraZone);
+        this.mask = this.cameraMask;
+        for (let zone = 0; zone < 64; zone++) {
+            if (!(this.cameraMask & arrZoneBits[zone])) continue;
+            const view = this.rects[zone];
+            view.minX = view.minY = 0;
+            view.maxX = view.maxY = 1;
+            this.queue.push(zone);
+            this.queued[zone] = 1;
+        }
         for (let i = 0; i < this.queue.length; i++) {
             const source = this.queue[i], from = this.rects[source];
             this.queued[source] = 0;
@@ -120,7 +248,6 @@ export class ZoneVisibility {
             this.clipPlane(clipped[2], planes[2], planes[3], rect.minY);
             this.clipPlane(clipped[3], planes[3], planes[2], 1 - rect.maxY);
         }
-        this.cameraZone = cameraZone;
         this.active = true;
         return this.mask;
     }
@@ -142,13 +269,14 @@ export class ZoneVisibility {
         target.constant += 1;
     }
 
-    public intersectsBox(mask: bigint, box: THREE.Box3): boolean {
+    public intersectsBox(mask: bigint, box: THREE.Box3, includeBSP = true): boolean {
         box.min.toArray(arrMin); box.max.toArray(arrMax);
-        return this.intersectsBounds(mask, arrMin, arrMax);
+        return this.intersectsBounds(mask, arrMin, arrMax, includeBSP);
     }
 
-    public intersectsBounds(mask: bigint, min: ArrayLike<number>, max: ArrayLike<number>): boolean {
-        if (!this.active || !mask || mask & arrZoneBits[this.cameraZone]) return true;
+    public intersectsBounds(mask: bigint, min: ArrayLike<number>, max: ArrayLike<number>, includeBSP = true): boolean {
+        if (this.isOccluded(mask, min, max, includeBSP)) return false;
+        if (!this.active || !mask || mask & this.cameraMask) return true;
         mask &= this.mask;
         for (const zone of this.zones) {
             if (!(mask & arrZoneBits[zone])) continue;

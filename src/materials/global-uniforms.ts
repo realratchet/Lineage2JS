@@ -1,5 +1,7 @@
 import { Matrix4, ShaderMaterial, Uniform, UniformsLib, UniformsUtils, Vector3, Vector4 } from "three";
 
+export const NUM_SKILL_LIGHTS = 8;
+
 export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     UniformsLib.fog, {
         globalTimeSeconds: new Uniform(0),
@@ -7,6 +9,9 @@ export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
         staticMeshSunAmbient: new Uniform(new Vector3()),
         staticMeshHardwareSunColor: new Uniform(new Vector3()),
         staticMeshHardwareSunDirection: new Uniform(new Vector3()),
+        skillLightCount: new Uniform(0),
+        skillLightPositions: new Uniform(Array.from({ length: NUM_SKILL_LIGHTS }, () => new Vector4())),
+        skillLightColors: new Uniform(Array.from({ length: NUM_SKILL_LIGHTS }, () => new Vector3())),
         clippingSphere: new Uniform(new Vector4(0, 0, 0, Infinity)),
         clippingFade: new Uniform(1024), // GL2ActorAppearingType 1 fades over the last 1024 units of range
         indoorRangeIgnored: new Uniform(0),

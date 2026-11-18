@@ -7,6 +7,7 @@ import CollisionOctree from "./collision-octree";
 import type { DecodeLibrary } from "@l2js/engine";
 import type PhysicsVolume from "../objects/physics-volume";
 import type MusicVolume from "../objects/music-volume";
+import type Projector from "../objects/projector";
 import { getProperty, getScriptVM, type ScriptHost_T, type ScriptValue_T, type UnScriptVM } from "../ue-script/vm";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
 import type BaseActor from "../base-actor";
@@ -15,7 +16,7 @@ import type StaticMeshActor from "../objects/static-mesh-actor";
 import type Volume from "../objects/volume";
 import type Terrain from "../objects/terrain";
 import type { ScriptComponent } from "../game/script-component";
-import { beginTouch, endTouch, releaseTouching } from "../objects/components/transform-component";
+import { beginTouch, endTouch, releaseTouching, type TouchActor_T } from "../objects/components/transform-component";
 import VolumeCollisionComponent from "./components/volume-collision-component";
 
 const tmpVolumeBounds = new Box3();
@@ -50,7 +51,7 @@ const CHECK_RESULT_POOL_SIZE = 128;
 const RAY_RESULT_POOL_SIZE = 2;
 
 export type CollisionActor_T = BaseActor | CollidingMesh | StaticMeshActor | Volume;
-type CollisionSource_T = CollisionActor_T | PhysicsVolume | MusicVolume;
+type CollisionSource_T = CollisionActor_T | PhysicsVolume | MusicVolume | Projector;
 
 export type CollisionQuery_T = {
     hit?: CheckResult_T | null;
@@ -659,16 +660,19 @@ export class CollisionWorld {
             else this.updatePawnCollision(pawn as CollisionActor_T);
         }
 
-        if (collideActors && !previous && (level || registered)) {
-            const actors = this.actorEncroachmentCheck(pawn, tmpBodyPosition.fromArray(pawn.getUnrealScriptProperty("Location") as number[]));
-            const vm = pawn.getComponent<ScriptComponent>("script").getVM();
-
-            for (const actor of actors)
-                if (actor !== pawn && actor !== pawn.getUnrealScriptProperty("Level") && !isJoinedTo(actor, pawn) && !this.isBlockedBy(pawn, actor, vm))
-                    beginTouch(pawn, actor as BaseActor);
-        }
+        if (collideActors && !previous && (level || registered))
+            this.findTouchingActors(pawn, tmpBodyPosition.fromArray(pawn.getUnrealScriptProperty("Location") as number[]));
 
         pawn.setUnrealScriptProperty("bNetDirty", true);
+    }
+
+    public findTouchingActors(source: CollisionSource_T, location: Vector3): void {
+        const actors = this.actorEncroachmentCheck(source, location);
+        const vm = source.getComponent<ScriptComponent>("script").getVM();
+
+        for (const actor of actors)
+            if (actor !== source && actor !== source.getUnrealScriptProperty("Level") && !isJoinedTo(actor, source) && !this.isBlockedBy(source, actor, vm))
+                beginTouch(source, actor as TouchActor_T);
     }
 
     public physicsVolumePointCheck(location: Vector3, volumes: PhysicsVolume[]): PhysicsVolume[] {
@@ -852,7 +856,7 @@ export class CollisionWorld {
                     const targetPhysics = getTraceProperty(target, "Physics");
                     if (record.object) record.object.getWorldPosition(tmpEncroachmentCenter);
                     else tmpEncroachmentCenter.fromArray(record.actor.position);
-                    const usePrimitive = targetProfile.collideActors && (targetPhysics === 13 || targetPhysics === 14);
+                    const usePrimitive = targetProfile.collideActors && (targetPhysics === EPhysics_T.PHYS_Karma || targetPhysics === EPhysics_T.PHYS_KarmaRagDoll);
                     if (encroachmentOverlap(source, profile, location, target, targetProfile, record.primitive, tmpEncroachmentCenter, usePrimitive, this, vm)) actors.push((actor as any).getCollisionActor(record.firstTriangle));
                 }
                 continue;
@@ -866,7 +870,7 @@ export class CollisionWorld {
             else actor.getWorldPosition(tmpEncroachmentCenter);
 
             const targetPhysics = getTraceProperty(actor, "Physics");
-            const usePrimitive = !!(actor as any).isVolume || !!(actor as any).isMovableObject || targetProfile.collideActors && (targetPhysics === 13 || targetPhysics === 14);
+            const usePrimitive = targetPrimitive.kind === "projector" || !!(actor as any).isVolume || !!(actor as any).isMovableObject || targetProfile.collideActors && (targetPhysics === EPhysics_T.PHYS_Karma || targetPhysics === EPhysics_T.PHYS_KarmaRagDoll);
             if (encroachmentOverlap(source, profile, location, actor, targetProfile, targetPrimitive, tmpEncroachmentCenter, usePrimitive, this, vm)) actors.push(actor);
         }
 
@@ -1061,8 +1065,10 @@ export class CollisionWorld {
 
             this.stats.analyticalPrimitiveTests++;
 
-            if (pointPrimitive(entry.primitive, query.location, query.extent)) {
+            const hit = pointPrimitive(entry.primitive, query.location, query.extent);
+            if (hit) {
                 if (unsupported) this.stats.unsupportedQueries++;
+                if (records && records.length) return (entry.actor as CollidingMesh).getCollisionActor(hit.item);
                 return (entry.actor as any).scriptActor || entry.actor;
             }
         }
@@ -1490,7 +1496,7 @@ export class CollisionWorld {
 
         const source = query.sourceProfile || defaultProfile;
 
-        if (source.isPawn && target.isPawn && (actor as BaseActor).isEnterRising()) return false;
+        if (source.isPawn && target.isPawn && actor.isEnterRising?.()) return false;
         if (target.worldGeometry) return source.collideWorld;
         if (!target.collideActors || !source.collideActors) return false;
         if (!(source.isPawn ? target.blockPlayers : target.blockActors)) return false;

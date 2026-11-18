@@ -297,6 +297,7 @@ export class PawnCrowd extends Object3D {
     protected lightBase: number = 0;
     protected lightCount: number = 0;
     protected isFlushed: boolean = false;
+    protected isAtlasReady: boolean = false;
     protected isLayoutDirty: boolean = false;
     protected isStaticDirty: boolean = false;
 
@@ -738,7 +739,7 @@ export class PawnCrowd extends Object3D {
     protected flush(renderer: WebGLRenderer, group: PawnCrowdMesh): void {
         if (!this.isFlushed) {
             this.isFlushed = true;
-            boneAtlas.upload(renderer);
+            this.isAtlasReady = boneAtlas.upload(renderer);
             for (const arrays of this.arrays.values()) for (const array of arrays) array.upload(renderer);
             this.dynamicTexture.needsUpdate = true;
             if (this.isStaticDirty) {
@@ -756,7 +757,7 @@ export class PawnCrowd extends Object3D {
         uniforms.pawnCrowdDynamic.value = this.dynamicTexture;
         uniforms.pawnCrowdDrawBase.value = group.drawBase;
         material.uniformsNeedUpdate = true;
-        (group as any)._multiDrawCount = group.drawCount;
+        (group as any)._multiDrawCount = this.isAtlasReady ? group.drawCount : 0;
     }
 
     public dispose(): void {

@@ -35,6 +35,7 @@ export type ICollidable = THREE.Object3D & {
     getCollisionRadius(): number;
     getCollisionProfile?(): ActorCollisionProfile_T;
     getCollisionPrimitive?(): CollisionPrimitive_T;
+    isEnterRising?(): boolean;
     getBaseActor?(): ICollidable | null;
     getBasedActors?(): ReadonlySet<ICollidable>;
     addBasedActor?(actor: ICollidable): void;
@@ -74,14 +75,20 @@ export type CollisionTriangleIndex_T = {
 
 
 
-type CollisionPrimitiveUnion_T =
+type CollisionPrimitiveUnion_T = {
+    bounds: THREE.Box3;
+    supportsZeroExtent: boolean;
+    supportsNonZeroExtent: boolean;
+    supportsPointCheck: boolean;
+} & (
+    {
+        kind: "projector";
+        planes: THREE.Plane[];
+        direction: THREE.Vector3;
+    }
     | {
         kind: "bsp";
         model: CollisionModel_T;
-        bounds: THREE.Box3;
-        supportsZeroExtent: boolean;
-        supportsNonZeroExtent: boolean;
-        supportsPointCheck: boolean;
     }
     | {
         kind: "staticMesh";
@@ -97,10 +104,6 @@ type CollisionPrimitiveUnion_T =
         useSimpleLineCollision?: boolean;
         useSimpleBoxCollision?: boolean;
         matrixWorld: THREE.Matrix4;
-        bounds: THREE.Box3;
-        supportsZeroExtent: boolean;
-        supportsNonZeroExtent: boolean;
-        supportsPointCheck: boolean;
     }
     | {
         kind: "terrain";
@@ -108,21 +111,13 @@ type CollisionPrimitiveUnion_T =
         indices: Uint32Array;
         index: CollisionTriangleIndex_T;
         matrixWorld: THREE.Matrix4;
-        bounds: THREE.Box3;
-        supportsZeroExtent: boolean;
-        supportsNonZeroExtent: boolean;
-        supportsPointCheck: boolean;
     }
     | {
         kind: "cylinder";
         center: THREE.Vector3;
         radius: number;
         halfHeight: number;
-        bounds: THREE.Box3;
-        supportsZeroExtent: boolean;
-        supportsNonZeroExtent: boolean;
-        supportsPointCheck: boolean;
-    };
+    });
 
 export type CollisionPrimitiveKind = CollisionPrimitiveUnion_T["kind"];
 

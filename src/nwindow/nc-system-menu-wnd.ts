@@ -22,6 +22,8 @@ export class NCSystemMenuWnd { // NCSystemMenuWnd (vtable 0x101bd030): NCConsole
     public onSelect: (item: SystemMenuItem_T) => void = null;
     protected readonly layer: NDomLayer;
     protected readonly minimized: NCMinimizedWnd;
+    protected readonly arrButtons: HTMLElement[] = [];
+    protected readonly arrLabelElements: HTMLDivElement[] = [];
 
     public constructor(layer: NDomLayer) {
         const manager = layer.getManager();
@@ -36,17 +38,31 @@ export class NCSystemMenuWnd { // NCSystemMenuWnd (vtable 0x101bd030): NCConsole
 
         arrIcons.forEach((path, index) => { // icon buttons 36x36 at (13, 29 + 37i), labels at (51, 43 + 37i).
             const [labelId, suffix] = arrLabels[index];
-            const label = suffix ? `${manager.getSysString(labelId)} ${suffix}` : manager.getSysString(labelId);
+            const label = manager.formatWindowKeyText(suffix ? `${manager.getSysString(labelId)} ${suffix}` : manager.getSysString(labelId));
             const button = layer.button(this.element, 13, 29 + index * 37, 36, 36, path, `${path}_down`, null, null, () => { if (this.onSelect) this.onSelect(arrItems[index]); });
 
             button.setAttribute("role", "button");
             button.setAttribute("aria-label", label);
-            layer.text(this.element, label, TEXT_COLOR, FontType_T.SMALL, 51, 43 + index * 37);
+            this.arrButtons.push(button);
+            this.arrLabelElements.push(layer.text(this.element, label, TEXT_COLOR, FontType_T.SMALL, 51, 43 + index * 37));
         });
+        this.updateKeyBindings();
     }
 
     public placeOnScreen(width: number, height: number) { this.minimized.place(width - WIDTH, height - HEIGHT - 46); }
     public isVisible() { return !this.element.hidden; }
+    public updateKeyBindings() {
+        const manager = this.layer.getManager(), canvas = manager.canvas, lineHeight = canvas.getLineHeight();
+
+        arrLabels.forEach(([id, suffix], index) => {
+            const label = manager.formatWindowKeyText(suffix ? `${manager.getSysString(id)} ${suffix}` : manager.getSysString(id));
+            const element = this.arrLabelElements[index], arrLines = canvas.wrapText(label, WIDTH - 57);
+
+            this.arrButtons[index].setAttribute("aria-label", label);
+            this.layer.renderText(element, arrLines.join("\n"), TEXT_COLOR);
+            this.layer.place(element, 51, 43 + index * 37 - Math.trunc((arrLines.length - 1) * lineHeight / 2));
+        });
+    }
     public setVisible(visible: boolean) {
         if (visible && this.minimized.isVisible()) this.minimized.restore(true);
         this.element.hidden = !visible;

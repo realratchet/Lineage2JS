@@ -1,3 +1,6 @@
+#if !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
+#define USE_SKILL_LIGHTS
+#endif
 uniform vec3 diffuse;
 #ifdef USE_TEX_MODIFIER
 uniform vec3 texModifierColor;
@@ -601,9 +604,29 @@ vec3 getFadeColor(FadeData fade) {
     #include <projector_receiver>
 #endif
 
+#ifdef USE_AUTHORED_PROJECTOR
+    #include <projector_fragment>
+    uniform samplerCube projectorAttenuation;
+    uniform vec4 projectorPlanes[6];
+    uniform bool projectOnBackfaces;
+    varying vec4 vAuthoredProjection;
+    varying vec3 vAuthoredProjectorWorld;
+    varying vec3 vAuthoredProjectorNormal;
+
+    vec4 getAuthoredProjection(vec3 baseColor) {
+        for (int i = 0; i < 6; i++) {
+            if (dot(projectorPlanes[i], vec4(vAuthoredProjectorWorld, 1.0)) > 0.0) discard;
+        }
+        float facing = projectOnBackfaces ? 1.0 : textureCube(projectorAttenuation, vAuthoredProjectorNormal).a;
+        return getProjectorColor(vAuthoredProjection, baseColor, facing);
+    }
+#endif
+
 #ifdef USE_VERTEX_ALPHA_MASK
     varying float vVertexAlpha;
 #endif
+
+#include <skill_light>
 
 void main() {
     #include <clipping_planes_fragment>
@@ -782,6 +805,10 @@ void main() {
         gl_FragColor = getProjectorShadow();
         return;
     #endif
+    #ifdef USE_AUTHORED_PROJECTOR
+        gl_FragColor = getAuthoredProjection(diffuseColor.rgb);
+        return;
+    #endif
     // #include <specularmap_fragment>
     
     // accumulation (baked indirect lighting only)
@@ -869,6 +896,10 @@ void main() {
 
     #ifdef USE_BSP_AMBIENT
         outgoingLight = clamp(outgoingLight, 0.0, 1.0) * ambient.color * 2.0;
+    #endif
+
+    #ifdef USE_SKILL_LIGHTS
+        outgoingLight += getSkillLight() * diffuseColor.rgb;
     #endif
 
     #if defined(USE_SPECULAR) && !defined(USE_SELF_ILLUMINATION)

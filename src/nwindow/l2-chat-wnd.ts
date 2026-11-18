@@ -28,6 +28,7 @@ export class L2ChatWnd {
         this.peerLabel = layer.text(this.element, "", 0xffdcdcdc, undefined, 11, 54);
         this.history = layer.scrollPane(this.element, 9, 96, 238, 252, 18, false, 14);
         this.history.content.setAttribute("role", "log");
+        this.history.content.classList.add("ndom-selectable");
         const setScroll = this.history.setScroll;
 
         this.history.setScroll = (position, isClamped = true) => {
@@ -120,11 +121,14 @@ export class L2ChatWnd {
         if (!arrLines.length) return;
 
         let scroll = this.history.getScroll();
+        const isAtBottom = scroll >= Math.max(0, this.arrLines.length - 14) * 18;
 
         arrLines.forEach(line => {
             this.arrLines.push({ text: isIndented ? `   ${line}` : line, color });
-            if (this.arrLines.length > 200) this.arrLines.shift();
-            else if (this.arrLines.length > 14) scroll += 18;
+            if (this.arrLines.length > 200) {
+                this.arrLines.shift();
+                if (!isAtBottom) scroll = Math.max(0, scroll - 18);
+            } else if (isAtBottom && this.arrLines.length > 14) scroll += 18;
         });
         this.history.setContentHeight(this.arrLines.length * 18);
         this.history.setScroll(scroll);

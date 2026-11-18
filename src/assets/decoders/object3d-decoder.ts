@@ -482,7 +482,7 @@ export function* decodeSectorCoreSteps(library: DecodeLibrary): Generator<void, 
     yield;
     for (const bspZone of library.bspZones) sector.zones.add(yield* decodeZoneObjectSteps(library, bspZone.zoneInfo));
 
-    sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
+    sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves, library.bspAntiPortals, library.bspPortalPolygons);
     yield;
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
     yield;
@@ -1133,6 +1133,7 @@ function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeI
 
     const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), {
         material,
+        refractionScale: info.refractionScale,
         spriteDirection: info.spriteDirection,
         projectionNormal: info.projectionNormal
     }));

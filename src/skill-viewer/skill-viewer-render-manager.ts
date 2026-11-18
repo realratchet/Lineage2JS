@@ -101,7 +101,8 @@ export class SkillViewerRenderManager extends RenderManager {
         this.getPhysicsManager().setTriggerPosition(this.camera.position);
         this.updatePawnVisibility();
 
-        this.skillLightProbe.update(this.renderer);
+        this.camera.getWorldPosition(this.skillLightFocus);
+        this.skillLightProbe.update(this.renderer, this.skillLightFocus);
 
         for (const component of this.pawnRenderables) this.updateViewerLighting(component.getParent());
         for (const component of this.actorMeshes) this.updateViewerLighting(component.getParent());

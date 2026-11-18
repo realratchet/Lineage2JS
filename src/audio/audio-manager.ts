@@ -1,6 +1,6 @@
 import { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
-import type { Object3D } from "three";
+import { Object3D, Vector3 } from "three";
 import { randInt } from "three/src/math/MathUtils";
 import type AmbientSoundComponent from "./components/ambient-sound-component";
 import fetchAsset from "../assets/asset-source";
@@ -661,11 +661,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     protected readonly activeAmbientSounds = new Map<string, AmbientChannel_T>();
+    protected readonly mutedAmbientSounds = new Set<string>();
     protected readonly arrChannelNodes: ChannelNodes_T[] = [];
     protected readonly ambientSounds = new Set<AmbientSoundComponent>();
     protected readonly cacheAmbientCells = new Map<number, AmbientSoundComponent[]>();
     protected isAmbientGridDirty = true;
     protected readonly ambientCandidates: AmbientCandidate_T[] = [];
+    protected readonly ambientPosition = new Vector3();
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
@@ -673,12 +675,14 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly cacheDecodedSoundBuffers = new WeakMap<Uint8Array | Blob, AudioBuffer>();
 
     public registerAmbientSound(component: AmbientSoundComponent): void {
+        component.info.maxDistance = component.info.refDistance * 50; // Core.dll 0x101cdf80; normalize older decoded sectors too.
         this.ambientSounds.add(component);
         this.isAmbientGridDirty = true;
     }
 
     public unregisterAmbientSound(component: AmbientSoundComponent): void {
         this.ambientSounds.delete(component);
+        this.mutedAmbientSounds.delete(component.info.uuid);
         this.isAmbientGridDirty = true;
         this.stopAmbientSound(component.info.uuid);
         this.ambientSlotAnchors.delete(component.info.uuid);
@@ -707,7 +711,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.isAmbientGridDirty = false;
     }
 
-    public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isSoundDay: boolean, isSoundNight: boolean, isSubmerged: boolean): void {
+    public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, vx: number, vy: number, vz: number, isSoundDay: boolean, isSoundNight: boolean, isSubmerged: boolean): void {
+        this.ambientPosition.set(px, py, pz);
+
         if (this.gameManager.isWorldLoading()) {
             for (const id of this.activeAmbientSounds.keys()) this.stopAmbientSound(id);
             return;
@@ -736,13 +742,15 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
             if (distSq > maxDistSq) continue;
 
-            // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
-            const priority = info.volume * this.alAudio.ambientVolume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
+            const viewDx = info.position[0] - vx, viewDy = info.position[1] - vy, viewDz = info.position[2] - vz;
+            // ALAudio.dll SoundPriority 0x100098ec..0x10009935 uses GetViewTarget().Location.
+            const priority = info.volume * this.alAudio.ambientVolume * Math.min(Math.max(1 - (viewDx * viewDx + viewDy * viewDy + viewDz * viewDz) / maxDistSq, 0.01), 1);
 
             const active = this.activeAmbientSounds.get(info.uuid);
             if (active) {
                 active.priority = priority;
                 active.isAudible = true;
+                if (active.nodes) active.nodes.gain.gain.value = this.getAmbientGain(info.uuid, active.info);
                 continue;
             }
             if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.soundData, info.randomChance, currentTime)) continue;
@@ -755,7 +763,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         for (const [id, entry] of this.activeAmbientSounds)
             if (!entry.isAudible) this.stopAmbientSound(id);
 
-        if (this.activeAmbientSounds.size >= this.alAudio.channels) {
+        if (this.activeAmbientSounds.size >= Math.min(this.alAudio.channels, 16)) { // ALAudio.dll 0x1000b878: ambient channel partition.
             let minPriority = Infinity;
             for (const entry of this.activeAmbientSounds.values()) minPriority = Math.min(minPriority, entry.priority);
             if (maxPriority <= minPriority) return;
@@ -814,7 +822,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     ): boolean {
         if (this.activeAmbientSounds.has(id)) return true;
 
-        if (this.activeAmbientSounds.size >= this.alAudio.channels && !this.stealAmbientChannel(priority)) return false;
+        if (this.activeAmbientSounds.size >= Math.min(this.alAudio.channels, 16) && !this.stealAmbientChannel(priority)) return false;
 
         const entry: AmbientChannel_T = {
             priority,
@@ -954,9 +962,29 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.arrChannelNodes.push(nodes);
     }
 
+    public setAmbientSoundMuted(id: string, muted: boolean): void {
+        if (muted) this.mutedAmbientSounds.add(id);
+        else this.mutedAmbientSounds.delete(id);
+
+        const entry = this.activeAmbientSounds.get(id);
+        if (entry && entry.nodes) entry.nodes.gain.gain.value = this.getAmbientGain(id, entry.info);
+    }
+
+    public setAllAmbientSoundsMuted(muted: boolean): void {
+        for (const component of this.ambientSounds) this.setAmbientSoundMuted(component.info.uuid, muted);
+    }
+
+    protected getAmbientGain(id: string, info: AmbientInfo_T): number {
+        if (this.mutedAmbientSounds.has(id)) return 0;
+
+        const dx = info.position[0] - this.ambientPosition.x, dy = info.position[1] - this.ambientPosition.y, dz = info.position[2] - this.ambientPosition.z;
+
+        return Math.min(Math.max(info.volume * (1 - Math.sqrt(dx * dx + dy * dy + dz * dz) / info.maxDistance), 0), 1); // ALAudio.dll 0x1000db89..0x1000dc45, before OpenAL attenuation.
+    }
+
     protected startAmbientSource(id: string, buffer: AudioBuffer, entry: AmbientChannel_T) {
         const info = entry.info;
-        const nodes = this.acquireChannelNodes(this.ambientGainNode, info.volume, true, info.position[0], info.position[1], info.position[2], info.refDistance, info.maxDistance);
+        const nodes = this.acquireChannelNodes(this.ambientGainNode, this.getAmbientGain(id, info), true, info.position[0], info.position[1], info.position[2], info.refDistance, info.maxDistance);
 
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
@@ -1106,6 +1134,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
                 id,
                 info: entry.info,
                 isPlaying: !!entry.source,
+                isMuted: this.mutedAmbientSounds.has(id),
+                gain: this.getAmbientGain(id, entry.info),
+                rollOff: this.alAudio.rollOff,
                 priority: entry.priority
             });
         }

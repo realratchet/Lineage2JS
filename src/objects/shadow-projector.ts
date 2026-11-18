@@ -15,9 +15,10 @@ const zScale = Math.fround(far / (far - near));
 const zOffset = Math.fround(-near * far / (far - near));
 
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
-const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
+export const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
 const SHADOW_BAND_Z = 200;
-const LIGHT_DISTANCE = 704;
+const LIGHT_DISTANCE_SCALE = 32; // AShadowProjector::execUpdateLightInfo 0x936648 multiplies the projector's collision height by 32.
+const LIGHT_DISTANCE = 22 * LIGHT_DISTANCE_SCALE;
 const SHADOW_SIZE = 256;
 const VECTOR_ROTATION_SCALE = 32767.5 / Math.PI;
 const SHADOW_POOL_SIZE = 20; // UShadowBitmapMaterial::Get 0x93ec08..0x93ec51 reuses targets modulo20.
@@ -79,7 +80,7 @@ export class ShadowProjector {
     protected readonly blurMaterial = new ShaderMaterial({ vertexShader: BLUR_VERTEX, fragmentShader: BLUR_FRAGMENT, depthTest: false, depthWrite: false, blending: NoBlending, uniforms: { tSource: { value: null } } });
     protected readonly camera = new PerspectiveCamera();
     protected readonly silhouette = new MeshBasicMaterial({ color: 0x000000 });
-    protected readonly attenuation = createAttenuationCube();
+    public readonly attenuation = createAttenuationCube();
     protected readonly targets: ShadowTarget_T[] = [];
     protected readonly shadowTextures: ShadowTexture_T[] = [];
     protected readonly projectors: PawnProjector_T[] = [];
@@ -137,7 +138,7 @@ export class ShadowProjector {
         return programs;
     }
 
-    public update(_renderer: THREE.WebGLRenderer, focus: Object3D, casters: Iterable<Object3D>, lightDirection: Vector3): void {
+    public update(_renderer: THREE.WebGLRenderer, focus: Object3D, casters: Iterable<Object3D>, lightDirection: Vector3, largeCasters?: ReadonlySet<Object3D>): void {
         this.frame++;
         focus.getWorldPosition(tmpFocusPos);
         this.lastFocusPosition.copy(tmpFocusPos);
@@ -145,12 +146,12 @@ export class ShadowProjector {
         this.lastCasters.length = this.projectors.length = 0;
 
         for (const object of casters) {
-            if (!object.visible && object !== focus) continue;
+            const largeShadow = largeCasters?.has(object);
+            if (!object.visible && object !== focus && !largeShadow) continue;
             const actor = object as BaseActor;
             if (actor.getUnrealScriptProperty("bHidden") || actor.getUnrealScriptProperty("bHideShadow")) continue;
             object.getWorldPosition(tmpCasterPos);
-            const dx = tmpCasterPos.x - tmpFocusPos.x, dy = tmpCasterPos.y - tmpFocusPos.y, dz = tmpCasterPos.z - tmpFocusPos.z;
-            if (dz <= -SHADOW_BAND_Z || dz >= SHADOW_BAND_Z || Math.hypot(dx, dy) > SHADOW_RANGE) continue;
+            if (!largeShadow && !isInShadowRange(tmpCasterPos, tmpFocusPos)) continue;
 
             const animation = actor.getComponent<AnimationComponent>("animation");
             if (!animation.getMeshes().length) continue;
@@ -183,11 +184,20 @@ export class ShadowProjector {
         tmpLeft.set(sy, -cy, 0);
 
         projector.fov = Math.trunc(Math.atan2(sphere.radius * 2 + 160, LIGHT_DISTANCE) * 180 / Math.PI + 5);
+        const radius = sphere.radius + sphere.center.distanceTo(root);
+        const sinHalfAngle = Math.sin((projector.fov - 5) * Math.PI / 360);
+        let lightDistance = LIGHT_DISTANCE, nearDepth = LIGHT_DISTANCE;
+        if (radius > LIGHT_DISTANCE * sinHalfAngle) {
+            lightDistance = Math.max(radius / sinHalfAngle, actor.getCollisionHeight() * LIGHT_DISTANCE_SCALE);
+            projector.fov = Math.ceil(Math.asin(radius / lightDistance) * 360 / Math.PI + 5);
+            nearDepth = Math.max(near, lightDistance - radius);
+        }
+
         const halfAngle = projector.fov * Math.PI / 360;
         const tangent = Math.fround(Math.tan(halfAngle));
-        const halfSize = LIGHT_DISTANCE * tangent;
+        const halfSize = lightDistance * tangent;
         const factor = Math.fround(0.5 / tangent);
-        const origin = projector.origin.copy(root).addScaledVector(tmpDirection, -LIGHT_DISTANCE);
+        const origin = projector.origin.copy(root).addScaledVector(tmpDirection, -lightDistance);
         const u = tmpCorner.copy(tmpLeft).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5);
         const v = tmpRay.copy(tmpUp).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5);
         const d = tmpDirection;
@@ -220,14 +230,14 @@ export class ShadowProjector {
         );
         const f = Math.fround(1 / Math.tan(Math.fround(halfAngle)));
         projector.projection.set(f, 0, -1 / SHADOW_SIZE, 0, 0, f, 1 / SHADOW_SIZE, 0, 0, 0, 1 - 2 * zScale, 2 * zOffset, 0, 0, -1, 0);
-        const farOffset = LIGHT_DISTANCE / (Math.cos(halfAngle) * Math.sqrt(1 + 2 * tangent * tangent));
-        projector.depth.set(LIGHT_DISTANCE, LIGHT_DISTANCE + farOffset);
+        const farOffset = lightDistance / (Math.cos(halfAngle) * Math.sqrt(1 + 2 * tangent * tangent));
+        projector.depth.set(nearDepth, lightDistance + farOffset);
         projector.bounds.makeEmpty();
         for (let y = -1; y <= 1; y += 2) for (let x = -1; x <= 1; x += 2) {
             tmpCorner.copy(root).addScaledVector(tmpLeft, halfSize * x).addScaledVector(tmpUp, halfSize * y);
-            projector.bounds.expandByPoint(tmpCorner);
-            tmpRay.copy(tmpCorner).sub(origin).normalize().multiplyScalar(LIGHT_DISTANCE / Math.cos(halfAngle)).add(tmpCorner);
+            tmpRay.copy(tmpCorner).sub(origin).normalize().multiplyScalar(lightDistance / Math.cos(halfAngle)).add(tmpCorner);
             projector.bounds.expandByPoint(tmpRay);
+            projector.bounds.expandByPoint(tmpCorner.lerp(origin, 1 - nearDepth / lightDistance));
         }
         projector.frame = -1;
     }
@@ -542,6 +552,11 @@ function swapMaterials(root: Object3D, material: Material, cacheSilhouetteMateri
 
 function getSilhouetteMaterial(source: Material, opaque: Material): Material {
     return (source as MeshStaticMaterial).isStaticMeshMaterial ? (source as MeshStaticMaterial).getShadowMaterial() || opaque : opaque;
+}
+
+export function isInShadowRange(position: Vector3, focus: Vector3): boolean {
+    const dx = position.x - focus.x, dy = position.y - focus.y, dz = position.z - focus.z;
+    return dz > -SHADOW_BAND_Z && dz < SHADOW_BAND_Z && Math.hypot(dx, dy) <= SHADOW_RANGE;
 }
 
 export default ShadowProjector;

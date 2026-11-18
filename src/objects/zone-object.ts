@@ -1,4 +1,5 @@
 import type DynamicLight from "./dynamic-light";
+import type BaseActor from "../base-actor";
 import type Terrain from "./terrain";
 import type { L2Environment } from "../rendering/l2-env";
 import { Box3, Color, Fog, InstancedBufferAttribute, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
@@ -11,6 +12,11 @@ import { isPortalBlocked } from "../rendering/door-portals";
 import ZoneVisibility from "../rendering/zone-visibility";
 import MusicVolume from "./music-volume";
 import Actor, { execL2GameEvent, type L2GameEvent_T } from "./actor";
+import Projector from "./projector";
+import AntiPortalActor from "./anti-portal-actor";
+import { PolyFlags_T } from "../assets/unreal/un-polys";
+import type { BSPBrushPolygonDecodeInfo_T } from "../assets/unreal/bsp/un-bsp-node";
+import { decodeProjectorTexture } from "../assets/decoders/material-decoder";
 import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
 import { usesAlphaCore } from "../materials/mesh-static-material/mesh-static-material";
 import { setScriptObjectProperty } from "./actor-properties";
@@ -38,6 +44,7 @@ const tmpVec4 = new Vector4();
 const tmpSphere = new Sphere();
 const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
+const arrPawnBoundsMin = [0, 0, 0], arrPawnBoundsMax = [0, 0, 0];
 const arrLightSortKeys = new Float64Array(8);
 let arrBSPStack = new Int32Array(256);
 const arrLightNodes: number[] = [];
@@ -51,16 +58,81 @@ const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 const MAX_RECURSION_DEPTH = 4;
 
 type BatchBoundsNode_T = { min: number[], max: number[], start: number, end: number, left: number, right: number };
+type L2SeamlessInfo_T = { index: number; location: Vector3Arr; rangeSq: number; map: string; loaded: boolean };
 type TerrainVisibility_T = { key?: string, visible: number[] };
 type BatchVisibility_T = { version: number, visible: Uint8Array, centers: Float64Array, nodes: BatchBoundsNode_T[], order: number[], frustumVisible: Uint8Array };
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string; actorIndex: number };
-type TranslucentBSPSection_T = { mesh: THREE.Mesh; source: Uint8Array | Uint16Array | Uint32Array; nodes: Int32Array; starts: Uint32Array; counts: Uint32Array; order: Int32Array; previous: Int32Array };
+type BSPSectionIndices_T = { mesh: Mesh; source: Uint8Array | Uint16Array | Uint32Array; nodes: Int32Array; starts: Uint32Array; counts: Uint32Array; order: Int32Array; hidden?: Uint8Array; occluded?: Set<number> };
 type TranslucentBSPNode_T = { index: number, plane: THREE.Vector4, front: number, back: number };
+type BSPVisibility_T = { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number>, occludedNodes?: Set<number> };
 type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number; ordinal: number };
 type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
 type BatchPacking_T = { source: BatchBounds_T["source"], index: THREE.BufferAttribute, indexVersion: number, stamp: number, ranges: Map<number, { offset: number, count: number, stamp: number, copied: boolean }> };
 const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
 const cacheBatchPacking = new WeakMap<BufferGeometry, BatchPacking_T>();
+
+function getBSPSectionIndices(mesh: Mesh): BSPSectionIndices_T {
+    const source = (mesh.geometry.index.array as BSPSectionIndices_T["source"]).slice();
+    const nodeAttr = mesh.geometry.getAttribute("nodeIndex").array as Uint32Array;
+    const nodes: number[] = [], starts: number[] = [], counts: number[] = [];
+
+    for (let i = 0; i < source.length; i += 3) {
+        const node = nodeAttr[source[i]];
+
+        if (nodes.length && nodes[nodes.length - 1] === node) counts[counts.length - 1] += 3;
+        else { nodes.push(node); starts.push(i); counts.push(3); }
+    }
+
+    const order = new Int32Array(nodes.length);
+    for (let i = 0; i < order.length; i++) order[i] = i;
+
+    return { mesh, source, nodes: Int32Array.from(nodes), starts: Uint32Array.from(starts), counts: Uint32Array.from(counts), order };
+}
+
+function packBSPSection(section: BSPSectionIndices_T, occluded: Set<number>, changed = false): void {
+    const { mesh, source, nodes, starts, counts, order } = section;
+
+    if (section.occluded !== occluded) {
+        section.occluded = occluded;
+        if (!section.hidden && occluded && nodes.some(node => occluded.has(node))) section.hidden = new Uint8Array(nodes.length);
+        if (section.hidden) for (let i = 0; i < nodes.length; i++) {
+            const hidden = occluded && occluded.has(nodes[i]) ? 1 : 0;
+            if (section.hidden[i] === hidden) continue;
+
+            section.hidden[i] = hidden;
+            changed = true;
+        }
+    }
+    if (!changed) return;
+
+    const geometry = mesh.geometry, index = geometry.index, target = index.array as BSPSectionIndices_T["source"];
+    let offset = 0, first = 0, end = 0;
+
+    for (const block of order) {
+        if (section.hidden && section.hidden[block]) continue;
+
+        const start = starts[block], count = counts[block];
+        if (start !== end) {
+            if (first !== end) {
+                target.set(source.subarray(first, end), offset);
+                offset += end - first;
+            }
+            first = start;
+        }
+        end = start + count;
+    }
+    if (first !== end) {
+        target.set(source.subarray(first, end), offset);
+        offset += end - first;
+    }
+
+    geometry.setDrawRange(0, offset === source.length ? Infinity : offset);
+    if (offset > 0) {
+        index.clearUpdateRanges();
+        index.addUpdateRange(0, offset);
+        index.needsUpdate = true;
+    }
+}
 
 function sortTerrainSectorKeys(keys: number[]) {
     const stack = [0, keys.length - 1];
@@ -111,7 +183,7 @@ function sortTerrainSectorKeys(keys: number[]) {
     }
 }
 
-function buildTranslucentBSPTree(nodes: BSPNodeData[], sections: TranslucentBSPSection_T[]): TranslucentBSPNode_T[] {
+function buildTranslucentBSPTree(nodes: BSPNodeData[], sections: BSPSectionIndices_T[]): TranslucentBSPNode_T[] {
     const used = new Uint8Array(nodes.length);
     const roots = new Int32Array(nodes.length).fill(-1);
     const stack = nodes.length ? [0] : [];
@@ -503,6 +575,8 @@ export class SectorObject extends GameObject {
     public levelActorUuids: (string | null)[] = [];
     protected readonly arrLevelActors: (ScriptHost_T | null)[] = [];
     protected readonly arrLevelActorRecords: DecodeLibrary["levelActors"] = [];
+    public readonly projectors: Projector[] = [];
+    public readonly antiPortals: AntiPortalActor[] = [];
     protected firstDynamicActor = 0;
     protected hasRearrangedLevelActors = false;
     protected readonly cacheLevelActorIndices = new Map<string, number>();
@@ -510,10 +584,14 @@ export class SectorObject extends GameObject {
     protected levelActorHostsReady = false;
     protected readonly initializedL2GameEventActors = new WeakSet<ScriptHost_T>();
     protected readonly arrPendingL2GameEvents: [number, number][] = [];
+    protected readonly arrL2SeamlessInfos: L2SeamlessInfo_T[] = [];
     protected hasInitializedL2GameEvents = false;
     protected readonly hiddenActorUuids = new Set<string>();
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
+    public hasBSPAntiPortals = false;
+    protected bspAntiPortalRange = Infinity;
+    protected bspAntiPortalOrigin: Vector3;
     public bspLeaves: BSPLeafData[];
     public index: THREE.Vector2;
     public sunTexture: any; // MapData_T - texture with size info
@@ -541,11 +619,13 @@ export class SectorObject extends GameObject {
     public staticMeshGroup?: THREE.Group;
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     public visibleEmitterUuids: Set<string> = new Set();
-    protected readonly zoneVisibility = new ZoneVisibility();
+    protected zoneVisibility = new ZoneVisibility();
     public visibleLeaves: Set<number> = new Set();
     protected cachedLeafZoneMask: bigint = null;
     protected readonly cacheLeafZoneVisibility = new Map<number, boolean>();
-    protected arrTranslucentBSP: TranslucentBSPSection_T[] = null;
+    protected occludedBSPNodes: Set<number>;
+    protected readonly cacheOpaqueBSPIndices = new Map<Mesh, BSPSectionIndices_T>();
+    protected arrTranslucentBSP: BSPSectionIndices_T[] = null;
     protected arrBSPRanks: Int32Array = null;
     protected arrTranslucentBSPNodes: TranslucentBSPNode_T[] = null;
     public readonly lights: Record<string, DynamicLight> = {};
@@ -561,7 +641,7 @@ export class SectorObject extends GameObject {
     protected readonly cacheTerrainVisibility = new WeakMap<Mesh, TerrainVisibility_T>();
     protected cacheTerrainSegments: Map<string, Terrain[]>;
     protected readonly arrTerrainSectorKeys: number[] = [];
-    protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
+    protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], stitched: Terrain[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
     protected readonly cacheStaticVisibleLeaves = new Set<number>();
@@ -573,7 +653,7 @@ export class SectorObject extends GameObject {
     protected staticActorCandidateStamps = new Uint32Array(256);
     protected staticActorVisibleStamps = new Uint32Array(256);
     protected staticVisibilityStamp = 0;
-    protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
+    protected topLevelBSPResult?: BSPVisibility_T;
     protected visibilityCacheInitialized = false;
     protected doorPortalsDirty = true;
     protected readonly blockedDoorPortals = new Set<number>();
@@ -592,6 +672,35 @@ export class SectorObject extends GameObject {
 
     public getLevelActorCount(): number { return this.arrLevelActors.length; }
     public getFirstDynamicActor(): number { return this.firstDynamicActor; }
+    public get hasActiveAntiPortals(): boolean { return this.zoneVisibility.hasAntiPortals; }
+    public invalidateVisibility(): void { this.visibilityCacheInitialized = false; }
+
+    public setBSPAntiPortalView(position: Vector3, range: number): void {
+        if (this.bspAntiPortalRange === range && this.bspAntiPortalOrigin?.equals(position)) return;
+        if (!this.bspAntiPortalOrigin) this.bspAntiPortalOrigin = new Vector3();
+
+        this.bspAntiPortalRange = range;
+        this.bspAntiPortalOrigin.copy(position);
+        this.invalidateVisibility();
+    }
+
+    public isPawnOccluded(bounds: Box3, leaves: readonly number[]): boolean {
+        let mask = 0n;
+
+        for (const index of leaves) {
+            const zone = this.bspLeaves[index].zone;
+            if (zone >= 0) mask |= 1n << BigInt(zone);
+        }
+
+        bounds.min.toArray(arrPawnBoundsMin);
+        bounds.max.toArray(arrPawnBoundsMax);
+        return this.zoneVisibility.isOccluded(mask, arrPawnBoundsMin, arrPawnBoundsMax);
+    }
+
+    public finishLoading(): void {
+        this.hasFinishedLoading = true;
+        for (const projector of this.projectors) projector.activateCollision();
+    }
 
     public setActorHidden(uuid: string, hidden: boolean): void {
         if (this.hiddenActorUuids.has(uuid) === hidden) return;
@@ -671,6 +780,38 @@ export class SectorObject extends GameObject {
         }
     }
 
+    protected addL2SeamlessInfo(index: number): void {
+        if (this.getLevelActorProperty(index, "bLoaded")) return;
+
+        const location = this.getLevelActorProperty(index, "Location") as Vector3Arr;
+        const range = this.getLevelActorProperty(index, "AffectRange") as number;
+        const mapX = this.getLevelActorProperty(index, "MapX"), mapY = this.getLevelActorProperty(index, "MapY");
+
+        if (!Array.isArray(location) || location.length !== 3 || !location.every(Number.isFinite) || !Number.isFinite(range) || !Number.isInteger(mapX) || !Number.isInteger(mapY))
+            throw new Error(`Invalid L2SeamlessInfo '${this.arrLevelActorRecords[index].name}' in '${this.name}'.`);
+        if (range > 0) this.arrL2SeamlessInfos.push({ index, location, rangeSq: range * range, map: `${mapX}_${mapY}`, loaded: false });
+    }
+
+    public collectL2SeamlessMaps(pawn: BaseActor, maps: Set<string>): void {
+        if (!this.arrL2SeamlessInfos.length || !this.hasFinishedLoading || !pawn.scriptProperties) return;
+
+        const [x, y, z] = pawn.getUnrealScriptProperty("Location") as Vector3Arr;
+
+        for (const info of this.arrL2SeamlessInfos) {
+            if (this.arrLevelActors[info.index] === null) continue;
+            if (!info.loaded) {
+                const dx = info.location[0] - x, dy = info.location[1] - y, dz = info.location[2] - z;
+
+                // AL2SeamlessInfo::Tick 0x83c076..0x83c0c8 queues on strict 3D distance and sets bLoaded.
+                if (dx * dx + dy * dy + dz * dz >= info.rangeSq) continue;
+
+                setProperty(this.getLevelActor(info.index), "bLoaded", true);
+                info.loaded = true;
+            }
+            maps.add(info.map);
+        }
+    }
+
     public rearrangeLevelActors(): void {
         if (this.hasRearrangedLevelActors) return;
 
@@ -695,9 +836,13 @@ export class SectorObject extends GameObject {
         this.arrLevelActors.length = this.arrLevelActorRecords.length = 0;
         this.cacheLevelActorIndices.clear();
         for (const entry of ordered) {
-            if (entry.info) this.cacheLevelActorIndices.set(entry.info.uuid, this.arrLevelActors.length);
+            const index = this.arrLevelActors.length;
+
+            if (entry.info) this.cacheLevelActorIndices.set(entry.info.uuid, index);
             this.arrLevelActors.push(entry.actor);
             this.arrLevelActorRecords.push(entry.info);
+
+            if (entry.info?.scriptClassId?.toLowerCase() === "engine.l2seamlessinfo") this.addL2SeamlessInfo(index);
         }
         this.hasRearrangedLevelActors = true;
     }
@@ -864,6 +1009,17 @@ export class SectorObject extends GameObject {
     }
 
     public releaseLevelActors(): void {
+        for (const portal of this.antiPortals) {
+            portal.release(false);
+            portal.removeFromParent();
+        }
+        this.antiPortals.length = 0;
+        this.zoneVisibility.reset();
+        for (const projector of this.projectors) {
+            projector.release(false);
+            projector.removeFromParent();
+        }
+        this.projectors.length = 0;
         for (const actor of this.arrLevelActors) if (actor) unregisterLevelActor(actor);
         deleteLevelActors(this.scriptVM.getLevelInfo());
         this.scriptVM.setLevelInfo(null);
@@ -873,6 +1029,7 @@ export class SectorObject extends GameObject {
         this.hasRearrangedLevelActors = false;
         this.hasInitializedL2GameEvents = false;
         this.arrPendingL2GameEvents.length = 0;
+        this.arrL2SeamlessInfos.length = 0;
         this.hiddenActorUuids.clear();
         this.cacheLevelActorObjects.clear();
         this.cacheLevelActorIndices.clear();
@@ -882,6 +1039,8 @@ export class SectorObject extends GameObject {
         this.physicsVolumeObjectFactory = objectFactory;
         this.createZoneInfoActors();
         for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
+        for (const projector of this.projectors) projector.setScriptRuntime(this.scriptVM, objectFactory, false);
+        for (const portal of this.antiPortals) portal.setScriptRuntime(this.scriptVM, objectFactory, false);
         this.createPhysicsVolumeActors();
         for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
         this.createMusicVolumeActors();
@@ -904,7 +1063,7 @@ export class SectorObject extends GameObject {
         }
 
         this.levelInfoActor = create(this.levelInfo);
-        const records = this.scriptVM.getLibrary().levelActors;
+        const library = this.scriptVM.getLibrary(), records = library.levelActors;
 
         this.arrLevelActors.length = records.length;
         this.arrLevelActorRecords.push(...records);
@@ -914,6 +1073,24 @@ export class SectorObject extends GameObject {
         }
         this.scriptVM.setLevelInfo(this.levelInfoActor);
         setLevelActors(this.levelInfoActor, this);
+        for (const info of library.antiPortals || []) {
+            const index = this.cacheLevelActorIndices.get(info.uuid);
+
+            if (index === undefined) throw new Error(`AntiPortalActor '${info.uuid}' has no actor slot in '${this.name}'.`);
+            const actor = new AntiPortalActor(records[index], info);
+
+            this.antiPortals.push(actor);
+            this.add(actor);
+        }
+        for (const info of library.projectors || []) {
+            const index = this.cacheLevelActorIndices.get(info.uuid);
+
+            if (index === undefined) throw new Error(`Projector '${info.uuid}' has no actor slot in '${this.name}'.`);
+            const actor = new Projector(records[index], info, decodeProjectorTexture(library, info.material));
+
+            this.projectors.push(actor);
+            this.add(actor);
+        }
         for (const zone of this.bspZones) this.zoneInfoActors.push(create(zone.zoneInfo));
         for (const actor of actors.values()) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
         if (this.levelInfo.physicsVolume) {
@@ -1140,9 +1317,10 @@ export class SectorObject extends GameObject {
         };
     }
 
-    public setBSPInfo(bspZones: IBSPZoneDecodeInfo_T[], bspNodes: IBSPNodeDecodeInfo_T[], bspLeaves: IBSPLeafDecodeInfo_T[]) {
+    public setBSPInfo(bspZones: IBSPZoneDecodeInfo_T[], bspNodes: IBSPNodeDecodeInfo_T[], bspLeaves: IBSPLeafDecodeInfo_T[], bspAntiPortals: Record<number, BSPBrushPolygonDecodeInfo_T> = {}, bspPortalPolygons: Record<number, BSPBrushPolygonDecodeInfo_T> = {}) {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
-        this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
+        this.bspNodes = bspNodes.map(info => BSPNodeData.fromInfo(info, bspAntiPortals[info.antiPortal], bspPortalPolygons[info.portalPolygon]));
+        this.hasBSPAntiPortals = Object.keys(bspAntiPortals).length !== 0;
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
         this.rangeIgnoredNodes = null;
         this.invalidateDoorPortals();
@@ -1401,6 +1579,22 @@ export class SectorObject extends GameObject {
         return activeZoneMask;
     }
 
+    protected clipZonePortal(polygon: BSPBrushPolygonDecodeInfo_T, cameraZone: number, source: bigint, targetZone: number): boolean {
+        const viewer = this.zoneInfoActors[cameraZone], target = this.zoneInfoActors[targetZone];
+
+        if (viewer && target) {
+            if (this.scriptVM.isA(target, "WarpZoneInfo")) return true;
+
+            // Engine.dll 0x91c7d3 checks the view zone's ManualExcludes.
+            const excludes = getProperty(viewer, "ManualExcludes") as ScriptHost_T[];
+            if (getProperty(viewer, "bLonelyZone") || getProperty(target, "bLonelyZone") || excludes && excludes.includes(target)) {
+                this.zoneVisibility.hideBSPPortal(polygon);
+                return false;
+            }
+        }
+        return this.zoneVisibility.clipBSPPortal(polygon, source, 1n << BigInt(targetZone));
+    }
+
     public traverseBSP(
         cameraPosition: THREE.Vector3,
         activeZoneMask: bigint,
@@ -1409,8 +1603,8 @@ export class SectorObject extends GameObject {
         recursionDepth: number = 0,
         leafOnlyMode: boolean = false,
         topLevelOnly: boolean = false
-    ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
-        this.zoneVisibility.active = false;
+    ): BSPVisibility_T {
+        this.zoneVisibility.reset();
         this.updateDoorPortals();
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
@@ -1420,7 +1614,10 @@ export class SectorObject extends GameObject {
             return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
         }
 
-        if (topLevelOnly) {
+        if (topLevelOnly && frustumCullingEnabled)
+            activeZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, (1n << 64n) - 1n, true);
+
+        if (topLevelOnly && (!frustumCullingEnabled || !(activeZoneMask & ~this.outdoorZoneMask))) {
             if (this.topLevelBSPResult) return this.topLevelBSPResult;
 
             for (let nodeIndex = 0; nodeIndex < this.bspNodes.length; nodeIndex++) {
@@ -1471,6 +1668,9 @@ export class SectorObject extends GameObject {
 
         const cameraZone = this.findPositionZone(cameraPosition);
         const hasViewZone = cameraZone !== null && cameraZone >= 0;
+        const cullBSPAntiPortals = this.hasBSPAntiPortals && frustumCullingEnabled;
+        const rangeOrigin = this.bspAntiPortalOrigin || cameraPosition;
+        let occludedNodes: Set<number>;
 
         const zoneDepthMap = new Map<number, number>();
         const zonesAddedThroughPortals = new Set<number>();
@@ -1551,11 +1751,9 @@ export class SectorObject extends GameObject {
                 while (current >= 0) {
                     const currentNode = this.bspNodes[current];
 
-                    const PF_Portal = 0x04000000;
-
                     const nodeZone0 = currentNode.zones[0];
                     const nodeZone1 = currentNode.zones[1];
-                    const hasPortalFlag = currentNode.surfFlags !== undefined && (currentNode.surfFlags & PF_Portal) !== 0;
+                    const hasPortalFlag = currentNode.surfFlags !== undefined && (currentNode.surfFlags & PolyFlags_T.PF_Portal) !== 0;
 
                     if (hasViewZone && hasPortalFlag && nodeZone0 >= 0 && nodeZone1 >= 0 && nodeZone0 !== nodeZone1) {
                         const planeDot = cameraPos.dot(currentNode.plane);
@@ -1573,7 +1771,10 @@ export class SectorObject extends GameObject {
 
                         const portalVisible = isCurrentZoneActive &&
                             !isDoorOccluded &&
-                            (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
+                            (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere)) &&
+                            (!cullBSPAntiPortals || (cameraZone > 0 && currentNode.portalPolygon
+                                ? this.clipZonePortal(currentNode.portalPolygon, cameraZone, currentZoneBit, oppositeZone)
+                                : !this.zoneVisibility.isBSPSphereOccluded(currentZoneBit, portalSphere)));
 
                         if (!leafOnlyMode && portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
                             const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
@@ -1609,6 +1810,22 @@ export class SectorObject extends GameObject {
                         isInFrustum = cameraFrustum.intersectsSphere(currentNode.exclusiveSphereBound);
                     }
 
+                    if (isInFrustum && cullBSPAntiPortals && (currentNode.antiPortal || this.zoneVisibility.hasBSPAntiPortals)) {
+                        const front = cameraPos.dot(currentNode.plane) > 0;
+                        const sourceZone = currentNode.zones[front ? 1 : 0];
+                        const zoneMask = 1n << BigInt(cameraZone > 0 ? sourceZone : 0);
+                        const sphere = currentNode.exclusiveSphereBound;
+                        if (this.zoneVisibility.isBSPSphereOccluded(zoneMask, sphere)) {
+                            isInFrustum = false;
+                            if (this.nodeToSection && this.nodeToSection[current] >= 0) {
+                                if (!occludedNodes) occludedNodes = new Set();
+                                occludedNodes.add(current);
+                            }
+                        }
+                        else if (currentNode.antiPortal && !(cameraZone && hasPortalFlag) && (!cameraZone || front || currentNode.surfFlags & (PolyFlags_T.PF_TwoSided | PolyFlags_T.PF_Unused5)) && (zoneMask & currentZoneMask))
+                            this.zoneVisibility.addBSPAntiPortal(currentNode.antiPortal, cameraPosition, rangeOrigin, this.bspAntiPortalRange, sphere, 1n << BigInt(sourceZone));
+                    }
+
                     if (isInFrustum && this.nodeToSection && this.nodeToSection[current] !== undefined && this.nodeToSection[current] >= 0) {
                         visibleNodes.add(current);
                     }
@@ -1619,12 +1836,13 @@ export class SectorObject extends GameObject {
         }
 
         if (frustumCullingEnabled) {
-            currentZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, currentZoneMask);
-            if (this.zoneVisibility.active) visibleNodes.forEach(nodeIndex => {
+            currentZoneMask = this.zoneVisibility.prepare(this, cameraPosition, cameraFrustum, currentZoneMask, topLevelOnly);
+            this.zoneVisibility.prepareAntiPortals(this, cameraPosition, cameraFrustum, currentZoneMask);
+            if (this.zoneVisibility.active || this.zoneVisibility.hasActorAntiPortals) visibleNodes.forEach(nodeIndex => {
                 const node = this.bspNodes[nodeIndex];
                 const mask = (1n << BigInt(node.zones[0])) | (1n << BigInt(node.zones[1]));
                 node.exclusiveSphereBound.getBoundingBox(tmpActorBox);
-                if (!this.zoneVisibility.intersectsBox(mask, tmpActorBox)) visibleNodes.delete(nodeIndex);
+                if (!this.zoneVisibility.intersectsBox(mask, tmpActorBox, false)) visibleNodes.delete(nodeIndex);
             });
         }
 
@@ -1645,7 +1863,7 @@ export class SectorObject extends GameObject {
         });
 
         this.lastZoneMask = currentZoneMask;
-        return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
+        return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals, occludedNodes };
     }
 
 
@@ -1687,7 +1905,8 @@ export class SectorObject extends GameObject {
             }
         }
 
-        const { visibleNodes, finalZoneMask } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
+        const { visibleNodes, finalZoneMask, occludedNodes } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
+        this.occludedBSPNodes = occludedNodes;
 
         const visibleSections = new Set<number>();
         visibleNodes.forEach(nodeIndex => {
@@ -1713,6 +1932,7 @@ export class SectorObject extends GameObject {
                 }
             }
         });
+        this.sortTranslucentBSP(cameraPosition);
 
         if (zoneChanged && currentZone !== null && currentZone >= 0) {
             const finalActiveZones: number[] = [];
@@ -1850,22 +2070,7 @@ export class SectorObject extends GameObject {
         for (const child of this.bspGroup.children as THREE.Mesh[]) {
             if ((child as any).priority !== "transparent" || !child.geometry.index) continue;
 
-            const index = child.geometry.index;
-            const source = (index.array as Uint16Array).slice();
-            const nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
-            const nodes: number[] = [], starts: number[] = [], counts: number[] = [];
-
-            for (let i = 0; i < source.length; i += 3) {
-                const node = nodeAttr[source[i]];
-
-                if (nodes.length && nodes[nodes.length - 1] === node) counts[counts.length - 1] += 3;
-                else { nodes.push(node); starts.push(i); counts.push(3); }
-            }
-
-            const order = new Int32Array(nodes.length);
-
-            for (let i = 0; i < order.length; i++) order[i] = i;
-            this.arrTranslucentBSP.push({ mesh: child, source, nodes: Int32Array.from(nodes), starts: Uint32Array.from(starts), counts: Uint32Array.from(counts), order, previous: order.slice() });
+            this.arrTranslucentBSP.push(getBSPSectionIndices(child));
         }
 
         this.arrTranslucentBSPNodes = buildTranslucentBSPTree(this.bspNodes, this.arrTranslucentBSP);
@@ -1873,6 +2078,15 @@ export class SectorObject extends GameObject {
     }
 
     public sortTranslucentBSP(cameraPosition: THREE.Vector3) { // Engine 0x1064d596: translucent nodes are prepended during the front-to-back walk, so 0x106523ec draws them back to front
+        const occluded = this.occludedBSPNodes;
+        if (occluded) for (const mesh of this.bspGroup.children as Mesh[]) {
+            if (!mesh.visible || (mesh as any).priority !== "opaque" || this.cacheOpaqueBSPIndices.has(mesh)) continue;
+            if (this.bspSections[(mesh as any).sectionIndex].nodeIndices.some(node => occluded.has(node)))
+                this.cacheOpaqueBSPIndices.set(mesh, getBSPSectionIndices(mesh));
+        }
+        for (const section of this.cacheOpaqueBSPIndices.values())
+            if (section.mesh.visible) packBSPSection(section, occluded);
+
         const sections = this.getTranslucentBSP();
         let hasVisible = false;
 
@@ -1915,34 +2129,24 @@ export class SectorObject extends GameObject {
         for (const section of sections) {
             if (!section.mesh.visible || section.order.length <= 1) continue;
 
-            const { order, previous, nodes: sectionNodes } = section;
+            const { order, nodes: sectionNodes } = section;
 
             let isChanged = false;
 
             for (let i = 1; i < order.length; i++) if (ranks[sectionNodes[order[i - 1]]] > ranks[sectionNodes[order[i]]]) { isChanged = true; break; }
-            if (!isChanged) continue;
-
-            order.sort((a, b) => ranks[sectionNodes[a]] - ranks[sectionNodes[b]]);
-
-            const index = section.mesh.geometry.index, target = index.array as Uint16Array;
-            let offset = 0;
-
-            for (let i = 0; i < order.length; i++) {
-                const block = order[i], start = section.starts[block], count = section.counts[block];
-
-                target.set(section.source.subarray(start, start + count), offset);
-                offset += count;
-            }
-
-            previous.set(order);
-            index.needsUpdate = true;
+            if (isChanged) order.sort((a, b) => ranks[sectionNodes[a]] - ranks[sectionNodes[b]]);
+            packBSPSection(section, occluded, isChanged);
         }
     }
 
     public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
         if (!auxiliary) this.updateLights(environment);
 
-        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) return;
+        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) {
+            if (this.terrainRenderables) for (const terrain of this.terrainRenderables.stitched)
+                if (terrain.needsStitchedLightingUpdate()) terrain.update(this, environment);
+            return;
+        }
 
         const library = (this as any).decodeLibrary as DecodeLibrary;
 
@@ -1984,7 +2188,7 @@ export class SectorObject extends GameObject {
             }
         }
 
-        const { visibleNodes, visibleLeaves, finalZoneMask } = this.traverseBSP(
+        const { visibleNodes, visibleLeaves, finalZoneMask, occludedNodes } = this.traverseBSP(
             cameraPosition,
             activeZoneMask,
             cameraFrustum,
@@ -1995,6 +2199,7 @@ export class SectorObject extends GameObject {
         );
 
         this.visibleLeaves = visibleLeaves;
+        this.occludedBSPNodes = occludedNodes;
 
         if (this.bspGroup && this.bspSections && this.nodeToSection) {
             const visibleSections = new Set<number>();
@@ -2080,9 +2285,9 @@ export class SectorObject extends GameObject {
                 }
             });
 
-            if (!auxiliary && zoneChanged && bspAmbientColor) {
-                console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
-            }
+            // if (!auxiliary && zoneChanged && bspAmbientColor) {
+            //     console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
+            // }
 
             this.sortTranslucentBSP(cameraPosition);
 
@@ -2093,7 +2298,7 @@ export class SectorObject extends GameObject {
                         finalActiveZones.push(i);
                     }
                 }
-                console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
+                // console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
             }
         }
 
@@ -2318,7 +2523,7 @@ export class SectorObject extends GameObject {
             }
 
             if (!auxiliary && leafIndex !== null && leafIndex >= 0 && leafIndex !== this.lastLoggedStaticMeshLeaf) {
-                console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
+                // console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
                 this.lastLoggedStaticMeshLeaf = leafIndex;
             }
         }
@@ -2477,8 +2682,10 @@ export class SectorObject extends GameObject {
                 }
             });
 
-            this.terrainRenderables = { batches, standalone, decorations };
+            this.terrainRenderables = { batches, standalone, stitched: [], decorations };
         }
+
+        this.terrainRenderables.stitched.length = 0;
 
         for (const batch of this.terrainRenderables.batches) {
             const batchGeo = batch.geometry as BufferGeometry;
@@ -2501,6 +2708,7 @@ export class SectorObject extends GameObject {
                     if (cached.visible[visibleCount] !== i) { changed = true; cached.visible[visibleCount] = i; }
                     visibleCount++;
                     sector.update(this, environment);
+                    if (sector.offsetX === 240 || sector.offsetY === 240) this.terrainRenderables.stitched.push(sector);
                 }
 
                 const decorations = this.terrainRenderables.decorations.get(sector.terrainSegmentUuid);
@@ -2543,7 +2751,10 @@ export class SectorObject extends GameObject {
 
         for (const terrain of this.terrainRenderables.standalone) {
             const isVisible = zoneVisible && terrain.visible;
-            if (isVisible) terrain.update?.(this, environment);
+            if (isVisible) {
+                terrain.update?.(this, environment);
+                if (terrain.offsetX === 240 || terrain.offsetY === 240) this.terrainRenderables.stitched.push(terrain);
+            }
 
             const decorations = this.terrainRenderables.decorations.get(terrain.terrainSegmentUuid);
             if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));
@@ -2701,6 +2912,8 @@ class BSPLeafData {
 
 class BSPNodeData {
     public portalVertices?: number[];
+    declare public portalPolygon?: BSPBrushPolygonDecodeInfo_T;
+    declare public antiPortal?: BSPBrushPolygonDecodeInfo_T;
     public back: number;
     public front: number;
     public iPlane: number; // Index to next coplanar node (UE2 line 1472-1473)
@@ -2715,7 +2928,7 @@ class BSPNodeData {
 
     protected constructor() { }
 
-    public static fromInfo(info: any) {
+    public static fromInfo(info: any, antiPortal?: BSPBrushPolygonDecodeInfo_T, portalPolygon?: BSPBrushPolygonDecodeInfo_T) {
         const node = new BSPNodeData();
 
         [node.front, node.back] = info.children;
@@ -2723,6 +2936,8 @@ class BSPNodeData {
 
         node.plane.fromArray(info.plane);
         node.portalVertices = info.portalVertices;
+        if (portalPolygon) node.portalPolygon = portalPolygon;
+        if (antiPortal) node.antiPortal = antiPortal;
 
         node.leaves[0] = info.leaves[0];
         node.leaves[1] = info.leaves[1];

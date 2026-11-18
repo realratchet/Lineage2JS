@@ -17,6 +17,7 @@ import NPawnLightComponent from "../rendering/components/pawn-light-component";
 import type { NetSkill_T, NetObject_T } from "./network-actors";
 
 const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
+const FERRY_SOUNDS = new Set(["itemsound.ship_arrival_departure", "itemsound.ship_5min", "itemsound.ship_1min"]);
 
 const tmpEarthquakePosition = new Vector3();
 const tmpSpoilLightPosition = new Vector3();
@@ -579,7 +580,7 @@ export class NetworkCombat {
             const position = this.network.getParent().getComponent("render").player.position.clone();
             const uri = await this.network.getParent().getComponent("asset").loadSound(name);
 
-            await audio.playOneShotSound(uri, position, 1, 1, 80, 8000); // Core.dll GAudioDefaultRadius 0x101cdf84 = 80.
+            await audio.playOneShotSound(uri, position, 1, 1, 80, 8000, true, undefined, FERRY_SOUNDS.has(name.toLowerCase())); // Core.dll GAudioDefaultRadius 0x101cdf84 = 80.
             return;
         }
 

@@ -2,10 +2,11 @@ import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
-import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
+import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T, type CollisionOverlapQuery_T } from "./collision-world";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
+import type WaterEffectsComponent from "./components/water-effects-component";
 import type { ScriptComponent } from "../game/script-component";
 
 import { pointPrimitive, queryPrimitive } from "./collision-primitive";
@@ -15,6 +16,7 @@ import type PhysicsVolume from "../objects/physics-volume";
 import type Actor from "../objects/actor";
 import type Volume from "../objects/volume";
 import type MusicVolume from "../objects/music-volume";
+import type Projector from "../objects/projector";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
@@ -142,6 +144,22 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return true;
     }
 
+    public releaseSectorVolumeReferences(sector: SectorObject): void {
+        const owner = sector.levelInfoActor;
+        if (!owner) return;
+
+        for (const movement of this.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
+            const pawn = movement.getParent();
+            if (!pawn.scriptProperties) continue;
+
+            for (const name of ["PhysicsVolume", "HeadVolume", "FootVolume"]) {
+                const volume = pawn.getUnrealScriptProperty(name) as unknown as PhysicsVolume;
+                if (volume && volume.getUnrealScriptProperty("Level") === owner)
+                    pawn.setUnrealScriptProperty(name, null);
+            }
+        }
+    }
+
     public async simulatePawns(count: number = 100): Promise<void> {
         await this.manGame.getComponent("network").pawnSimulation.spawn(count, this.manGame.getComponent("input").getOrbitTarget());
     }
@@ -245,6 +263,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return !hit || hit.time > 0;
     }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
+    public overlapCheck(query: CollisionOverlapQuery_T): ICollidable | null { return this.collisionWorld.overlapCheck(query); }
     public isBlockedBy(source: ScriptHost_T, target: ScriptHost_T, vm: UnScriptVM): boolean { return this.collisionWorld.isBlockedBy(source, target, vm); }
     protected setActorRotation(pawn: BaseActor | CollidingMesh, rotation: Vector3Arr): void {
         pawn.setUnrealScriptProperty("Rotation", rotation);
@@ -374,10 +393,11 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return false;
     }
 
-    public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume): void {
+    public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume, test: boolean): void {
         if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
 
-        if (volume !== owner.getUnrealScriptProperty("FootVolume")) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
+        const entered = volume !== owner.getUnrealScriptProperty("FootVolume");
+        if (entered) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
         if (!volume.getUnrealScriptProperty("Brush")) return;
         const primitive = this.collisionWorld.getPhysicsVolumePrimitive(volume);
         if (!primitive) throw new Error(`Water volume '${volume.name}' has no registered primitive.`);
@@ -408,6 +428,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         if (pointPrimitive(primitive, tmpWaterHitLocation, zeroWaterExtent)) tmpWaterHitLocation.set(0, 0, 0);
         owner.setUnrealScriptProperty("HitLocation", tmpWaterHitLocation.toArray());
+        if (entered && !test && tmpWaterHitLocation.lengthSq() !== 0)
+            owner.findComponent<WaterEffectsComponent>("waterEffects")?.recordWaterEntry(volume, tmpWaterHitLocation);
     }
 
     public setActorZone(actor: Actor, test: boolean = false, forceRefresh: boolean = false): void {
@@ -558,7 +580,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             }
             pawn.setUnrealScriptProperty("HeadVolume", head as any);
         }
-        this.updatePawnWaterHitEffect(pawn, foot);
+        this.updatePawnWaterHitEffect(pawn, foot, test);
         if (foot !== pawn.getUnrealScriptProperty("FootVolume")) pawn.setUnrealScriptProperty("FootVolume", foot as any);
     }
     public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true, sourceActor?: CollisionQuery_T["sourceActor"]): RayCheckResult_T | null {
@@ -586,7 +608,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         for (const sector of sectors) {
             const volume = sector.getDefaultPhysicsVolume();
-            const actors = new Set([sector.levelInfoActor, ...sector.zoneInfoActors, ...sector.physicsVolumeActors, ...sector.musicVolumeActors, volume]);
+            const actors = new Set([sector.levelInfoActor, ...sector.zoneInfoActors, ...sector.physicsVolumeActors, ...sector.musicVolumeActors, ...sector.projectors, volume]);
             sector.traverse((object: any) => {
                 if (object.scriptActor) {
                     actors.add(object.scriptActor);
@@ -621,11 +643,17 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         this.collisionWorld.register(object, colliders);
     }
 
+    public registerProjectorCollision(projector: Projector): void {
+        this.registerCollider(projector);
+        this.collisionWorld.findTouchingActors(projector, projector.position);
+    }
+
     public unregisterSimulationObjects(root: Object3D): void {
         root.traverse(object => {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
                 this.collisionWorld.unregisterPhysicsVolumes(sector.physicsVolumeActors);
+                for (const projector of sector.projectors) projector.deactivateCollision();
             }
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.unregisterObjectComponents(terrain);

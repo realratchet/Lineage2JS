@@ -30,6 +30,9 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
 
     protected renderManager: RenderManager = null;
     protected waterHitEffect: WaterHitEffect = null;
+    protected waterEntryVolume: PhysicsVolume = null;
+    protected readonly waterEntryPosition = new Vector3();
+    protected readonly waterEntryVelocity = new Vector3();
     protected readonly underWaterPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastUnderWaterSamplingLocation = new Vector3(Infinity, Infinity, Infinity);
     protected underWaterVolume: IWaterVolumeDecodeInfo = null;
@@ -47,6 +50,7 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     public onPhysicsRemoved(manager: PhysicsManager): void {
         this.renderManager = null;
         this.waterHitEffect = null;
+        this.waterEntryVolume = null;
 
         super.onPhysicsRemoved(manager);
     }
@@ -63,22 +67,33 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
         return false;
     }
 
+    public recordWaterEntry(volume: PhysicsVolume, position: Vector3): void {
+        this.waterEntryVolume = volume;
+        this.waterEntryPosition.copy(position);
+        this.waterEntryVelocity.fromArray(this.getParent().getUnrealScriptProperty("Velocity") as number[]);
+    }
+
     protected updateWaterHitEffect(deltaTime: number): void {
         const owner = this.getParent();
         const foot = owner.getUnrealScriptProperty("FootVolume") as unknown as PhysicsVolume;
+        const entered = foot && foot === this.waterEntryVolume;
+        this.waterEntryVolume = null;
         if (!owner.getComponent<PawnRenderableComponent>("pawnRenderable").isRendered || !foot || !foot.getUnrealScriptProperty("bL2WaterVolume")) return;
         const volumeLevel = foot.getUnrealScriptProperty("Level");
         const sector = this.renderManager.getLoadedSectors().find(sector => sector.levelInfoActor === volumeLevel);
         if (!sector) throw new Error(`Water volume '${foot.name}' has no registered level for water effects.`);
 
         tmpWaterHitPosition.fromArray(owner.getUnrealScriptProperty("HitLocation") as number[]);
-        if (tmpWaterHitPosition.lengthSq() === 0) {
+        const useEntry = entered && tmpWaterHitPosition.lengthSq() === 0;
+        if (useEntry) tmpWaterHitPosition.copy(this.waterEntryPosition);
+        else if (tmpWaterHitPosition.lengthSq() === 0) {
             owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
             return;
         }
 
         if (owner.getUnrealScriptProperty("HitWaterEffectTimer") === 0) {
-            tmpWaterVelocity.fromArray(owner.getUnrealScriptProperty("Velocity") as number[]);
+            if (useEntry) tmpWaterVelocity.copy(this.waterEntryVelocity);
+            else tmpWaterVelocity.fromArray(owner.getUnrealScriptProperty("Velocity") as number[]);
             const moving = Math.abs(tmpWaterVelocity.x) >= 0.0001 || Math.abs(tmpWaterVelocity.y) >= 0.0001 || Math.abs(tmpWaterVelocity.z) >= 0.0001;
             const wait = (owner.getUnrealScriptProperty("SitWaitAnimName") as string[])[owner.getUnrealScriptProperty("CurWeaponType") as number];
             const action = owner.getAnimationAction();

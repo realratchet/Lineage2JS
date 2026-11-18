@@ -48,17 +48,21 @@ export class NCPetitionWnd {
             if (text.length && this.onSay) this.onSay(text);
             this.input.setValue("");
         });
-        layer.button(this.element, 80, 383, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(isGM ? SysString_T.BeginConsultation : SysString_T.CancelPetition), () => {
+        const beginText = manager.getSysString(isGM ? SysString_T.BeginConsultation : SysString_T.CancelPetition), endText = manager.getSysString(isGM ? SysString_T.EndConsultation : SysString_T.Evaluate);
+        const beginWidth = isGM ? Math.max(76, Math.ceil(layer.measureText(beginText)) + 12) : 76, endWidth = isGM ? Math.max(76, Math.ceil(layer.measureText(endText)) + 12) : 76;
+        const beginX = isGM ? Math.trunc((310 - beginWidth - endWidth - 4) / 2) : 80;
+
+        layer.button(this.element, beginX, 383, beginWidth, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, beginText, () => {
             if (isGM) { if (this.onBegin) this.onBegin(); return; }
 
             this.evaluate.setEnabled(false);
             if (this.onCancel) this.onCancel();
-        });
-        this.evaluate = layer.button(this.element, 160, 383, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(isGM ? SysString_T.EndConsultation : SysString_T.Evaluate), () => {
+        }, null, 76);
+        this.evaluate = layer.button(this.element, isGM ? beginX + beginWidth + 4 : 160, 383, endWidth, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, endText, () => {
             const callback = isGM ? this.onEnd : this.onEvaluate;
 
             if (callback) callback();
-        });
+        }, null, 76);
         if (!isGM) this.evaluate.setEnabled(false);
     }
 

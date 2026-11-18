@@ -76,7 +76,22 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     > i { background-image: var(--glyphs); }
 }
 
-.ndom-button, .ndom-inventory-item { cursor: inherit; }
+.ndom-selectable { user-select: text; }
+
+.ndom-item-search {
+    z-index: 2;
+    background: #161b23;
+    border: 1px solid #635b49;
+    box-sizing: border-box;
+
+    .ndom-input::placeholder { color: #8c8c8c; }
+}
+
+.ndom-search-miss { filter: grayscale(1) brightness(0.4); }
+
+.ndom-button, .ndom-inventory-item { cursor: inherit; user-select: none; }
+
+.ndom-layer [role="checkbox"], .ndom-layer [role="tab"] { user-select: none; }
 
 .ndom-window:focus-visible, .ndom-button[role="tab"] { outline: none; }
 
@@ -232,4 +247,38 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     left: 0;
     top: 48px;
     pointer-events: none;
+}
+
+.ndom-control-bindings {
+    width: 100%;
+    height: 208px;
+}
+
+.ndom-control-binding, .ndom-control-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 110px 32px;
+    gap: 4px;
+    align-items: center;
+
+    > * { position: relative; left: auto !important; top: auto !important; }
+    > .ndom-text { width: auto !important; height: auto !important; white-space: normal; }
+}
+
+.ndom-control-heading {
+    width: calc(100% - 15px);
+
+    > .ndom-text:not(:first-child) { text-align: center; }
+}
+
+.ndom-control-binding {
+    min-height: 23px;
+
+    > .ndom-button:last-child { justify-self: center; }
+    + .ndom-control-binding { margin-top: 3px; }
+}
+
+.ndom-options-row > .ndom-binding-status {
+    width: 100% !important;
+    height: 30px !important;
+    white-space: normal;
 }

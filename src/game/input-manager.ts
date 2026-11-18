@@ -316,6 +316,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     public isFollowingPlayer(): boolean { return this.followPlayer || this.isPawnFreeCamera; }
     public isCameraInputLocked(): boolean { return this.isCameraLocked; }
     public isFreeCameraEnabled(): boolean { return this.isFreeCamera; }
+    public setInvertMouseWheel(isInverted: boolean): void { this.controls.orbit.invertWheel = isInverted; }
 
     public setFreeCamera(enabled: boolean): void {
         if (enabled && this.isCameraLocked) return;
@@ -872,13 +873,12 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public updateFollowPlayer(deltaTime: number): void {
         const controller = this.manGame.getComponent("asset").playerController;
+        const network = this.manGame.getComponent("network");
         const wasMovingToDefault = controller && controller.scriptProperties.get("bCameraMovingToDefault") as boolean;
 
-        if (!controller || !this.manGame.getComponent("network").isInWorld()) this.releaseKeyboardMovingKeys();
+        if (!controller || !network.isInWorld()) this.releaseKeyboardMovingKeys();
         if (controller) {
-            const network = this.manGame.getComponent("network");
-
-            if (network.isInWorld()) {
+            if (network.isInWorld() && !network.actors.missingSector) {
                 const level = controller.scriptProperties.get("Level") as BaseActor,
                     actorDelta = Math.fround(Math.max(MIN_ACTOR_DELTA, Math.min(MAX_ACTOR_DELTA, Math.fround(Math.fround(deltaTime / 1000) * (level.getUnrealScriptProperty("TimeDilation") as number)))));
 
@@ -919,7 +919,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             setProperty(controller, "bUseHoldCamera", false);
         }
 
-        const network = this.manGame.getComponent("network"), replay = network.getGameClient()?.isPlayingReplay();
+        const replay = network.getGameClient()?.isPlayingReplay();
 
         if (replay || network.isInWorld() && this.isOrbitControls && this.followPlayer && !this.isCameraLocked) {
             const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
@@ -1133,6 +1133,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("bCameraManuallyRotating", false);
         properties.set("bCameraMovingToDefault", true);
         orbit.enableRotate = false;
+        if (!network.getGameClient().isPlayingReplay()) network.checkTutorialClientEvent(8); // UInput::Exec 0x8496c2..0x8496d3
     }
 
     protected updateDefaultCamera(wasMovingToDefault: boolean, target: Vector3): boolean {
@@ -1165,9 +1166,13 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected updateAutoTrackingPawn(target: Vector3, manualYaw: number): void {
-        if (cameraVelocity.lengthSq() === 0 || manualYaw !== 0 || !this.manGame.getComponent("network").ui.isAutoTrackingPawnEnabled()) return;
+        if (cameraVelocity.lengthSq() === 0 || manualYaw !== 0) return;
 
-        const controller = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const asset = this.manGame.getComponent("asset"), ui = this.manGame.getComponent("network").ui;
+
+        if (!(ui ? ui.isAutoTrackingPawnEnabled() : asset.userConfig.game.autoTrackingPawn)) return;
+
+        const controller = asset.playerController.scriptProperties;
         const speed = controller.get("AutoTrackingPawnSpeed") as number;
 
         if (!controller.get("bUseAutoTrackingPawn") || speed === 0 || controller.get("bUseHoldCamera") ||
@@ -1267,7 +1272,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         const network = this.manGame.getComponent("network");
 
-        if (!network.isInWorld() || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return false;
+        if (!network.isInWorld() || network.actors.missingSector || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return false;
 
         if (bound) event.preventDefault();
         if (this.keyboardMovingKeys.has(key)) return bound;
@@ -1527,8 +1532,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network");
 
         if (network.isInWorld()) {
-            if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, event.shiftKey)) return;
-            if (physicsIntersection && network.requestAction(physicsIntersection.actor, event.shiftKey, event.ctrlKey || network.ui.getInputModifiers()[0])) return;
+            const [isCtrl, isShift] = network.ui.getInputModifiers();
+
+            if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, isShift)) return;
+            if (physicsIntersection && network.requestAction(physicsIntersection.actor, isShift, isCtrl)) return;
 
             if (physicsIntersection) {
                 tmpMouseIntersection.copy(physicsIntersection.location);
@@ -1576,7 +1583,11 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onHandleMouseUp(event: MouseEvent): void {
         if (event.button === 2) {
+            const held = event.timeStamp - this.rightMouseDownTime;
+
             this.rightMouseDownTime = -Infinity;
+            if (held !== Infinity && this.inputBindings && !this.replayCameraState) // WinDrv 0x11105b6d..0x11105b90: release amount is the held time in ms
+                this.inputBindings.process(EInputKey_T.IK_RightMouse, EInputAction_T.IST_Release, Math.fround(held), (command, action, amount, viewport) => parseInputCommand(command, "FixedDefaultCamera") === null || this.executeInputCommand(command, action, amount, viewport));
             return;
         }
         if (event.button !== 0) return;
