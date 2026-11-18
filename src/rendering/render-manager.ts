@@ -3627,19 +3627,19 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public stitchTerrains() {
-        const terrains: Terrain[] = [];
-        this.scene.traverse(child => {
-            if ((child as any).isTerrain) {
-                terrains.push(child as Terrain);
-            } else if ((child as any).isTerrainBatch) {
-                const batchSectors = (child as any).sectors as Terrain[];
-                if (batchSectors) {
-                    batchSectors.forEach(s => terrains.push(s));
-                }
-            }
-        });
+        const owners = new Map<Terrain, SectorObject>();
 
-        const result = Terrain.stitchAll(terrains);
+        for (const sector of this.arrSceneSectors) {
+            sector.traverse(child => {
+                if ((child as any).isTerrain)
+                    owners.set(child as Terrain, sector);
+                else if ((child as any).isTerrainBatch)
+                    for (const terrain of (child as any).sectors as Terrain[])
+                        owners.set(terrain, sector);
+            });
+        }
+
+        const result = Terrain.stitchAll([...owners.keys()]);
 
         (window as any).terrainDebug = result;
 
@@ -3648,7 +3648,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
         for (const terrain of result.modified) {
             this.getPhysicsManager().refreshCollider(terrain);
-            sectors.add(this.sectors.get(terrain.mapX).get(terrain.mapY));
+            sectors.add(owners.get(terrain));
         }
 
         for (const sector of sectors) this.sectorOcclusion.add(sector);

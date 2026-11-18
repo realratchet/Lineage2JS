@@ -58,6 +58,8 @@ export class NetworkMovement {
     public constructor(protected readonly network: NetworkManager) {}
 
     public tick(currentTime: number): void {
+        if (this.network.actors.missingSector) return;
+
         const player = this.network.getParent().getComponent("render").player;
         const isMoving = player.isLocomoting();
 
@@ -87,6 +89,8 @@ export class NetworkMovement {
     }
 
     public cannotMoveAnymore(isHitWall = false) {
+        if (this.network.actors.missingSector) return;
+
         const player = this.network.getParent().getComponent("render").player, base = player.getBaseActor() as Vehicle;
 
         if (!isHitWall) player.stopMoving();
@@ -293,6 +297,16 @@ export class NetworkMovement {
 
         if (object.kind === "user") this.network.actors.clearKnownObjects();
 
+        if (object.kind === "user" && this.network.actors.missingSector) {
+            const render = this.network.getParent().getComponent("render");
+
+            tmpTeleportPosition.copy(object.position);
+            tmpTeleportPosition.z = Math.fround(tmpTeleportPosition.z + Math.fround(object.speeds.collisionHeight) + 10);
+            render.player.l2Teleport(tmpTeleportPosition);
+            void this.finishTeleport();
+            return;
+        }
+
         if (object.actor) {
             if (object.actor.getUnrealScriptProperty("Controller")) {
                 object.actor.stopMove();
@@ -332,8 +346,26 @@ export class NetworkMovement {
         const render = this.network.getParent().getComponent("render");
         const asset = this.network.getParent().getComponent("asset");
         const generation = ++this.network.actors.teleportGeneration;
+        const isRecovering = !!this.network.actors.missingSector;
+
+        if (isRecovering) {
+            const [x, y] = render.getSectorId(render.player.position);
+            const sectorName = `${x}_${y}`;
+
+            if (!asset.hasSector(sectorName)) {
+                asset.setStreaming(render, false);
+                this.teleportLoading = false;
+                this.network.actors.missingSector = sectorName;
+                this.network.session.game.appearing();
+                this.network.actors.showMissingSector();
+                return;
+            }
+
+            asset.setStreaming(render, true);
+        }
+
         const sector = render.getSector(render.player.position);
-        const isLoading = !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
+        const isLoading = isRecovering || !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
 
         render.cutCamera();
 
@@ -345,6 +377,7 @@ export class NetworkMovement {
             await waitForAreaLoad(asset, render, () => this.network.actors.inWorld && generation === this.network.actors.teleportGeneration);
 
             if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
+            if (isRecovering) this.network.actors.resumeWorld(render.getSector(render.player.position));
         } else if ((sector.getMusicIdAt(render.player.position).musicId ?? -1) !== render.getActiveMusicId()) render.cancelMusic();
 
         this.network.actors.teleportInfoPending = true;
@@ -500,6 +533,8 @@ export class NetworkMovement {
     }
 
     public onVehicleLocation(packet: PacketReader, isStopped: boolean) {
+        if (this.network.actors.missingSector) return;
+
         const info = GamePackets.readVehicleLocation(packet);
         let vehicle = this.vehicles.get(info.objectId);
 
@@ -747,6 +782,8 @@ export class NetworkMovement {
             this.isMounted = ride.isMounted;
             this.network.actors.updateMountable();
         }
+
+        if (this.network.actors.missingSector) return;
 
         const previous = this.mounts.get(ride.objectId);
 

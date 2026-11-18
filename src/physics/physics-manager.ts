@@ -6,6 +6,7 @@ import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, Phys
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
+import type WaterEffectsComponent from "./components/water-effects-component";
 import type { ScriptComponent } from "../game/script-component";
 
 import { pointPrimitive, queryPrimitive } from "./collision-primitive";
@@ -392,10 +393,11 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return false;
     }
 
-    public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume): void {
+    public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume, test: boolean): void {
         if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
 
-        if (volume !== owner.getUnrealScriptProperty("FootVolume")) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
+        const entered = volume !== owner.getUnrealScriptProperty("FootVolume");
+        if (entered) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
         if (!volume.getUnrealScriptProperty("Brush")) return;
         const primitive = this.collisionWorld.getPhysicsVolumePrimitive(volume);
         if (!primitive) throw new Error(`Water volume '${volume.name}' has no registered primitive.`);
@@ -426,6 +428,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         if (pointPrimitive(primitive, tmpWaterHitLocation, zeroWaterExtent)) tmpWaterHitLocation.set(0, 0, 0);
         owner.setUnrealScriptProperty("HitLocation", tmpWaterHitLocation.toArray());
+        if (entered && !test && tmpWaterHitLocation.lengthSq() !== 0)
+            owner.findComponent<WaterEffectsComponent>("waterEffects")?.recordWaterEntry(volume, tmpWaterHitLocation);
     }
 
     public setActorZone(actor: Actor, test: boolean = false, forceRefresh: boolean = false): void {
@@ -576,7 +580,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             }
             pawn.setUnrealScriptProperty("HeadVolume", head as any);
         }
-        this.updatePawnWaterHitEffect(pawn, foot);
+        this.updatePawnWaterHitEffect(pawn, foot, test);
         if (foot !== pawn.getUnrealScriptProperty("FootVolume")) pawn.setUnrealScriptProperty("FootVolume", foot as any);
     }
     public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true, sourceActor?: CollisionQuery_T["sourceActor"]): RayCheckResult_T | null {

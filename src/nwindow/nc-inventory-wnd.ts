@@ -394,22 +394,33 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.paintItems();
     }
 
-    public placeOnScreen(width: number, height: number) { this.place(width - 302, Math.trunc(height * 0.5 - 252)); }
-    protected place(x: number, y: number) {
-        const dx = x - parseFloat(this.element.style.left), dy = y - parseFloat(this.element.style.top);
+    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 302, Math.trunc(height * 0.5 - 252)); }
 
+    protected place(x: number, y: number) {
         this.layer.place(this.element, x, y);
-        this.layer.place(this.folded, parseFloat(this.folded.style.left) + dx, parseFloat(this.folded.style.top) + dy);
+        this.placeFoldedOnScreen();
+    }
+
+    public placeFoldedOnScreen(isReset: boolean = false) {
+        this.placeWithinScreen(this.folded, isReset || this.folded.hidden ? this.element : this.folded);
         this.placeCaption();
     }
+
+    protected placeWithinScreen(element: HTMLElement, anchor: HTMLElement) {
+        const { width, height } = this.layer.getManager().canvas;
+        const x = Math.max(0, Math.min(width - parseFloat(element.style.width), parseFloat(anchor.style.left)));
+        const y = Math.max(0, Math.min(height - parseFloat(element.style.height), parseFloat(anchor.style.top)));
+
+        this.layer.place(element, x, y);
+    }
+
     public isVisible() { return !this.element.hidden; }
     public isItemDropTarget(target: Node) { return this.equipment.contains(target) || this.arrBags.some(bag => target === bag || bag.content.contains(target)); }
     protected minimize() { // NCInventoryWnd 0x10093ea0.
-        this.layer.place(this.folded, Math.max(0, this.element.offsetLeft), this.element.offsetTop);
         this.setVisible(false);
         this.folded.hidden = false;
+        this.placeFoldedOnScreen(true);
         this.folded.focus();
-        this.placeCaption();
     }
 
     protected placeCaption() { // NWindow 0x1001dfb0, final inventory Hide clears above-caption flag.
@@ -430,13 +441,15 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.placeCaption();
     }
     public setVisible(isVisible: boolean) {
+        const anchor = this.folded.hidden ? this.element : this.folded;
+
         if (!isVisible) this.search.close(false);
         this.folded.hidden = true;
         this.caption.hidden = true;
 
         if (isVisible) {
-            this.place(parseFloat(this.folded.style.left), parseFloat(this.folded.style.top));
-            this.layer.place(this.folded, parseFloat(this.element.style.left), parseFloat(this.element.style.top));
+            this.placeWithinScreen(this.element, anchor);
+            this.placeFoldedOnScreen();
             this.hideBags();
             this.getBag().hidden = false;
             this.arrSavedOrder = this.orderKey ? JSON.parse(localStorage.getItem(this.orderKey) || "[]") : [];

@@ -86,6 +86,29 @@ function fadeOutAction(action: AnimationAction, duration: number): boolean { // 
     return true;
 }
 
+function copyActionPlayback(source: any, target: any, durationScale: number): void {
+    target.setLoop(source.loop, source.repetitions);
+    target.clampWhenFinished = source.clampWhenFinished;
+    target.time = source.time * durationScale;
+    target.timeScale = source.timeScale * durationScale;
+    target.weight = source.weight;
+    target.paused = source.paused;
+    target.enabled = source.enabled;
+    target._loopCount = source._loopCount;
+    target._startTime = source._startTime;
+    target._effectiveTimeScale = source._effectiveTimeScale * durationScale;
+    target._effectiveWeight = source._effectiveWeight;
+    Object.assign(target._interpolantSettings, source._interpolantSettings);
+
+    if (source._weightInterpolant) {
+        const fade = target._weightInterpolant = target.getMixer()._lendControlInterpolant();
+
+        fade.parameterPositions.set(source._weightInterpolant.parameterPositions);
+        fade.sampleValues.set(source._weightInterpolant.sampleValues);
+    }
+    target.play();
+}
+
 export class AnimationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "animation";
     protected readonly renderManager: RenderManager;
@@ -321,7 +344,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         }
     }
 
-    public setMeshes(meshes: Mesh[]): void {
+    public setMeshes(meshes: Mesh[], preserveAnimation: boolean = false): void {
         const parent = this.getParent();
         const skeletons: LocalSpaceSkeleton[] = [];
 
@@ -336,8 +359,11 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             if (skeleton && !skeletons.includes(skeleton)) skeleton.transferAttachments(skeletons);
         }
 
+        const wasSuspended = this.simulationSuspendedAt !== null;
+
         this.setSimulationEnabled(true);
-        this.stop();
+        if (preserveAnimation) this.replaceMeshActions(meshes);
+        else this.stop();
 
         for (const scaler of this.boneScalers.values()) {
             for (const [bone, scale] of scaler.bones) bone.scale.copy(scale);
@@ -367,9 +393,79 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         for (const [name, scaler] of this.boneScalers) this.setBoneScale(name, scaler.scale);
 
+        if (preserveAnimation && wasSuspended) this.setSimulationEnabled(false);
         this.placeMeshes();
         this.dispatchEvent(MESHES_CHANGED_EVENT, meshes);
         this.renderManager.invalidatePawnLighting(parent);
+    }
+
+    protected replaceMeshActions(meshes: Mesh[]): void {
+        const notify = this.animationNotifyAction;
+        const source = notify ? notify.getRoot() as Mesh : this.meshes.find(mesh => this.currAnimations.has(mesh));
+        let nextNotify: AnimationAction = null;
+
+        if (source) {
+            const current = this.currAnimations.get(source);
+            const previous = this.prevAnimations.get(source) || [];
+
+            for (const mesh of meshes) {
+                if ((mesh as any).isBoneAttachment || (mesh as any).sharesSkeleton) continue;
+
+                const action = this.copyMeshAction(current, mesh);
+
+                if (action) {
+                    this.currAnimations.set(mesh, action);
+                    if (!nextNotify && current === notify) nextNotify = action;
+                }
+
+                const fading: AnimationAction[] = [];
+                for (const old of previous) {
+                    if (!old.enabled) continue;
+                    const action = this.copyMeshAction(old, mesh);
+                    if (action) fading.push(action);
+                }
+                this.prevAnimations.set(mesh, fading);
+            }
+        }
+
+        for (const mesh of this.meshes) {
+            const previous = this.prevAnimations.get(mesh);
+            const current = this.currAnimations.get(mesh);
+
+            if (previous) for (const action of previous) action.stop();
+            if (current) current.stop();
+        }
+        for (const action of this.tweenTimeScales.keys())
+            if (this.meshes.includes(action.getRoot() as Mesh)) this.tweenTimeScales.delete(action);
+
+        this.animationNotifyAction = nextNotify;
+        this.updateTweenRegistration();
+    }
+
+    protected copyMeshAction(source: AnimationAction, mesh: Mesh): AnimationAction {
+        if (!source.isScheduled()) return null;
+
+        const sourceClip = source.getClip();
+        let clip = sourceClip;
+
+        if ((mesh as LitSkinnedMesh).skeleton?.rootBoneSource) {
+            const animations = (mesh as any).meshAnimations as Record<string, AnimationClip>;
+            const name = Object.keys(animations).find(name => name.toLowerCase() === sourceClip.name.toLowerCase());
+
+            if (!name) return null;
+
+            clip = source.loop === LoopOnce ? getOnceAnimation(animations[name]) : animations[name];
+            if (this.mixer.existingAction(clip, mesh)?.isScheduled()) clip = getTweenTwin(clip, this.mixer, mesh);
+        }
+
+        const action = this.mixer.clipAction(clip, mesh);
+        const durationScale = sourceClip.duration > 0 ? clip.duration / sourceClip.duration : 1;
+        const tweenRate = this.tweenTimeScales.get(source);
+
+        copyActionPlayback(source, action, durationScale);
+        if (tweenRate !== undefined) this.tweenTimeScales.set(action, tweenRate * durationScale);
+
+        return action;
     }
 
     protected disposeSkeletons(): void {

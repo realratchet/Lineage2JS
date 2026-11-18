@@ -873,13 +873,12 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public updateFollowPlayer(deltaTime: number): void {
         const controller = this.manGame.getComponent("asset").playerController;
+        const network = this.manGame.getComponent("network");
         const wasMovingToDefault = controller && controller.scriptProperties.get("bCameraMovingToDefault") as boolean;
 
-        if (!controller || !this.manGame.getComponent("network").isInWorld()) this.releaseKeyboardMovingKeys();
+        if (!controller || !network.isInWorld()) this.releaseKeyboardMovingKeys();
         if (controller) {
-            const network = this.manGame.getComponent("network");
-
-            if (network.isInWorld()) {
+            if (network.isInWorld() && !network.actors.missingSector) {
                 const level = controller.scriptProperties.get("Level") as BaseActor,
                     actorDelta = Math.fround(Math.max(MIN_ACTOR_DELTA, Math.min(MAX_ACTOR_DELTA, Math.fround(Math.fround(deltaTime / 1000) * (level.getUnrealScriptProperty("TimeDilation") as number)))));
 
@@ -920,7 +919,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             setProperty(controller, "bUseHoldCamera", false);
         }
 
-        const network = this.manGame.getComponent("network"), replay = network.getGameClient()?.isPlayingReplay();
+        const replay = network.getGameClient()?.isPlayingReplay();
 
         if (replay || network.isInWorld() && this.isOrbitControls && this.followPlayer && !this.isCameraLocked) {
             const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
@@ -1273,7 +1272,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         const network = this.manGame.getComponent("network");
 
-        if (!network.isInWorld() || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return false;
+        if (!network.isInWorld() || network.actors.missingSector || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return false;
 
         if (bound) event.preventDefault();
         if (this.keyboardMovingKeys.has(key)) return bound;

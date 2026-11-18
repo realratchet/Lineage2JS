@@ -716,17 +716,21 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         const copySource = Object.create(source) as this;
         const uniforms = getLocalUniforms(source.uniforms);
         const proceduralUniforms: Record<string, THREE.IUniform> = {};
+        const compressedCubeUniforms: Record<string, THREE.IUniform> = {};
 
-        for (const [name, uniform] of Object.entries(uniforms))
-            if ((uniform.value as any)?.isTexture && (uniform.value as any).isUpdatable) {
-                proceduralUniforms[name] = uniform;
-                delete uniforms[name];
-            }
+        for (const [name, uniform] of Object.entries(uniforms)) {
+            const texture = uniform.value as any;
+            if (!texture?.isTexture) continue;
+            if (texture.isUpdatable) proceduralUniforms[name] = uniform;
+            else if (texture.isCompressedCubeTexture) compressedCubeUniforms[name] = { ...uniform };
+            else continue;
+            delete uniforms[name];
+        }
 
         copySource.uniforms = uniforms;
 
         super.copy(copySource);
-        Object.assign(this.uniforms, proceduralUniforms);
+        Object.assign(this.uniforms, proceduralUniforms, compressedCubeUniforms);
         appendGlobalUniforms(this.uniforms);
 
         for (const [name, uniform] of Object.entries(this.uniforms))

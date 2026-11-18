@@ -640,11 +640,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const bodyparts = characterLibrary.pawnActors.map(info => decodeObject3D(characterLibrary, info) as THREE.SkinnedMesh);
         const animations = (bodyparts[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
         const player = actor || renderManager.player;
-
-        if (player === renderManager.player) this.pawnSkillRequests.set(player, (this.pawnSkillRequests.get(player) || 0) + 1);
+        const previousLibrary = this.pawnLibraries.get(player);
         const previousAttack = player.findComponent<PawnAttackComponent>("pawnAttack");
+        const animationSet = characterLibrary.pawnActors[0].animationSet;
+        const preserveAnimation = !!previousAttack && player.scriptClassId === classId && !!animationSet && previousLibrary?.pawnActors[0]?.animationSet === animationSet;
 
-        if (previousAttack) player.removeComponent(previousAttack);
+        if (!preserveAnimation) {
+            if (player === renderManager.player) this.pawnSkillRequests.set(player, (this.pawnSkillRequests.get(player) || 0) + 1);
+            if (previousAttack) player.removeComponent(previousAttack);
+        }
 
         if (!animations) throw new Error(`'${characterLibrary.name}' animations failed to decode.`);
 
@@ -657,15 +661,17 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!declared) throw new Error(`'assets/system/lineagewarrior.int' has no '${className}' class.`);
 
         setPawnComponents(renderManager, characterLibrary, player);
-        player.setAnimations(animations);
-        player.setIdleAnimation(findAnimation(animations, declared.wait));
-        player.setWalkingAnimation(findAnimation(animations, declared.walk));
-        player.setRunningAnimation(findAnimation(animations, declared.run));
-        player.setDeathAnimation(findAnimation(animations, declared.death));
-        player.setFallingAnimation(findAnimation(animations, declared.falling));
-        player.setSwimmingAnimation(findAnimation(animations, declared.swim));
-        player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
-        player.setMeshes(bodyparts);
+        if (!preserveAnimation) {
+            player.setAnimations(animations);
+            player.setIdleAnimation(findAnimation(animations, declared.wait));
+            player.setWalkingAnimation(findAnimation(animations, declared.walk));
+            player.setRunningAnimation(findAnimation(animations, declared.run));
+            player.setDeathAnimation(findAnimation(animations, declared.death));
+            player.setFallingAnimation(findAnimation(animations, declared.falling));
+            player.setSwimmingAnimation(findAnimation(animations, declared.swim));
+            player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
+            player.setMeshes(bodyparts);
+        }
         const vm = new UnScriptVM(characterLibrary);
 
         player.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, characterLibrary, effectClassId, vm));
@@ -684,15 +690,21 @@ export class AssetManager implements IEngineComponent<GameManager> {
             (part.skeleton as LocalSpaceSkeleton).rootBoneSource = host.bones[index];
         }
 
-        if (characterLibrary.pawnEquipment) applyCharacterEquipment(renderManager, characterLibrary, player, animations);
+        if (preserveAnimation) player.setMeshes(bodyparts, true);
+        if (characterLibrary.pawnEquipment) applyCharacterEquipment(renderManager, characterLibrary, player, animations, !preserveAnimation);
         else {
             const equipment = player.findComponent<PawnEquipmentComponent>("pawnEquipment");
 
             if (equipment) player.removeComponent(equipment);
         }
         player.effectSpawnBoneIndex = characterLibrary.effectSpawnBoneIndex;
-        player.initAnimations();
-        player.addComponent(new PawnAttackComponent(renderManager, player.getAnimationNames(), [], characterLibrary.npcBow));
+        if (preserveAnimation) {
+            characterLibrary.npcSkillAttacks.push(...previousLibrary.npcSkillAttacks);
+            previousAttack.setWeapon(characterLibrary.npcBow);
+        } else {
+            player.initAnimations();
+            player.addComponent(new PawnAttackComponent(renderManager, player.getAnimationNames(), [], characterLibrary.npcBow));
+        }
 
         this.pawnLibraries.set(player, characterLibrary);
         renderManager.queueShaderCompile(player);
@@ -716,7 +728,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         actor.getComponent<ScriptComponent>("script").getVM().loadFunctions();
         pawnLibrary.pawnEquipment = library.pawnEquipment;
         pawnLibrary.npcBow = library.npcBow;
-        applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])));
+        applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])), false);
         actor.getComponent<PawnAttackComponent>("pawnAttack").setWeapon(pawnLibrary.npcBow);
         renderManager.queueShaderCompile(actor);
         renderManager.needsUpdate = true;
@@ -1599,11 +1611,11 @@ function isHeadBone(name: string) {
 }
 
 // system/lineagewarrior.int clip names are case-insensitive against package names.
-function applyCharacterEquipment(renderManager: RenderManager, library: DecodeLibrary, actor: BaseActor, animations: Record<string, THREE.AnimationClip>): void {
+function applyCharacterEquipment(renderManager: RenderManager, library: DecodeLibrary, actor: BaseActor, animations: Record<string, THREE.AnimationClip>, updateIdle: boolean): void {
     const weapon = library.pawnEquipment.weaponType;
 
     actor.setUnrealScriptProperty("CurWeaponType", weapon);
-    actor.setIdleAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WaitAnimName") as string[])[weapon]));
+    if (updateIdle) actor.setIdleAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WaitAnimName") as string[])[weapon]));
     actor.setWalkingAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WalkAnimName") as string[])[weapon]));
     actor.setRunningAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("RunAnimName") as string[])[weapon]));
     const equipment = actor.findComponent<PawnEquipmentComponent>("pawnEquipment");
