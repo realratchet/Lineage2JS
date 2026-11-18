@@ -70,6 +70,9 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
             this.invalidate();
         };
         this.element.addEventListener("wheel", event => this.onWheel(Math.sign(event.deltaY)));
+        document.addEventListener("selectionchange", () => {
+            if (this.pending.length && this.isVisible() && !this.hasSelection()) this.invalidate();
+        });
     }
 
     public static getTextures(): string[] { return [TEX_SYSTEM]; }
@@ -103,6 +106,12 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
         this.scrollBar.scrollBy(delta);
 
         return true;
+    }
+
+    protected hasSelection() {
+        const selection = document.getSelection();
+
+        return selection && !selection.isCollapsed && selection.getRangeAt(0).intersectsNode(this.text);
     }
 
     protected invalidate() {
@@ -143,7 +152,7 @@ export class NCChatListBox { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a5
     }
 
     protected render() { // OnPaint 0x10056530
-        this.flush();
+        if (this.pending.length && !this.hasSelection()) this.flush();
 
         const rows = Math.trunc((this.height - 10) / ROW_HEIGHT);
 
