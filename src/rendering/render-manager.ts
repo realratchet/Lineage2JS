@@ -39,7 +39,7 @@ import LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
 import LocalSpaceSkeleton from "../objects/local-space-skeleton";
 import type GroundPickup from "../objects/ground-pickup";
-import ShadowProjector, { isInShadowRange } from "../objects/shadow-projector";
+import ShadowProjector, { isInShadowRange, SHADOW_RANGE } from "../objects/shadow-projector";
 import ProjectorRenderer from "./projector-renderer";
 import PawnCrowd from "../objects/pawn-crowd";
 import boneAtlas from "../objects/bone-atlas";
@@ -362,6 +362,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected pawnRange: number = null;
     protected pawnLimit = 10000;
     protected readonly arrVisiblePawns: PawnRenderableComponent[] = [];
+    protected readonly largeShadowCasters = new Set<BaseActor>();
     protected pawnShadow = true;
     protected pawnRelightDistanceSq = 0; // retail relights on any root bone movement
     protected pawnShadowLimited = false;
@@ -1716,6 +1717,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const limit = inWorld ? this.pawnLimit : 10000;
 
         this.arrVisiblePawns.length = 0;
+        this.largeShadowCasters.clear();
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
             const filterPawn = resetDynamicActorFilter(pawn);
@@ -1742,9 +1744,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
                     if (leafVisible && state.sector.hasActiveAntiPortals && state.sector.isPawnOccluded(component.getRenderBox(), leaves)) leafVisible = false;
                 } else leafVisible = state.leafIndex !== null && state.sector.visibleLeaves.has(state.leafIndex);
 
-                pawn.visible = leafVisible && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere()));
-                if (pawn.visible && filterPawn) setProperty(pawn, "bDynamicActorFilterState", true);
-                pawn.visible = pawn.visible && !pawn.checkLoadingResource(false);
+                pawn.visible = leafVisible;
+                if (leafVisible) {
+                    const sphere = component.getRenderSphere();
+                    const largeShadow = this.pawnShadow && sphere.radius > SHADOW_RANGE && isInShadowRange(state.position, this.player.position);
+                    pawn.visible = !this.frustumCullingEnabled || frustum.intersectsSphere(sphere);
+                    if (pawn.visible && filterPawn) setProperty(pawn, "bDynamicActorFilterState", true);
+                    if ((pawn.visible || largeShadow) && pawn.checkLoadingResource(false)) pawn.visible = false;
+                    else if (largeShadow) this.largeShadowCasters.add(pawn);
+                }
             }
             if (pawn.visible) {
                 if (limit < 10000 && pawn !== this.player) this.arrVisiblePawns.push(component);
@@ -1756,6 +1764,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.arrVisiblePawns.forEach((component, index) => {
             component.getParent().visible = index < limit;
             if (index < limit) component.createSkin();
+            else this.largeShadowCasters.delete(component.getParent());
         });
 
         this.sectors.forEach(row => row.forEach(sector => {
@@ -1866,11 +1875,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (this.pawnShadow && !this.pawnShadowLimited) {
             const gui = this.manGame.getComponent("gui");
-            for (const component of this.pawnRenderables)
-                if (component.getParent() !== this.player && (gui.getScreen() !== "world" || gui.hasNameplate(component.getParent()))) arrShadowCasters.push(component.getParent());
+            for (const component of this.pawnRenderables) {
+                const pawn = component.getParent();
+                if (pawn !== this.player && (gui.getScreen() !== "world" || this.largeShadowCasters.has(pawn) || gui.hasNameplate(pawn))) arrShadowCasters.push(pawn);
+            }
         }
 
-        this.shadowProjector.update(this.renderer, focus, arrShadowCasters, tmpShadowDirection);
+        this.shadowProjector.update(this.renderer, focus, arrShadowCasters, tmpShadowDirection, this.largeShadowCasters);
     }
 
     public invalidatePawnLighting(actor: THREE.Object3D): void {

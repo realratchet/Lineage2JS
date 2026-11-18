@@ -15,7 +15,7 @@ const zScale = Math.fround(far / (far - near));
 const zOffset = Math.fround(-near * far / (far - near));
 
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
-const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
+export const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
 const SHADOW_BAND_Z = 200;
 const LIGHT_DISTANCE_SCALE = 32; // AShadowProjector::execUpdateLightInfo 0x936648 multiplies the projector's collision height by 32.
 const LIGHT_DISTANCE = 22 * LIGHT_DISTANCE_SCALE;
@@ -138,7 +138,7 @@ export class ShadowProjector {
         return programs;
     }
 
-    public update(_renderer: THREE.WebGLRenderer, focus: Object3D, casters: Iterable<Object3D>, lightDirection: Vector3): void {
+    public update(_renderer: THREE.WebGLRenderer, focus: Object3D, casters: Iterable<Object3D>, lightDirection: Vector3, largeCasters?: ReadonlySet<Object3D>): void {
         this.frame++;
         focus.getWorldPosition(tmpFocusPos);
         this.lastFocusPosition.copy(tmpFocusPos);
@@ -146,11 +146,12 @@ export class ShadowProjector {
         this.lastCasters.length = this.projectors.length = 0;
 
         for (const object of casters) {
-            if (!object.visible && object !== focus) continue;
+            const largeShadow = largeCasters?.has(object);
+            if (!object.visible && object !== focus && !largeShadow) continue;
             const actor = object as BaseActor;
             if (actor.getUnrealScriptProperty("bHidden") || actor.getUnrealScriptProperty("bHideShadow")) continue;
             object.getWorldPosition(tmpCasterPos);
-            if (!isInShadowRange(tmpCasterPos, tmpFocusPos)) continue;
+            if (!largeShadow && !isInShadowRange(tmpCasterPos, tmpFocusPos)) continue;
 
             const animation = actor.getComponent<AnimationComponent>("animation");
             if (!animation.getMeshes().length) continue;
