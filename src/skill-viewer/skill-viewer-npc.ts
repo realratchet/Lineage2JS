@@ -19,7 +19,7 @@ export class SkillViewerStage {
     protected readonly assetManager: SkillViewerAssetManager;
     protected readonly entries: SkillViewerEntry_T[] = [];
     protected cacheSkills: SkillViewerSkill_T[] = null;
-    protected cacheNpcs: INpcDefinition[] = null;
+    protected cacheNpcs: INpcDefinition[] = [];
     protected spawnRequest = 0;
 
     public constructor(renderManager: RenderManager, assetManager: SkillViewerAssetManager) {

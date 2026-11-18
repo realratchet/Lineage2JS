@@ -343,7 +343,6 @@ export abstract class UParticleEmitter extends UObject {
     declare protected _curLifeTime: any;
     declare protected _bNotifyPreDestroy: any;
 
-    declare protected _refraction: any;
 
     declare protected addVelocityFromOwner: boolean;
     declare protected scaleSizeXByVelocity: boolean;
@@ -520,7 +519,6 @@ export abstract class UParticleEmitter extends UObject {
             "CurLifeTime": "_curLifeTime",
             "bNotifyPreDestroy": "_bNotifyPreDestroy",
 
-            "Refraction": "_refraction",
         });
     }
 

@@ -1133,6 +1133,7 @@ function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeI
 
     const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), {
         material,
+        refractionScale: info.refractionScale,
         spriteDirection: info.spriteDirection,
         projectionNormal: info.projectionNormal
     }));

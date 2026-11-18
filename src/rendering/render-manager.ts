@@ -1,5 +1,6 @@
 import SkillLightProbe from "./skill-light-probe";
 import { disposeStaticLighting, pollStaticLighting } from "./static-lighting";
+import ParticleRefraction, { type RefractionMaterial_T } from "./particle-refraction";
 import NameplateDepth from "./nameplate-depth";
 import TranslucentRenderList from "./translucent-render-list";
 import PortalVisibility from "./portal-visibility";
@@ -12,7 +13,7 @@ import { EDrawType_T } from "../assets/unreal/un-aactor";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, MeshBasicMaterial, Camera, Color, Sprite, NormalBlending, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion, DepthTexture, FloatType, WebGLCoordinateSystem } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, type InstancedBufferGeometry, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, MeshBasicMaterial, Camera, Color, Sprite, NormalBlending, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion, DepthTexture, FloatType, WebGLCoordinateSystem } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS, { getLocalUniforms } from "../materials/global-uniforms";
 import Player from "../player";
@@ -350,6 +351,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected lastObjectUpdateTime = -1;
     protected readonly arrViewportBatchEmitters: any[] = [];
+    protected readonly particleRefraction = new ParticleRefraction();
     protected readonly nameplateDepth: NameplateDepth;
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
@@ -465,7 +467,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         try {
             const canvas = document.createElement("canvas");
             canvas.style.display = "block";
-            const context = canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true, premultipliedAlpha: false, alpha: true });
+            const context = canvas.getContext("webgl2", { antialias: false, stencil: true, preserveDrawingBuffer: true, premultipliedAlpha: false, alpha: true });
             if (!context) throw new Error(`WebGL2 context is unavailable`);
             const reversedDepthBuffer = !!context.getExtension("EXT_clip_control");
             this.renderer = new WebGLRenderer({
@@ -528,7 +530,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).resolveMatrices();
 
             if (scene === this.scene || scene === this.nameplateScene) this.nameplateDepth.beforeRender(material, object); // a fading pawn in the shadow pass made it copy the 256x256 shadow depth
-            renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
+            if ((material as RefractionMaterial_T).refractionMask && scene === this.scene) {
+                if ((geometry as InstancedBufferGeometry).instanceCount === 0) return;
+                const refract = material as RefractionMaterial_T;
+                this.particleRefraction.prepare(this.renderer, scene, camera, refract);
+                try {
+                    renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
+                } finally {
+                    refract.uniforms.refractionScene.value = null;
+                }
+            } else renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
             this.sectorOcclusion.afterRender(camera, scene, geometry, material, object, group);
         };
 
@@ -540,6 +551,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.projectorRenderer.dispose();
             disposeStaticLighting(this.renderer);
             this.nameplateDepth.dispose();
+            this.particleRefraction.dispose();
             this.sectorOcclusion.dispose();
             dispose.call(this.renderer);
         };

@@ -1,4 +1,4 @@
-import { Box3, BufferGeometry, Color, CustomBlending, DstColorFactor, EqualDepth, FrontSide, Group, Matrix3, Mesh, MeshBasicMaterial, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, SrcAlphaFactor, SrcColorFactor, Uniform, Vector3, Vector4, ZeroFactor, type Camera, type Scene, type Texture, type WebGLRenderer } from "three";
+import { Box3, BufferGeometry, Color, CustomBlending, DstColorFactor, EqualDepth, FrontSide, Group, LessEqualDepth, Matrix3, Mesh, MeshBasicMaterial, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, SrcAlphaFactor, SrcColorFactor, Uniform, Vector3, Vector4, ZeroFactor, type Camera, type Scene, type Texture, type WebGLRenderer } from "three";
 import { EProjectorBlending_T } from "../assets/unreal/un-projector";
 import type { BatchElement_T } from "../assets/unreal/static-mesh-batch";
 import { appendGlobalUniforms } from "../materials/global-uniforms";
@@ -390,7 +390,8 @@ export class ProjectorRenderer {
                     useIndoorRangeIgnored: new Uniform(false)
                 } : {})
             }),
-            side: FrontSide, vertexColors: !bsp, ...projectorBlending(blend)
+            side: FrontSide, vertexColors: !bsp, ...projectorBlending(blend),
+            depthFunc: bsp ? EqualDepth : LessEqualDepth
         });
         cache.set(blend, material);
         return material;

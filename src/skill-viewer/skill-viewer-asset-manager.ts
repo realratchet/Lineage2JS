@@ -12,6 +12,7 @@ export class SkillViewerAssetManager extends AssetManager {
 
     public constructor(settings: LoadSettings_T, assets: AssetList_T, protected readonly characterPoolSize: number = CHARACTER_POOL_SIZE) {
         super(settings, assets);
+        this.isStreaming = false;
     }
 
     protected createDecodeWorker(): SkillViewerDecodeWorkerClient { return new SkillViewerDecodeWorkerClient(this.decodeWorkerPoolSize); }
