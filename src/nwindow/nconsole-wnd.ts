@@ -2132,7 +2132,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         this.shortCutWnd.setActiveSkills(active);
         this.skillWnd.setActiveSkills(active);
-        this.abnormalStatusWnd.setEffects(effects.filter(effect => !active.has(`${effect.id}:${effect.level}`)).slice(0, 31));
+        this.abnormalStatusWnd.setEffects(effects.slice(0, 31));
     }
     public setSecondaryAbnormalStatus(effects: GamePackets.AbnormalStatus_T[]) { this.abnormalStatusWnd.setSecondaryEffects(effects); }
     public setShortBuff(effect: GamePackets.AbnormalStatus_T) {
