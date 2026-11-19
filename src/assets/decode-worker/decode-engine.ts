@@ -21,7 +21,7 @@ import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
-import decodeSkillVisuals, { validatePlayerSkillSource } from "../unreal/skills/skill-visual-decoder";
+import decodeSkillVisuals, { applyEffectSkinDefaults, getSkillVisualCacheKey, validatePlayerSkillSource } from "../unreal/skills/skill-visual-decoder";
 import mobSkillTable from "./mob-skill-table";
 import { WeaponType, PawnMeshType_T, type UPawn } from "@l2js/engine/un-pawn";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
@@ -1201,6 +1201,8 @@ export class DecodeEngine {
                 for (const [name, value] of Object.entries(current.defaults))
                     if (!(name in info.scriptProperties)) info.scriptProperties[name] = value;
         } else builder.pullScriptClassFunctions([cls]);
+
+        applyEffectSkinDefaults(cls.name, info.scriptProperties);
 
         if (weaponId !== undefined) {
             const row = (await this.decodeWeaponGrp()).find(row => row.id === weaponId);
@@ -2454,7 +2456,8 @@ export class DecodeEngine {
 
         const library = new DecodeLibrary();
         const key = visualEffect.toLowerCase() === "none" ? JSON.stringify([id, attack.name, attack.castStyle === 0]) : visualEffect.toLowerCase();
-        const assets = await this.getStoredAssets("skill_visuals", key, settings, () => this.decodeSkillAssets(settings, { ...attack, sounds: [] }));
+        const visualKey = getSkillVisualCacheKey(key, id, attack.castStyle);
+        const assets = await this.getStoredAssets("skill_visuals", visualKey, settings, () => this.decodeSkillAssets(settings, { ...attack, sounds: [] }));
         const prepared = assets.npcSkillAttacks[0];
 
         library.name = `Skill_${id}_${level}`;
