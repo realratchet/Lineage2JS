@@ -590,6 +590,8 @@ const nativeEffectIds = new Map<number, string>([
     [2174, "e_rejected_transient"],
     [2175, "e_rejected_transient"],
     [2176, "e_rejected_transient"],
+    [2177, "e_rejected_transient"],
+    [2178, "e_rejected_transient"],
     [2181, "e_fishing_shot"],
     [2182, "e_fishing_shot"],
     [2183, "e_fishing_shot"],
