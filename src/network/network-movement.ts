@@ -295,7 +295,10 @@ export class NetworkMovement {
         object.pendingAttack = null;
         object.pendingTransientSkills.length = 0;
 
-        if (object.kind === "user") this.network.actors.clearKnownObjects();
+        if (object.kind === "user") {
+            this.network.actors.teleportGeneration++;
+            this.network.actors.clearKnownObjects();
+        }
 
         if (object.kind === "user" && this.network.actors.missingSector) {
             const render = this.network.getParent().getComponent("render");
@@ -315,18 +318,26 @@ export class NetworkMovement {
             tmpTeleportPosition.z = Math.fround(tmpTeleportPosition.z + Math.fround(object.speeds.collisionHeight) + 10);
             if (object.actor === this.network.getParent().getComponent("render").player) {
                 this.teleportPosition.copy(tmpTeleportPosition);
-                if (object.kind === "user" && !fast) {
+                if (object.kind === "user") {
                     const render = this.network.getParent().getComponent("render"), game = this.network.session.game;
 
-                    if (render.screenFadeOut(1000, [0, 0, 0, 255], () => {
+                    if (!fast && this.teleportPending) return;
+                    if (!fast && render.screenFadeOut(1000, [0, 0, 0, 255], () => {
                         this.teleportPending = false;
                         render.resetScreenFade();
                         if (!this.network.actors.inWorld || this.network.session.game !== game || this.network.actors.objects.get(object.objectId) !== object) return;
 
                         render.player.l2Teleport(this.teleportPosition);
                         void this.finishTeleport();
-                    })) this.teleportPending = true;
-                    return;
+                    })) {
+                        this.teleportPending = true;
+                        return;
+                    }
+
+                    if (this.teleportPending) {
+                        this.teleportPending = false;
+                        render.resetScreenFade();
+                    }
                 }
                 object.actor.l2Teleport(tmpTeleportPosition);
             } else this.network.getParent().getComponent("physics").farMoveActor(object.actor, tmpTeleportPosition);
@@ -345,24 +356,27 @@ export class NetworkMovement {
     protected async finishTeleport() {
         const render = this.network.getParent().getComponent("render");
         const asset = this.network.getParent().getComponent("asset");
-        const generation = ++this.network.actors.teleportGeneration;
+        const generation = this.network.actors.teleportGeneration;
         const isRecovering = !!this.network.actors.missingSector;
+        const [x, y] = render.getSectorId(render.player.position);
+        const sectorName = `${x}_${y}`;
 
-        if (isRecovering) {
-            const [x, y] = render.getSectorId(render.player.position);
-            const sectorName = `${x}_${y}`;
-
-            if (!asset.hasSector(sectorName)) {
-                asset.setStreaming(render, false);
-                this.teleportLoading = false;
-                this.network.actors.missingSector = sectorName;
-                this.network.session.game.appearing();
-                this.network.actors.showMissingSector();
-                return;
-            }
-
-            asset.setStreaming(render, true);
+        if (!asset.hasSector(sectorName)) {
+            this.teleportLoading = false;
+            this.network.actors.missingSector = sectorName;
+            this.network.actors.worldLevel = null;
+            asset.playerController.setPawn(null);
+            render.player.setUnrealScriptProperty("Level", null);
+            render.player.visible = false;
+            render.setLevel(null);
+            render.setZoneMusicEnabled(false);
+            asset.setStreaming(render, false);
+            this.network.session.game.appearing();
+            this.network.actors.showMissingSector();
+            return;
         }
+
+        if (isRecovering) asset.setStreaming(render, true);
 
         const sector = render.getSector(render.player.position);
         const isLoading = isRecovering || !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident

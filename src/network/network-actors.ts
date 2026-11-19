@@ -227,6 +227,16 @@ export class NetworkActors {
         return load;
     }
 
+    public async loadUserAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor): Promise<void> {
+        const load = this.loadAppearance(appearance, actor);
+
+        this.userAppearanceLoad = load;
+        try { await load; }
+        finally {
+            if (this.userAppearanceLoad === load) this.userAppearanceLoad = null;
+        }
+    }
+
     protected async applyAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor) {
         const asset = this.network.getParent().getComponent("asset");
         const paperdoll = appearance.paperdoll;
@@ -570,7 +580,7 @@ export class NetworkActors {
 
         if (key !== object.appearanceKey) {
             object.appearanceKey = key;
-            this.userAppearanceLoad = this.loadAppearance(info, player);
+            void this.loadUserAppearance(info, player);
         }
 
         this.network.movement.setRide({ objectId: info.objectId, isMounted: info.mountType !== GamePackets.MountType_T.NONE, mountType: info.mountType, npcId: info.mountNpcId });

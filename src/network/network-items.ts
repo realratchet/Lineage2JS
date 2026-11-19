@@ -343,7 +343,7 @@ export class NetworkItems {
             paperdoll[slot] = itemId;
         }
         object.appearanceKey = this.network.actors.getAppearanceKey(appearance);
-        this.network.actors.userAppearanceLoad = this.network.actors.loadAppearance(appearance, this.network.movement.riders.get(this.network.actors.userId) || object.actor);
+        void this.network.actors.loadUserAppearance(appearance, this.network.movement.riders.get(this.network.actors.userId) || object.actor);
     }
 
     public onEquipUpdate(packet: PacketReader) {
@@ -400,7 +400,7 @@ export class NetworkItems {
         if (!object || key === object.appearanceKey) return;
 
         object.appearanceKey = key;
-        if (object.actor) void this.network.actors.loadAppearance(appearance, this.network.movement.riders.get(this.network.actors.userId) || object.actor);
+        if (object.actor) void this.network.actors.loadUserAppearance(appearance, this.network.movement.riders.get(this.network.actors.userId) || object.actor);
     }
 
     protected updateInventory(showWindow: boolean = false, isFull: boolean = false) {
