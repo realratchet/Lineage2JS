@@ -102,7 +102,7 @@ export class TranslucentRenderList {
             const source = library.geometries[actor.instance.mesh.geometry];
             const center = new Vector3().fromArray(source.bounds.sphere.center).applyMatrix4(mesh.matrixWorld), memberships: number[] = [];
             library.leafActors.forEach((entries: any[], leaf: number) => { if (entries.some(entry => entry.uuid === actor.uuid)) memberships.push(leaf); });
-            const owner: Owner_T = { index: actors.length, center, radius: 0, path: 0, leaves: memberships, parts: [], count: 0, ordinals: new Map(mesh.geometry.groups.map((group, index) => [group.start, index])) };
+            const owner: Owner_T = { index: actors.length, center, radius: 0, path: 0, leaves: memberships, parts: [], count: 0, ordinals: new Map(source.groups.map((group: [number, number, number], index: number) => [group[0], index])) };
             center.set(Math.fround(center.x), Math.fround(center.y), Math.fround(center.z));
             meshes.set(mesh, [owner]); actors.push(owner); rosters.push({ owner, uuid: actor.uuid });
         }

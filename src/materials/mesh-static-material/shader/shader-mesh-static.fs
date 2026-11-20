@@ -628,7 +628,14 @@ vec3 getFadeColor(FadeData fade) {
 
 #include <skill_light>
 
+#ifdef USE_STATIC_MESH_LOD
+    #include <static_mesh_lod_fragment>
+#endif
+
 void main() {
+    #ifdef USE_STATIC_MESH_LOD
+        discardStaticMeshLod();
+    #endif
     #include <clipping_planes_fragment>
     #ifdef USE_RANGE_FADE
         float rangeAlpha = vRangeAlpha;

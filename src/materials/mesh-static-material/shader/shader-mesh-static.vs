@@ -541,6 +541,10 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     varying vec3 vAuthoredProjectorNormal;
 #endif
 
+#ifdef USE_STATIC_MESH_LOD
+    #include <static_mesh_lod_vertex>
+#endif
+
 void main() {
     #ifdef USE_VERTEX_ALPHA_MASK
         vVertexAlpha = vertexAlpha;
@@ -926,6 +930,9 @@ void main() {
         #include <defaultnormal_vertex>
     #endif
     #include <begin_vertex>
+    #ifdef USE_STATIC_MESH_LOD
+        transformed = applyStaticMeshLod(transformed);
+    #endif
     #ifdef USE_SWAY
         float swayPivotZ = sway.x;
         float swayPeriod = sway.y;

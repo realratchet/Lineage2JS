@@ -1,3 +1,4 @@
+import { expandBillboardBounds } from "../objects/static-mesh-lod";
 import { Box3, Matrix4, Sphere, Vector3 } from "three";
 import ShadowProjector from "../objects/shadow-projector";
 
@@ -31,6 +32,7 @@ export class MeshBounds {
         for (let i = 0; i < position.count; i++) {
             tmpVertex.fromBufferAttribute(position, i);
             cached.bounds.expandByPoint(tmpVertex);
+            if (geometry.attributes.lodBillboard) expandBillboardBounds(cached.bounds, geometry.attributes.lodBillboard, i);
             if (!sway || sway.getY(i) <= 0) continue;
             const angle = sway.getZ(i), phase = sway.getW(i);
             if (angle === 0) continue;
@@ -77,6 +79,7 @@ export class MeshBounds {
                 for (let i = start, end = Math.min(start + 8192, position.count); i < end; i++) {
                     tmpVertex.fromBufferAttribute(position, i);
                     cached.bounds.expandByPoint(tmpVertex);
+                    if (geometry.attributes.lodBillboard) expandBillboardBounds(cached.bounds, geometry.attributes.lodBillboard, i);
                     if (!sway || sway.getY(i) <= 0) continue;
                     const angle = sway.getZ(i), phase = sway.getW(i);
                     if (angle === 0) continue;

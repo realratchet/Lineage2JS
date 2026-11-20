@@ -397,7 +397,7 @@ nativeEffectBindings.set("e_appearance_change", { effects: ["LineageEffect.e_u00
 
 // Engine.dll ID2036: empty phase handlers; transient selector0x79a9d1 ->0x79a7e1 with edi=0.
 // SpawnNTransientEffect selector15 sends IDs2065/2074/2075/2077 to0x104ca7e1 with edi=0.
-// SpawnNTransientEffect rejects IDs2137..2139/2171..2176/2188/2189/2190/2208..2212/2229 at0x104ca7e1 with edi=0.
+// SpawnNTransientEffect rejects IDs2137..2139/2171..2178/2188/2189/2190/2208..2212/2229 at0x104ca7e1 with edi=0.
 // SpawnNTransientEffect rejects enchant/package/fish records through0x104ca7e1 with edi=0.
 // Engine.dll IDs2001/2002: unsigned selector rejection0x798e5d ->0x79a7e1; edi=0 skips sound and returns false.
 nativeEffectBindings.set("e_rejected_transient", nativeEffectRecipes.get("e_rejected_transient"));

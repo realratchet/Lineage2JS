@@ -1,10 +1,12 @@
 import type { NativeSkillEffect_T } from "../native-effects";
 
+export const shiningArrow = { effectClass: "LineageEffect.s_u003_d", skin: "LineageWeaponsTex.Shining_arrow_t00_et" };
+
 // Engine.dll Init 0x7a17a8, PreShot 0x7a43c0, Shot 0x7afa26.
 const effects: NativeSkillEffect_T[] = [
     // Engine.dll 0x7a1878 -> 0x79e29c: NAME_None uses bone 2; unmatched names do not.
     { phase: "casting", effectClass: "LineageEffect.s_u003_a", host: "caster", position: "center", physics: "none", lifeSpan: "shotTime", boneProperty: "LeftHandBone", boneFallback: 2 },
-    { phase: "preshot", effectClass: "LineageEffect.s_u003_d", host: "caster", position: "center", rotation: "caster", physics: "none", boneProperty: "RightHandBone", projectile: { target: "target" } },
+    { phase: "preshot", effectClass: shiningArrow.effectClass, host: "caster", position: "center", rotation: "caster", physics: "none", boneProperty: "RightHandBone", projectile: { target: "target" } },
     { phase: "shot", effectClass: "LineageEffect.s_u003_b", host: "source", owner: "source", attach: "trail", position: "location", releaseProjectile: true }
 ];
 

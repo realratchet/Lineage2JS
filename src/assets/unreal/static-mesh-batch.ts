@@ -7,6 +7,7 @@ export type BatchElementGroup_T = {
     start: number;
     count: number;
     materialIndex: number;
+    lod?: number;
 };
 
 export type BatchElement_T = {

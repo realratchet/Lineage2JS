@@ -19,6 +19,7 @@ type PreparedActorGeometryData_T = {
     colors: ColorTypedArray_T | null;
     vertexAlpha: Uint8Array | null;
     colorsInstance: ColorTypedArray_T | null;
+    lods: IStaticMeshActorDecodeInfo["instance"]["mesh"]["lods"];
     sway: IStaticMeshSwayDecodeInfo | null;
     swayPhase: number;
     indices: ArrayLike<number> | null;
@@ -209,6 +210,7 @@ function prepareActorGeometriesData(
             colors: (meshGeo.attributes.colors as ColorTypedArray_T) ?? null,
             vertexAlpha: meshGeo.attributes.vertexAlpha ?? null,
             colorsInstance: ((info.attributes as any)?.colors as ColorTypedArray_T) ?? null,
+            lods: info.mesh.lods,
             sway: info.mesh.sway ?? null,
             swayPhase: info.swayPhase ?? 0,
             indices: meshGeo.indices ?? null,
@@ -330,7 +332,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let indexOffset = 0;
     let colliderIndexOffset = 0;
     const actorColliderIndices: Uint32Array[] = [];
-    const mergedGroups: { start: number, count: number, materialIndex: number, actorIndex: number }[] = [];
+    const mergedGroups: (BatchElementGroup_T & { actorIndex: number })[] = [];
 
     const tmpV = new Vector3();
     const tmpN = new Vector3();
@@ -370,8 +372,12 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
         }
 
         if (indices) {
+            const levels = actorGeometries[ai].lods;
             for (const [start, count, materialIndex] of groups) {
+                let level = levels ? levels.length - 1 : 0;
+                while (level && start < levels[level].index) level--;
                 mergedGroups.push({
+                    ...(levels ? { lod: level } : {}),
                     start: indexOffset + start,
                     count,
                     materialIndex: materialIndices[materialIndex ?? 0] ?? 0,
@@ -644,8 +650,8 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 leaves: actorLeaves.get(a.uuid) ?? null
             }));
 
-            for (const group of mergedGroups)
-                batchElements[group.actorIndex].groups.push({ start: group.start, count: group.count, materialIndex: group.materialIndex });
+            for (const { actorIndex, ...group } of mergedGroups)
+                batchElements[actorIndex].groups.push(group);
 
             // Regroup indices per material if multi-material
             let finalGroups: [number, number, number][];

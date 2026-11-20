@@ -1,3 +1,4 @@
+import { expandBillboardBounds } from "./static-mesh-lod";
 import type DynamicLight from "./dynamic-light";
 import type BaseActor from "../base-actor";
 import type Terrain from "./terrain";
@@ -228,8 +229,11 @@ export function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["
     if (cached && cached.count === group.count) return cached.bounds;
 
     const bounds = new Box3();
-    for (let i = group.start, end = Math.min(group.start + group.count, source.length); i < end; i++)
+    const billboard = geometry.attributes.lodBillboard;
+    for (let i = group.start, end = Math.min(group.start + group.count, source.length); i < end; i++) {
         bounds.expandByPoint(tmpVec3.fromBufferAttribute(position, source[i]));
+        if (billboard) expandBillboardBounds(bounds, billboard, source[i]);
+    }
 
     cache.ranges.set(group.start, { count: group.count, bounds });
     return bounds;
@@ -638,6 +642,8 @@ export class SectorObject extends GameObject {
 
     protected renderDeco = true;
     protected sortTransparent = true;
+    protected staticMeshLod = false;
+    public lodTransitioning = false;
     protected readonly cacheTerrainVisibility = new WeakMap<Mesh, TerrainVisibility_T>();
     protected cacheTerrainSegments: Map<string, Terrain[]>;
     protected readonly arrTerrainSectorKeys: number[] = [];
@@ -2056,6 +2062,12 @@ export class SectorObject extends GameObject {
         });
     }
 
+    public setStaticMeshLod(enabled: boolean) {
+        if (this.staticMeshLod === enabled) return;
+        this.staticMeshLod = enabled;
+        this.visibilityCacheInitialized = false;
+    }
+
     public setRenderDeco(enabled: boolean) {
         if (this.renderDeco === enabled) return;
 
@@ -2139,15 +2151,16 @@ export class SectorObject extends GameObject {
         }
     }
 
-    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false, now = performance.now()) {
         if (!auxiliary) this.updateLights(environment);
 
-        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) {
+        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq) && !this.lodTransitioning) {
             if (this.terrainRenderables) for (const terrain of this.terrainRenderables.stitched)
                 if (terrain.needsStitchedLightingUpdate()) terrain.update(this, environment);
             return;
         }
 
+        if (!auxiliary) this.lodTransitioning = false;
         const library = (this as any).decodeLibrary as DecodeLibrary;
 
         if (!this.bspGroup && !this.staticMeshGroup) {
@@ -2366,7 +2379,7 @@ export class SectorObject extends GameObject {
                     if (!elemRelight || elemRelight.length !== batchElements.length)
                         elemRelight = (object as any).elemRelight = new Uint8Array(batchElements.length);
                     const batchVisibility = this.getBatchVisibility(batchElements), leafVisibility = batchVisibility.visible, centers = batchVisibility.centers;
-                    let visibilityChanged = false;
+                    let visibilityChanged = false, lodChanged = false;
                     if (frustumCullingEnabled && batchVisibility.nodes.length) {
                         batchVisibility.frustumVisible.fill(0);
                         updateBatchFrustum(batchVisibility, batchElements, cameraFrustum, 0, 63);
@@ -2396,6 +2409,11 @@ export class SectorObject extends GameObject {
                             elemVisible = isFrustumVisible && (!frustumCullingEnabled || !elem.zoneMask || elem.zoneMask === finalZoneMask || !!(elem.zoneMask & finalZoneMask)) && this.zoneVisibility.intersectsBounds(elem.zoneMask, elem.boundsMin, elem.boundsMax) && (elem.isRangeIgnored || isActorInRange(elem.boundsMin, elem.boundsMax, cameraPosition, staticMeshCullDistanceSq));
                         }
 
+                        const lod = (object as LitActorMesh).batchLods?.[ei];
+                        if (!auxiliary && elemVisible && lod) {
+                            if (lod.update(cameraPosition, this.staticMeshLod, now)) lodChanged = true;
+                            if (lod.transitioning) this.lodTransitioning = true;
+                        }
                         elemDistances[ei] = distSq;
 
                         const visibleValue = elemVisible ? 1 : 0;
@@ -2409,7 +2427,7 @@ export class SectorObject extends GameObject {
                     let sortChanged = false;
                     const previousGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
 
-                    if (!visibilityChanged && sortedTransparentMats?.size && previousGroups) {
+                    if (!visibilityChanged && !lodChanged && sortedTransparentMats?.size && previousGroups) {
                         let previousDistance = Infinity, previousMaterial = -1;
 
                         for (const group of previousGroups) {
@@ -2428,22 +2446,22 @@ export class SectorObject extends GameObject {
 
                     if (visibilityChanged) (object as any).needsRelightPass = true; // catch up a newly-visible element's dynamic lighting
 
-                    if (visibilityChanged || sortChanged) {
+                    if (visibilityChanged || lodChanged || sortChanged) {
                         let groupPool = (object as any).batchGroupPool as BatchGroup_T[];
                         if (!groupPool) groupPool = (object as any).batchGroupPool = [];
 
                         let visibleGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
                         if (!visibleGroups) visibleGroups = (object as any).visibleBatchGroups = [];
 
-                        let groupCount = visibilityChanged ? 0 : visibleGroups.length;
+                        let groupCount = visibilityChanged || lodChanged ? 0 : visibleGroups.length;
 
-                        if (visibilityChanged) for (let ei = 0; ei < batchElements.length; ei++) {
+                        if (visibilityChanged || lodChanged) for (let ei = 0; ei < batchElements.length; ei++) {
                             if (!elemVisibility[ei]) continue;
 
                             const distance = elemDistances[ei];
 
                             for (const g of batchElements[ei].groups) {
-                                if (!g.count) continue;
+                                if (!g.count || g.lod !== undefined && !((object as LitActorMesh).batchLods[ei].mask & (1 << g.lod))) continue;
 
                                 let entry = groupPool[groupCount];
                                 if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0, ordinal: 0 };
@@ -2472,7 +2490,7 @@ export class SectorObject extends GameObject {
 
                     if (this.sortTransparent && object.visible && (object as any).sortedIndexBuffers) {
                         const mesh = object as LitActorMesh, index = geometry.index;
-                        const packing = cacheBatchPacking.get(geometry), repacked = visibilityChanged || sortChanged;
+                        const packing = cacheBatchPacking.get(geometry), repacked = visibilityChanged || lodChanged || sortChanged;
                         const ranges = packing && packing.index === index && packing.indexVersion === index.version ? packing.ranges : null;
                         let offset = 0, changed = false;
 
@@ -2518,6 +2536,11 @@ export class SectorObject extends GameObject {
                     }
 
                     object.visible = isVisible && !this.hiddenActorUuids.has(uuid);
+                    const mesh = object as LitActorMesh;
+                    if (!auxiliary && object.visible && mesh.lod) {
+                        mesh.lod.update(cameraPosition, this.staticMeshLod, now, mesh.matrixWorld);
+                        if (mesh.lod.transitioning) this.lodTransitioning = true;
+                    }
                     if (object.visible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
                 }
             }
@@ -2765,6 +2788,7 @@ export class SectorObject extends GameObject {
         const library = (this as any).decodeLibrary as DecodeLibrary;
         if (!library || !this.staticMeshGroup || this.staticMeshMap.size === 0) return;
 
+        const now = performance.now();
         const cameraLeaf = this.findPositionLeaf(cameraPosition);
         const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
 
@@ -2814,7 +2838,8 @@ export class SectorObject extends GameObject {
 
                 const visibleGroups: { start: number; count: number; materialIndex: number }[] = [];
 
-                for (const elem of batchElements) {
+                for (let i = 0; i < batchElements.length; i++) {
+                    const elem = batchElements[i];
                     let elemVisible = visibleActorUuids.has(elem.uuid);
 
                     if (!elemVisible) {
@@ -2828,8 +2853,10 @@ export class SectorObject extends GameObject {
                     }
 
                     if (elemVisible && !this.hiddenActorUuids.has(elem.uuid)) {
+                        const lod = (object as LitActorMesh).batchLods?.[i];
+                        if (lod) lod.update(cameraPosition, this.staticMeshLod, now);
                         for (const g of elem.groups) {
-                            visibleGroups.push(g);
+                            if (g.lod === undefined || lod.mask & (1 << g.lod)) visibleGroups.push(g);
                         }
                     }
                 }
@@ -2852,6 +2879,7 @@ export class SectorObject extends GameObject {
                 const isVisible = visibleActorUuids.has(uuid) && !this.hiddenActorUuids.has(uuid);
                 object.visible = isVisible;
                 if (isVisible) {
+                    (object as LitActorMesh).lod?.update(cameraPosition, this.staticMeshLod, now, object.matrixWorld);
                     visibleCount++;
                     if ((object as any).isUpdatable) {
                         (object as any)?.update(this, environment);

@@ -1,3 +1,4 @@
+import StaticMeshLod from "../../objects/static-mesh-lod";
 import { Group, Object3D, Mesh, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Color, LineBasicMaterial, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, Vector2, Bone, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip } from "three";
 import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
@@ -295,6 +296,7 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
                 : new CollidingMesh(props);
 
     object.actorUuid = info.uuid;
+    if (instanceInfo.mesh.lods) object.lod = new StaticMeshLod(geometry, info, 0, library.geometries[instanceInfo.mesh.geometry].attributes.positions);
     object.material = canonicalizeStaticMeshMaterials(object.material);
 
     // if (info.name === "StaticMeshActor140")

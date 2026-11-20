@@ -546,6 +546,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.manGame.getComponent("input").resetInput();
         this.session.stopReplayRecording();
         this.actors.worldLoad = null;
+        this.actors.userAppearanceLoad = null;
         this.actors.clearDisappearNpcActions();
         for (const objectId of this.movement.riders.keys()) this.movement.endRide(objectId);
         const lifecycle = render.player.findComponent<NpcLifecycleComponent>("npcLifecycle");

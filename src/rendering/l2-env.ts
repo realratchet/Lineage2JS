@@ -4,6 +4,9 @@ import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
 import { hsvToColorPlane } from "../objects/dynamic-light";
 
+// AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
+export const CLIPPING_RANGE_SCALE = 2048;
+
 // const tmpColor_1 = new Color();
 // const tmpColor_2 = new Color();
 // const tmpColor_3 = new Color();
