@@ -1,3 +1,4 @@
+import type StaticMeshLod from "./static-mesh-lod";
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
@@ -46,6 +47,8 @@ export class LitActorMesh extends GameMesh {
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
     protected readonly arrHardwareMaterials: MeshStaticMaterial[] = [];
 
+    public lod?: StaticMeshLod;
+    public batchLods?: StaticMeshLod[];
     public isBatch?: boolean;
     public batchActorUuids?: string[];
     public perActorAmbient?: any[];

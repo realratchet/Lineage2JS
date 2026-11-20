@@ -20,7 +20,7 @@ import Player from "../player";
 import type BaseActor from "../base-actor";
 import type CollidingMesh from "../objects/colliding-mesh";
 import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo_T } from "./visualizer";
-import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
+import L2Environment, { CLIPPING_RANGE_SCALE, FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
 import SkyRenderer from "./sky-renderer";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "../utils/color-byte";
@@ -110,8 +110,6 @@ const tmpViewMatrix = new Matrix4();
 const tmpViewSphere = new Sphere();
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
-// AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
-const CLIPPING_RANGE_SCALE = 2048;
 const tmpColorByte = new ColorByte();
 const tmpHardwareSun = { color: new Color(), attenuation: new Vector2(), cone: 0 };
 const tmpColorByte_2 = new ColorByte();
@@ -373,6 +371,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly skillLightProbe = new SkillLightProbe();
     protected readonly skillLightFocus = new Vector3();
     protected sortTransparent = true;
+    protected staticMeshLod = false;
     protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
@@ -1841,6 +1840,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
+    public setStaticMeshLod(enabled: boolean) {
+        this.staticMeshLod = enabled;
+        this.arrSceneSectors.forEach(sector => sector.setStaticMeshLod(enabled));
+        this.needsUpdate = true;
+    }
+
     public setRenderDeco(enabled: boolean) {
         this.renderDeco = enabled;
         this.arrSceneSectors.forEach(sector => sector.setRenderDeco(enabled));
@@ -2103,7 +2108,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const topLevelOnly = !isCameraInSector;
 
-            if (auxiliary || isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
+            if (auxiliary || isCameraInSector || sector.lodTransitioning || !wasVisible || !(sector as any).visibilityCacheInitialized) {
                 sector.updateVisibility(
                     this.environment,
                     bspCullingPosition,
@@ -2112,7 +2117,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
                     topLevelOnly,
                     staticMeshCullDistSq,
                     emitterCullDistSq,
-                    auxiliary
+                    auxiliary,
+                    this.manGame.getCurrentTime()
                 );
             } else this.neighborVisibilitySectors.push(sector);
         }
@@ -2126,7 +2132,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 this.frustumCullingEnabled,
                 true,
                 staticMeshCullDistSq,
-                emitterCullDistSq
+                emitterCullDistSq,
+                false,
+                this.manGame.getCurrentTime()
             );
         }
 
@@ -3143,7 +3151,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!this.isRenderingFrame) return;
 
         this.manUI.endFrame();
-        if (!document.hidden) this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
+        if (!document.hidden) this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0 || this.staticMeshLod && this.arrSceneSectors.some(sector => sector.visible && sector.lodTransitioning);
         this.isRenderingFrame = false;
     }
 
@@ -3219,6 +3227,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public *addSectorSteps(sector: SectorObject): Generator<void, void> {
+        sector.setStaticMeshLod(this.staticMeshLod);
         sector.setRenderDeco(this.renderDeco);
         sector.setSortTransparent(this.sortTransparent);
         if (this.level) {

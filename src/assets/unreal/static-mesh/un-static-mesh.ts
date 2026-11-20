@@ -19,8 +19,9 @@ import type { UAActor, IEdgesObjectDecodeInfo } from "../un-aactor";
 import type { FBox } from "../un-box";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { IGeometryDecodeInfo, IBaseObjectDecodeInfo, IBaseMeshObjectDecodeInfo } from "../decode-library";
+import type { StaticMeshLodLevel_T } from "./static-mesh-lod";
 
-export type IStaticMeshObjectDecodeInfo = IBaseMeshObjectDecodeInfo & { type: "StaticMesh", sway?: IStaticMeshSwayDecodeInfo };
+export type IStaticMeshObjectDecodeInfo = IBaseMeshObjectDecodeInfo & { type: "StaticMesh", sway?: IStaticMeshSwayDecodeInfo, lods?: StaticMeshLodLevel_T[] };
 export type IStaticMeshSwayDecodeInfo = { pivotZ: number, frequency: number, maxAngle: number };
 export type IMaterialInstancedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "instance", baseMaterial: string, modifiers: string[] };
 export type StaticMeshDecodeResult_T = { object: IStaticMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, materials: [string, IBaseMaterialDecodeInfo][], colorMaterials: string[] };
@@ -256,6 +257,20 @@ export abstract class UStaticMesh extends UPrimitive {
 
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
+
+    public getLodReferences() {
+        if (!this.hasStaticMeshLod) return [];
+        const levels: { path: string, index: number, range: number }[] = [];
+        for (const [mesh, range] of [[this.staticMeshLod1, this.lodRange1], [this.staticMeshLod2, this.lodRange2]] as const) {
+            if (!mesh || mesh === this || !(range > 0)) continue;
+            if (levels.some(level => level.path === mesh.pkg.path && level.index === mesh.exportIndex)) continue;
+            if (levels.length && range <= levels[0].range) levels.pop();
+            levels.push({ path: mesh.pkg.path, index: mesh.exportIndex, range });
+        }
+        return levels;
+    }
+
+    public get billboard() { return this.isUsingBillboard; }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder, matModifiers?: string[]): StaticMeshDecodeResult_T {
         // await this.onDecodeReady();

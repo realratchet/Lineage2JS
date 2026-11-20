@@ -2703,6 +2703,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "useTrilinear":
                 case "renderDeco":
                 case "pawnShadow":
+                case "staticMeshLod":
                 case "sortTransparent":
                 case "useColorCursor":
                 case "autoTrackingPawn":
@@ -2748,7 +2749,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         const asset = this.manNetwork.getParent().getComponent("asset");
 
-        this.options.game = { ...asset.userConfig.game, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
+        this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
         this.nwindow.setWindowKeyBindings(this.options.game.windowKeyBindings);
         for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd])
             if (wnd) wnd.updateKeyBindings();
@@ -2756,6 +2757,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.manGame.getComponent("input").setInvertMouseWheel(this.options.game.invertMouseWheel);
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
+        this.manRender.setStaticMeshLod(this.options.game.staticMeshLod);
         this.manRender.setSortTransparent(this.options.game.sortTransparent);
         this.manRender.skillLightProbe.mode = this.options.game.skillEffectLighting;
         this.manRender.setRenderDeco(this.options.game.renderDeco);

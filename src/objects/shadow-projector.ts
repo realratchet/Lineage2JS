@@ -1,3 +1,4 @@
+import { expandBillboardBounds } from "./static-mesh-lod";
 import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, InstancedBufferGeometry, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, NoBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import { sinRotator } from "../assets/unreal/utils/rotator";
@@ -351,8 +352,10 @@ export class ShadowProjector {
         const bounds = cached ? cached.bounds : new Box3();
         bounds.makeEmpty();
         for (let i = group.start, end = Math.min(group.start + group.count, index ? index.count : position.count); i < end; i++) {
-            tmpCorner.fromBufferAttribute(position, index ? index.getX(i) : i);
+            const vertex = index ? index.getX(i) : i;
+            tmpCorner.fromBufferAttribute(position, vertex);
             bounds.expandByPoint(tmpCorner);
+            if (geometry.attributes.lodBillboard) expandBillboardBounds(bounds, geometry.attributes.lodBillboard, vertex);
         }
         this.cacheReceiverBounds.set(group, { geometry, position, index, positionVersion, indexVersion, start: group.start, count: group.count, bounds });
         return bounds;

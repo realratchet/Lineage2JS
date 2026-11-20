@@ -1,6 +1,7 @@
 import { v5 as seededUuid } from "uuid";
 import StringSet from "./utils/string-set";
 import type PackageCache from "../decode-worker/package-cache";
+import { buildLodMesh, extendLodLighting } from "./static-mesh/static-mesh-lod";
 import FBox from "./un-box";
 import FVector from "./un-vector";
 import type { UTexture, ITextureDecodeInfo } from "./un-texture";
@@ -78,6 +79,7 @@ export class DecodeLibraryBuilder {
     protected readonly alphaPalettes = new Set<string>();
     protected readonly materialSizes = new Map<string, { width: number, height: number }>();
     protected readonly staticMeshMetadata = new Map<string, any>();
+    protected readonly cacheLodMeshes = new Map<string, ReturnType<typeof buildLodMesh>>();
 
     public constructor(library: DecodeLibrary, settings: LoadSettings_T, packageCache: PackageCache = null) {
 
@@ -258,11 +260,30 @@ export class DecodeLibraryBuilder {
         const metadata = {
             renderBounds: mesh.getRenderBoundingBox().getDecodeInfo(),
             collisionBounds: (mesh as any).collisionModel ? (mesh as any).collisionModel.loadSelf().getCollisionBoundingBox().getDecodeInfo() : null,
+            lods: mesh.getLodReferences(),
+            billboard: mesh.billboard,
             useVertexColor: mesh.useVertexColor
         };
         this.staticMeshMetadata.set(mesh.uuid, metadata);
         this.packageCache?.end(mesh, this.library, { object: result.object, metadata, colorMaterials: result.colorMaterials });
         return this.packageCache ? this.getStaticMeshVariant(result.object, modifiers) : result.object;
+    }
+
+    public pullActorStaticMesh(mesh: UStaticMesh): IStaticMeshObjectDecodeInfo {
+        const cached = this.cacheLodMeshes.get(mesh.uuid);
+        if (cached) return cached.mesh;
+        const base = this.pullStaticMesh(mesh), refs = this.getStaticMeshMetadata(mesh).lods;
+        if (!refs.length) return base;
+
+        const levels = [{ mesh: base, range: 0, billboard: false }];
+        for (const ref of refs) {
+            const source: UStaticMesh = (mesh as any).pkg.loader.getPackage(ref.path).fetchObject(ref.index + 1);
+            const level = this.pullStaticMesh(source);
+            levels.push({ mesh: level, range: ref.range, billboard: this.getStaticMeshMetadata(source).billboard });
+        }
+        const result = buildLodMesh(this.library, levels);
+        this.cacheLodMeshes.set(mesh.uuid, result);
+        return result.mesh;
     }
 
     protected getStaticMeshVariant(info: IStaticMeshObjectDecodeInfo, modifiers?: string[]): IStaticMeshObjectDecodeInfo {
@@ -681,6 +702,7 @@ export class DecodeLibraryBuilder {
         this.setScriptClass(actor, result.object, true);
 
         this.library.exportedActors.add(actor.uuid);
+        if (result.object.instance.mesh.lods) extendLodLighting(result.object.instance, this.cacheLodMeshes.get(result.object.instance.mesh.uuid).nearest);
         this.library.geometryInstances[result.geometryUuid]++;
 
         const zoneInfo = this.library.bspZones[this.library.bspZoneIndexMap[result.zoneUuid]].zoneInfo;

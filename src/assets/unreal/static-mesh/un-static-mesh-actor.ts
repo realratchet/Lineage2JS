@@ -23,6 +23,7 @@ export type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
     instance: IStaticMeshInstanceDecodeInfo,
     bounds: IBoxDecodeInfo,
     collisionBounds: IBoxDecodeInfo,
+    lodViewDuration: number,
     scaledGlow: number,
     isSunAffected?: boolean,
     isSpecialLit?: boolean,
@@ -198,7 +199,7 @@ export abstract class UStaticMeshActor extends UAActor {
         }
 
         const mesh = this.mesh as UStaticMesh;
-        const meshInfo = builder.pullStaticMesh(mesh, null);
+        const meshInfo = builder.pullActorStaticMesh(mesh);
 
         const level = this.getLevel();
         const baseModel = level.getModel();
@@ -314,6 +315,7 @@ export abstract class UStaticMeshActor extends UAActor {
             type: "StaticMeshActor",
             name: this.objectName,
             position: _position,
+            lodViewDuration: this.lodViewDuration,
             scaledGlow: this.scaleGlow,
             forcedRegionTag: this.forcedRegionTag,
             forcedRegion: this.forcedRegion,

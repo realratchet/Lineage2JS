@@ -720,6 +720,13 @@ export class UIManager implements IEngineComponent<GameManager> {
     public addClippingRangeControls(): void {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
         const clippingRange = asset.userConfig.clippingRange;
+        const lod = JSON.parse(localStorage.getItem("option:*") || "{}").staticMeshLod === true;
+        render.setStaticMeshLod(lod);
+        this.addCheckbox(this.qualitySection, "Static mesh LOD", lod, value => {
+            const options = JSON.parse(localStorage.getItem("option:*") || "{}");
+            localStorage.setItem("option:*", JSON.stringify({ ...options, staticMeshLod: value }));
+            render.setStaticMeshLod(value);
+        });
         this.addRange(this.qualitySection, "Emitter Range", clippingRange.actor, 1, 12, 0.5, value => {
             clippingRange.actor = value;
             render.invalidateSectorVisibility();
