@@ -13,6 +13,8 @@ import type { DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInf
 import type { StaticMeshBatchManifest_T, BatchElement_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
 import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
+const tmpLodMatrix = new Matrix4(), tmpPosition = new Vector3(), tmpQuaternion = new Quaternion(), tmpScale = new Vector3();
+
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 
 export type StaticMeshBatchJob_T = {
@@ -236,9 +238,9 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
         for (let i = 0; i < batch.actors.length; i++) {
             const actor = batch.actors[i];
             if (!actor.instance.mesh.lods) continue;
-            const matrix = new Matrix4().compose(new Vector3().fromArray(actor.position), new Quaternion().fromArray(actor.quaternion), new Vector3().fromArray(actor.scale));
+            tmpLodMatrix.compose(tmpPosition.fromArray(actor.position), tmpQuaternion.fromArray(actor.quaternion), tmpScale.fromArray(actor.scale));
             if (!batchObject.batchLods) batchObject.batchLods = [];
-            batchObject.batchLods[i] = new StaticMeshLod(geometry, actor, batch.perActorAmbient[i].startVertex, library.geometries[actor.instance.mesh.geometry].attributes.positions, matrix);
+            batchObject.batchLods[i] = new StaticMeshLod(geometry, actor, batch.perActorAmbient[i].startVertex, library.geometries[actor.instance.mesh.geometry].attributes.positions, tmpLodMatrix);
         }
         const source = geometry.index?.array as StaticMeshIndexArray_T;
         yield* batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
