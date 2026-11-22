@@ -685,11 +685,9 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             if (notify.object?.type !== "native") continue;
             const name = notify.object.className.toLowerCase();
 
-            if (clip.attackEffectFrame < 0 && name === "animnotify_attackpreshot") this.bowPreShotFrame = notify.time;
-            if (clip.attackEndEffectFrame < 0 && name === "animnotify_attackshot") this.bowShotFrame = notify.time;
+            if (clip.attackEffectFrame === 0 && name === "animnotify_attackpreshot") this.bowPreShotFrame = notify.time; // 0x8c6c34 compares with 0.0
+            if (clip.attackEndEffectFrame === 0 && name === "animnotify_attackshot") this.bowShotFrame = notify.time;
         }
-        if (this.bowPreShotFrame < 0) this.bowPreShotFrame = 0;
-        if (this.bowShotFrame < 0) this.bowShotFrame = 0;
     }
 
     protected updateBowAttack(force: boolean): void {

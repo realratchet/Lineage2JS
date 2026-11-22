@@ -203,7 +203,7 @@ export class PlayerController extends GameObject implements ScriptHost_T {
             properties.set("KeyboardMovingDirFlg", 0);
             properties.set("bDesiredKeyboardMovingPermanently", quickRelease);
             pawn.setUnrealScriptProperty("bTurning", false);
-            if (!moving) return null;
+            if (!moving) return; // 0x10539121 sends nothing
         } else {
             yaw = rotation[1] + relativeYaw | 0;
             properties.set("KeyboardMovingDir", yaw);
