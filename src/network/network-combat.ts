@@ -126,7 +126,7 @@ export class NetworkCombat {
 
         if (caster && caster.isDead) return;
 
-        if (caster && caster.objectId === this.network.actors.userId) this.network.ui.setSkillCoolTime(id, level, Math.trunc(reuseDelay / 1000), Math.trunc(reuseDelay / 1000)); // OnReceiveMagicSkillUse 0x7505a2 / 0x750690.
+        if (caster && caster.objectId === this.network.actors.userId) this.network.ui.setSkillCoolTime(id, Math.trunc(reuseDelay / 1000), Math.trunc(reuseDelay / 1000)); // OnReceiveMagicSkillUse 0x7505a2 / 0x750690.
 
         const isTransient = CUBIC_SKILLS.has(id) || this.network.ui.getStrings().skillCastStyles[`${id}:${level}`] === 0;
 

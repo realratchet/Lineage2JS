@@ -35,7 +35,7 @@ const RECT_PREV = [[1, 13, 14, 14], [13, 31, 14, 14]];
 const RECT_ROTATE = [[16, 489, 15, 15], [489, 16, 15, 15]];
 const RECT_GRIP = [[0, 0, 46, 12], [0, 0, 12, 46]];
 
-export type ShortcutEntry_T = { icon: string, label: string, tooltip: string | TooltipInfo_T, skillKey?: string, isAutoSoulShot?: boolean, acronym?: string };
+export type ShortcutEntry_T = { icon: string, label: string, tooltip: string | TooltipInfo_T, skillKey?: string, skillId?: number, isAutoSoulShot?: boolean, acronym?: string };
 
 type ShortcutSlot_T = { icon: HTMLDivElement, outline: HTMLDivElement, outlineDown: HTMLDivElement, toggle: HTMLDivElement, acronym: HTMLDivElement, coolTime: HTMLDivElement, fkey: HTMLDivElement, coolTexture: string, coolColor: number };
 
@@ -77,7 +77,7 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
     public onDragMove: (x: number, y: number) => void = null;
     public onAutoSoulShot: (page: number, slot: number) => void = null;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly coolTimes: Map<string, NCCoolTimeIcon>) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly coolTimes: Map<number, NCCoolTimeIcon>) {
         this.element = layer.createWindow(0, 0, 46, 504);
         this.element.hidden = true;
         this.element.classList.add("ndom-opaque");
@@ -144,8 +144,8 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
 
     public resetLayout() { if (this.isHorizontal) this.rotate(); }
 
-    public hasCoolTime(key: string) {
-        return this.isVisible() && this.entries.slice(this.page * SLOTS_PER_PAGE, (this.page + 1) * SLOTS_PER_PAGE).some(entry => entry && entry.skillKey === key);
+    public hasCoolTime(id: number) {
+        return this.isVisible() && this.entries.slice(this.page * SLOTS_PER_PAGE, (this.page + 1) * SLOTS_PER_PAGE).some(entry => entry && entry.skillId === id);
     }
 
     public clearSlots() {
@@ -338,7 +338,7 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
     public renderCoolTimes() {
         for (let i = 0; i < SLOTS_PER_PAGE; i++) {
             const slot = this.arrSlots[i], entry = this.entries[this.page * SLOTS_PER_PAGE + i];
-            const coolTime = entry && this.coolTimes.get(entry.skillKey), texture = coolTime && coolTime.texture && this.layer.hasTexture(coolTime.texture) ? coolTime.texture : null, color = coolTime ? coolTime.color : 0xffffff;
+            const coolTime = entry && this.coolTimes.get(entry.skillId), texture = coolTime && coolTime.texture && this.layer.hasTexture(coolTime.texture) ? coolTime.texture : null, color = coolTime ? coolTime.color : 0xffffff;
 
             if (texture === slot.coolTexture && color === slot.coolColor) continue;
 

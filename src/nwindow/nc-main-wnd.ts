@@ -36,7 +36,7 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
     protected selectedTab: MainTab_T = "status";
     protected readonly minimized: NCMinimizedWnd;
 
-    public constructor(protected readonly layer: NDomLayer, coolTimes: Map<string, NCCoolTimeIcon>, skin: Skin) {
+    public constructor(protected readonly layer: NDomLayer, coolTimes: Map<number, NCCoolTimeIcon>, skin: Skin) {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         this.element.tabIndex = -1;
