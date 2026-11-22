@@ -125,7 +125,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected abnormalStatusWnd: AbnormalStatusWndView_T = null;
     protected targetStatusWnd: TargetStatusWndView_T = null;
     protected restartMenuWnd: RestartMenuWndView_T = null;
-    protected readonly skillCoolTimes = new Map<string, NCCoolTimeIcon>();
+    protected readonly skillCoolTimes = new Map<number, NCCoolTimeIcon>();
     protected shortCutWnd: ShortCutWndView_T = null;
     protected chatWnd: ChatWndView_T = null;
     protected chatFilterWnd: ChatFilterWndView_T = null;
@@ -2141,13 +2141,11 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.abnormalStatusWnd.setShortEffect(skill && skill.name && skill.name.charCodeAt(0) !== 0 ? effect : null);
     }
 
-    public setSkillCoolTime(id: number, level: number, duration: number, remaining: number) {
+    public setSkillCoolTime(id: number, duration: number, remaining: number) { // retail keys by id and level and loses the cool time when the skill is upgraded, servers keep it.
         if (duration < 0 || remaining < 0 || remaining > duration) throw new Error(`Invalid skill reuse time ${duration}/${remaining}.`);
 
-        const key = `${id}:${level}`;
-
-        if (remaining === 0) this.skillCoolTimes.delete(key);
-        else this.skillCoolTimes.set(key, new NCCoolTimeIcon(duration, remaining, this.manNetwork.getParent().getCurrentTime()));
+        if (remaining === 0) this.skillCoolTimes.delete(id);
+        else this.skillCoolTimes.set(id, new NCCoolTimeIcon(duration, remaining, this.manNetwork.getParent().getCurrentTime()));
     }
 
     public render() {
@@ -3185,7 +3183,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             case GamePackets.ShortCutType_T.TYPE_SKILL: {
                 const info = NCTooltip.shortcutSkill(strings, shortcut.id, shortcut.level);
 
-                entry = { icon: strings.skillInfos[`${shortcut.id}:${shortcut.level}`]?.icon || strings.skillIcons[shortcut.id], label: info.title, tooltip: info, skillKey: `${shortcut.id}:${shortcut.level}` };
+                entry = { icon: strings.skillInfos[`${shortcut.id}:${shortcut.level}`]?.icon || strings.skillIcons[shortcut.id], label: info.title, tooltip: info, skillKey: `${shortcut.id}:${shortcut.level}`, skillId: shortcut.id };
                 break;
             }
             case GamePackets.ShortCutType_T.TYPE_ACTION: {

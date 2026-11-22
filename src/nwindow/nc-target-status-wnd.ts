@@ -44,6 +44,7 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
     protected readonly infoButton: NDomButton_T;
     protected readonly closeButton: NDomButton_T;
     protected readonly tooltip = new NCTooltip();
+    protected hoveredTooltip: HTMLDivElement = null;
     protected target: TargetStatus_T = null;
     protected isExpanded = false;
 
@@ -73,7 +74,7 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
         const icons = skills.map(id => strings.skillInfos[`${id}:1`]).filter(skill => skill && skill.icon).map(skill => skill.icon);
 
         await this.layer.loadTextures(icons);
-        this.update();
+        this.updateSkills();
     }
 
     protected toggleExpanded() { // 0x1010d640 swaps the info button textures and toggles between 46 and 76 px.
@@ -82,6 +83,7 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
         this.isExpanded = !this.isExpanded;
         this.infoButton.setTextures(texture, texture, texture);
         this.update();
+        this.updateSkills();
     }
 
     public setTarget(target: TargetStatus_T) {
@@ -91,11 +93,11 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
         if (target && target.npcId !== previousNpcId) void this.loadIcons();
         this.setVisible(!!target);
         this.update();
+        if (!target || target.npcId !== previousNpcId) this.updateSkills();
     }
 
     protected update() {
         const layer = this.layer;
-        const strings = layer.getManager().strings;
         const target = this.target;
         const W = this.width;
         const H = this.isExpanded ? HEIGHT_EXPANDED : HEIGHT_COLLAPSED;
@@ -104,7 +106,6 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
 
         this.layoutFrame(H, this.isExpanded ? [TEX_EX_BACK1, TEX_EX_BACK2, TEX_EX_BACK3] : [TEX_BACK1, TEX_BACK2, TEX_BACK3], H);
         layer.place(this.closeButton, W - 19, 6);
-        this.skills.replaceChildren();
 
         for (const bar of this.arrBars) bar.hidden = true;
         this.setName(target ? target.name : "", target && target.showHp ? getConColor(target.levelDifference) : NAME_COLOR, 12, 9, W - 30, true);
@@ -120,8 +121,22 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
                 layer.placeTile(mp, 16, 33, barWidth(target.curMp, target.maxMp, barW), 6, 0, 0, 8, 6, TEX_MPBAR);
             }
         }
+    }
 
-        if (!this.isExpanded) return;
+    protected hideTooltip() {
+        if (this.hoveredTooltip) this.hoveredTooltip.remove();
+        this.hoveredTooltip = null;
+    }
+
+    protected updateSkills() {
+        const layer = this.layer;
+        const strings = layer.getManager().strings;
+        const target = this.target;
+
+        this.skills.replaceChildren();
+        this.hideTooltip();
+
+        if (!target || !this.isExpanded) return;
 
         (strings.npcPassiveSkills[target.npcId] || []).forEach((id, index) => {
             const skill = strings.skillInfos[`${id}:1`];
@@ -130,11 +145,13 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
 
             const x = 18 + 18 * (index % 8), y = 40 + 18 * Math.floor(index / 8);
             const icon = layer.tile(this.skills, x, y, 15, 15, 0, 0, 32, 32, skill.icon);
-            let tooltip: HTMLDivElement = null;
 
             icon.style.pointerEvents = "auto";
-            icon.addEventListener("mouseenter", () => tooltip = this.tooltip.createDOM(layer, this.element, parseFloat(this.element.style.left) + x, parseFloat(this.element.style.top) + y, { title: skill.name, lines: [], description: skill.description, minimumWidth: 144 }));
-            icon.addEventListener("mouseleave", () => { if (tooltip) tooltip.remove(); tooltip = null; });
+            icon.addEventListener("mouseenter", () => {
+                this.hideTooltip();
+                this.hoveredTooltip = this.tooltip.createDOM(layer, this.element, parseFloat(this.element.style.left) + x, parseFloat(this.element.style.top) + y, { title: skill.name, lines: [], description: skill.description, minimumWidth: 144 });
+            });
+            icon.addEventListener("mouseleave", () => this.hideTooltip());
         });
     }
 }

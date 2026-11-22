@@ -26,12 +26,12 @@ export class NCSkillWnd {
     protected isPassive = false;
     protected pressedSelection: HTMLDivElement = null;
     protected pressedFrame: HTMLDivElement = null;
-    protected readonly coolTimeIcons = new Map<string, HTMLDivElement>();
+    protected readonly coolTimeIcons = new Map<number, HTMLDivElement>();
     protected readonly toggleIcons = new Map<string, HTMLDivElement>();
     protected activeSkills = new Set<string>();
     protected readonly search: NCItemSearch;
 
-    public constructor(layer: NDomLayer, protected readonly coolTimes: Map<string, NCCoolTimeIcon>, parent: HTMLElement) {
+    public constructor(layer: NDomLayer, protected readonly coolTimes: Map<number, NCCoolTimeIcon>, parent: HTMLElement) {
         this.layer = layer;
         this.element = layer.createWindow(0, 66, 256, 335, parent);
         this.element.hidden = true;
@@ -177,7 +177,7 @@ export class NCSkillWnd {
             coolTimeIcon.className = "ndom-tile";
             coolTimeIcon.hidden = true;
             coolTimeIcon.dataset.texture = "";
-            this.coolTimeIcons.set(`${skill.id}:${skill.level}`, coolTimeIcon);
+            this.coolTimeIcons.set(skill.id, coolTimeIcon);
 
             const use = (event: MouseEvent | KeyboardEvent) => { if (this.onUse) this.onUse(skill.id, event.ctrlKey, event.shiftKey); };
             button.addEventListener("mousedown", event => {
