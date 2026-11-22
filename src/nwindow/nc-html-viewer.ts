@@ -978,7 +978,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             for (const [top, line] of lines) {
                 if (top === lastLine || line.spaces.length === 0) continue;
 
-                const extra = Math.max(0, Math.round((bounds.right - line.end) / scale));
+                const extra = Math.max(0, Math.floor((bounds.right - line.end) / scale + 0.01));
                 const advance = Math.floor(extra / line.spaces.length), remainder = extra % line.spaces.length;
 
                 for (let i = 0; i < line.spaces.length; i++)

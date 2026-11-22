@@ -73,7 +73,7 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         }
         if (remaining >= 0) {
             const seconds = remaining % (24 * 60 * 60), hours = Math.trunc(seconds / 3600), minutes = Math.trunc(seconds % 3600 / 60);
-            const value = hours > 0 ? `${hours}${strings.sysStrings[SysString_T.Hours]}` : minutes > 0 ? `${minutes}${strings.sysStrings[SysString_T.Minutes]}` : `${seconds % 60}초`;
+            const value = hours > 0 ? `${hours}${strings.sysStrings[SysString_T.Hours]}` : minutes > 0 ? `${minutes}${strings.sysStrings[SysString_T.Minutes]}` : `${seconds % 60}s`;
 
             lines.push({ label: strings.sysStrings[SysString_T.RemainingTime], value });
         }

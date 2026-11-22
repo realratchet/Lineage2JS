@@ -72,7 +72,7 @@ export class NCQuestWnd {
         layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, `${TEX_PATH}QuestWndBack`);
         layer.text(this.element, this.strings.sysStrings[SysString_T.AcceptedQuest], 0xffdcdcdc, undefined, 11, 12);
         this.count = layer.text(this.element, "(0/15)", 0xffb09b79, undefined, 190, 12);
-        this.list = layer.scrollPane(this.element, 7, 27, 242, 274, 16);
+        this.list = layer.scrollPane(this.element, 7, 27, 242, 274, 16, false, 17);
         this.list.content.classList.add("ndom-selectable");
         this.list.content.style.width = "226px";
         this.list.content.style.overflow = "hidden";
