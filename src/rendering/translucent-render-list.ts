@@ -293,7 +293,7 @@ export class TranslucentRenderList {
                 }
                 continue;
             }
-            const owners = state && item.material.blending === NormalBlending && state.meshes.get(object);
+            const owners = state && state.meshes.get(object);
             if (owners && object.isBatch) {
                 const groups = object.visibleBatchGroups, starts = this.getBatchStarts(object), limit = item.group.start + item.group.count;
                 let firstGroup = 0, lastGroup = groups.length;
