@@ -18,6 +18,7 @@ import type { CheckResult_T, CollisionQuery_T, CollisionOverlapQuery_T } from ".
 import { getLatentAction, getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
+import type LitSkinnedMesh from "../../objects/lit-skinned-mesh";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
 import type PlayerController from "../../objects/player-controller";
 import type LandmarkComponent from "../../rendering/components/landmark-component";
@@ -106,6 +107,7 @@ const AIR_SPEED = 118.09999084472656; // Live retail wyvern APawn+5232.
 const ACCEL_RATE = 2048; // Live retail player APawn+5240; Engine.u Pawn default.
 const SPAWN_FLOOR_PROBE = 1000;
 const WATERLINE_DEPTH = 13; // Retail APawn::findWaterLine 0x8d2959.
+const BUBBLE_INTERVAL = Math.fround(0.9); // Retail APawn::UpdateBubbles 0x8c2a4f.
 // APawn::SpawnEnterEvent (0x8b47e0): rise moves 5/9 of its full offset per second.
 const ENTER_RISE_RATE = 5 / 9;
 export const PAWN_TELEPORTED_EVENT = "pawnTeleported";
@@ -1111,6 +1113,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             }
         } else this.floor.set(0, 0, 1);
 
+        this.updateBubbles(deltaTime);
+
         if (remainingTime < deltaTime) {
             const velocityZ = this.velocity.z;
 
@@ -1130,6 +1134,26 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         }
 
         if ((this.physicsMode as PhysicsMode_T) !== "swimming") this.startNewPhysics(position, remainingTime, iterations);
+    }
+
+    protected updateBubbles(deltaTime: number) { // APawn::UpdateBubbles 0x8c2a00
+        const parent = this.getParent(), mesh = this.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
+
+        if (!mesh || parent.getUnrealScriptProperty("bSwimAfloat") || deltaTime / (deltaTime + BUBBLE_INTERVAL) <= Math.random()) return;
+
+        const asset = this.renderManager.getParent().getComponent("asset"), bone = Math.trunc(Math.random() * (mesh.skeleton.bones.length - 1)), bubble = asset.createEffect("LineageEffect.e_u061_bubble");
+
+        this.renderManager.addTransientEffect(bubble, parent);
+        parent.attachObjectToBone(bubble, bone);
+
+        const controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T, alias = mesh.tagAliases.findIndex(name => name.toLowerCase() === "e_bone");
+
+        if (bone % 3 || parent.getUnrealScriptProperty("bNpc") || !controller || getProperty(controller, "bDead") || alias < 0) return;
+
+        const breath = asset.createEffect("LineageEffect.e_u061_breath");
+
+        this.renderManager.addTransientEffect(breath, parent);
+        parent.attachObjectToBone(breath, mesh.tagNames[alias]);
     }
 
     protected swim(position: Vector3, delta: Vector3): number { // APawn::Swim 0x8d5fd0

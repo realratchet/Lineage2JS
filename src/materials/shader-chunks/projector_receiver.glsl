@@ -26,5 +26,6 @@ vec4 getProjectorShadow() {
     float alpha = texture2D(shadowMap, vec2(uv.x, 1.0 - uv.y)).a;
     #endif
     alpha *= textureCube(shadowAttenuation, shadowNormalMatrix * normalize(vProjectorNormal)).a;
+    alpha *= min(1.0, (shadowDepthRange.y - depth) * 8.0 / shadowDepthRange.y); // retail bGradient is off: hard cut at the far plane
     return vec4(0.0, 0.0, 0.0, alpha * shadowDarkness);
 }
