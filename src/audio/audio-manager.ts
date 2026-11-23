@@ -11,6 +11,7 @@ const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const AL_SOURCE_RADIUS_FALLBACK = 10; // ALAudioSubsystem::PlaySound uses 10 when Radius is zero.
 const AMBIENT_CELL_SIZE = 4096;
 const arrNoAmbientSounds: AmbientSoundComponent[] = [];
+const tmpPosition = new Vector3();
 
 function getAmbientCellKey(x: number, y: number): number { return (x + 32768) * 65536 + (y + 32768); }
 
@@ -25,7 +26,7 @@ type AmbientInfo_T = {
     looping: boolean
 };
 
-type ChannelNodes_T = { gain: GainNode, panner: PannerNode };
+type ChannelNodes_T = { gain: GainNode, panner: PannerNode, owner: Object3D, offset: Vector3 };
 
 type AmbientChannel_T = {
     source?: AudioBufferSourceNode,
@@ -435,6 +436,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.prevTime = this.lastTime;
         this.lastTime = currentTime;
 
+        for (const nodes of this.arrActorChannels) { // ALAudio.dll UALAudioSubsystem::Update 0x1000d1ea..0x1000d217
+            nodes.owner.getWorldPosition(tmpPosition).add(nodes.offset);
+            nodes.panner.positionX.value = tmpPosition.x;
+            nodes.panner.positionY.value = tmpPosition.y;
+            nodes.panner.positionZ.value = tmpPosition.z;
+        }
+
         if (this.requestedVoice && !this.gameManager.isWorldLoading()) {
             const request = this.requestedVoice;
 
@@ -663,6 +671,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly activeAmbientSounds = new Map<string, AmbientChannel_T>();
     protected readonly mutedAmbientSounds = new Set<string>();
     protected readonly arrChannelNodes: ChannelNodes_T[] = [];
+    protected readonly arrActorChannels: ChannelNodes_T[] = [];
     protected readonly ambientSounds = new Set<AmbientSoundComponent>();
     protected readonly cacheAmbientCells = new Map<number, AmbientSoundComponent[]>();
     protected isAmbientGridDirty = true;
@@ -931,7 +940,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         let nodes = this.arrChannelNodes.pop(); // a gain and panner per sound left thousands of nodes for every major GC to delete
 
         if (!nodes) {
-            nodes = { gain: this.audioContext.createGain(), panner: this.audioContext.createPanner() };
+            nodes = { gain: this.audioContext.createGain(), panner: this.audioContext.createPanner(), owner: null, offset: new Vector3() };
             nodes.panner.panningModel = "equalpower"; // hrtf convolution is too costly at 32 concurrent panners
             nodes.panner.distanceModel = "inverse";
         }
@@ -1031,6 +1040,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const sourceRadius = refDistance === 0 ? AL_SOURCE_RADIUS_FALLBACK : refDistance;
         const sourceMaxDistance = maxDistance === 0 ? sourceRadius * 100 : maxDistance;
 
+        if (owner) owner.getWorldPosition(tmpPosition);
+        const dx = x - tmpPosition.x, dy = y - tmpPosition.y, dz = z - tmpPosition.z;
+
         const pendingBuffer = typeof dataUri === "string" ? this.loadAmbientBuffer(dataUri, "one-shot") : this.loadSoundBuffer(dataUri);
         const pendingUnlock = this.ensureUnlocked();
         const buffer = await pendingBuffer;
@@ -1052,6 +1064,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
             source.disconnect();
             this.releaseChannelNodes(nodes);
             if (owner) {
+                nodes.owner = null;
+                this.arrActorChannels.splice(this.arrActorChannels.indexOf(nodes), 1);
+
                 const sounds = this.activeOneShotSounds.get(owner)!, count = sounds.get(soundId)! - 1;
 
                 if (count > 0) sounds.set(soundId, count);
@@ -1062,6 +1077,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         source.start(0);
         if (owner) {
+            nodes.owner = owner;
+            nodes.offset.set(dx, dy, dz);
+            this.arrActorChannels.push(nodes);
+
             if (!this.activeOneShotSounds.has(owner)) this.activeOneShotSounds.set(owner, new Map());
             const sounds = this.activeOneShotSounds.get(owner)!;
 
