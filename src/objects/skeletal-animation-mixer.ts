@@ -124,10 +124,17 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     protected readonly arrDeferredRoots: RootState_T[] = [];
     protected readonly arrFastActions: AnimationAction[] = [];
     protected readonly arrFastTimes: number[] = [];
+    protected readonly arrFinishedEvents: any[] = [];
     protected bindingVersion: number = 0;
     protected cachedBindingVersion: number = -1;
     protected frame: number = 0;
     protected direction: number = 0;
+    protected isUpdating: boolean = false;
+
+    public dispatchEvent(event: any): void { // a listener that plays or stops an action reorders the list update is walking
+        if (this.isUpdating && event.type === "finished") this.arrFinishedEvents.push(event);
+        else super.dispatchEvent(event);
+    }
 
     public setTweening(component: Tweening_T, tweening: boolean): void {
         if (tweening) this.tweening.add(component);
@@ -288,6 +295,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         const bindingVersion = this.bindingVersion;
         const direction = this.direction = Math.sign(deltaTime), accuIndex = mixer._accuIndex ^= 1;
         this.time = time;
+        this.isUpdating = true;
 
         for (let i = 0; i < count; i++) {
             const action = actions[i], object = action.getRoot(), state = action.enabled ? this.getActionState(action) : null;
@@ -356,6 +364,10 @@ export class SkeletalAnimationMixer extends AnimationMixer {
             root.bindingStates.length = root.bindingCount;
         }
         this.arrDeferredRoots.length = 0;
+
+        this.isUpdating = false;
+        for (let i = 0; i < this.arrFinishedEvents.length; i++) super.dispatchEvent(this.arrFinishedEvents[i]);
+        this.arrFinishedEvents.length = 0;
 
         return this;
     }
