@@ -92,6 +92,10 @@ export class NCOptionWnd {
     protected readonly systemMsgWndDamage: NDomCheckBox_T;
     protected readonly systemMsgWndExpendableItem: NDomCheckBox_T;
     protected readonly partyLooting: NCComboBox;
+    protected readonly titleStatus: NDomCheckBox_T;
+    protected readonly titleStatusCp: NDomCheckBox_T;
+    protected readonly titleStatusHp: NDomCheckBox_T;
+    protected readonly titleStatusMp: NDomCheckBox_T;
     protected readonly invertMouseWheel: NDomCheckBox_T;
     protected readonly forceAttackKey: NCComboBox;
     protected readonly forceAttackKeys: ForceAttackKey_T[] = ["ctrl", "alt", "shift"];
@@ -306,8 +310,12 @@ export class NCOptionWnd {
         this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(SysString_T.SystemMessageWindow), () => this.updateSystemMessageControls());
         this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(SysString_T.Damage));
         this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(SysString_T.Consumables));
+        this.titleStatus = layer.checkbox(game, 25, 361, 180, 12, "Status in title when inactive", () => this.updateTitleStatusControls());
+        this.titleStatusCp = layer.checkbox(game, 36, 378, 40, 12, "CP");
+        this.titleStatusHp = layer.checkbox(game, 84, 378, 40, 12, "HP");
+        this.titleStatusMp = layer.checkbox(game, 132, 378, 40, 12, "MP");
         this.invertMouseWheel = layer.checkbox(this.controls, 25, 0, 150, 12, "Invert mouse scroll");
-        [...this.nameChecks, this.autoTrackingPawn, this.useColorCursor, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem, this.invertMouseWheel].forEach(checkbox => {
+        [...this.nameChecks, this.autoTrackingPawn, this.useColorCursor, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem, this.titleStatus, this.titleStatusCp, this.titleStatusHp, this.titleStatusMp, this.invertMouseWheel].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
                 if (checkbox.getAttribute("aria-disabled") === "true" || event.repeat || event.key !== " " && event.key !== "Enter") return;
@@ -316,6 +324,7 @@ export class NCOptionWnd {
                 checkbox.setChecked(!checkbox.getChecked());
                 if (checkbox === this.nameChecks[2]) this.updateNameControls();
                 if (checkbox === this.systemMsgWnd) this.updateSystemMessageControls();
+                if (checkbox === this.titleStatus) this.updateTitleStatusControls();
             });
         });
         const lootLabel = manager.getSysString(SysString_T.PartyLoot);
@@ -364,11 +373,13 @@ export class NCOptionWnd {
             names.appendChild(checkbox);
         });
         this.systemMsgWndDamage.style.marginLeft = "12px";
+        this.titleStatusCp.style.marginLeft = "12px";
         layoutSections(game, [
             [[interfaceText, initialize, this.transparencyMode]],
             [[displayText, names]],
             [[this.enterChatting, this.oldChatting], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle]],
             [[this.systemMsgWnd], [this.systemMsgWndDamage, this.systemMsgWndExpendableItem]],
+            [[this.titleStatus], [this.titleStatusCp, this.titleStatusHp, this.titleStatusMp]],
             [[lootText, this.partyLooting.element]]
         ]);
         names.parentElement.classList.add("ndom-options-tree");
@@ -504,6 +515,11 @@ export class NCOptionWnd {
             this.systemMsgWndDamage.setChecked(options.systemMsgWndDamage);
             this.systemMsgWndExpendableItem.setChecked(options.systemMsgWndExpendableItem);
             this.updateSystemMessageControls();
+            this.titleStatus.setChecked(options.titleStatus);
+            this.titleStatusCp.setChecked(options.titleStatusCp);
+            this.titleStatusHp.setChecked(options.titleStatusHp);
+            this.titleStatusMp.setChecked(options.titleStatusMp);
+            this.updateTitleStatusControls();
             this.lootType = options.partyLooting;
             this.partyLooting.setSelected(this.lootType);
             this.invertMouseWheel.setChecked(options.invertMouseWheel);
@@ -706,6 +722,17 @@ export class NCOptionWnd {
         });
     }
 
+    protected updateTitleStatusControls() {
+        const enabled = this.titleStatus.getChecked();
+
+        [this.titleStatusCp, this.titleStatusHp, this.titleStatusMp].forEach(checkbox => {
+            checkbox.setAttribute("aria-disabled", String(!enabled));
+            checkbox.style.pointerEvents = enabled ? "" : "none";
+            checkbox.style.opacity = enabled ? "" : "0.5";
+            checkbox.tabIndex = enabled ? 0 : -1;
+        });
+    }
+
     protected apply() {
         const gamma = this.gamma.getSelected();
 
@@ -719,7 +746,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio({ ...Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])), backgroundAudio: this.backgroundAudioModes[this.backgroundAudio.getSelected()] } as AudioConfig_T);
-        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), staticMeshLod: this.staticMeshLod.getChecked(), skillEffectLighting: this.skillEffectLightingModes[this.skillEffectLighting.getSelected()], ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()], windowKeyBindings: { ...this.windowKeyBindings } } as GameOptions_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), staticMeshLod: this.staticMeshLod.getChecked(), skillEffectLighting: this.skillEffectLightingModes[this.skillEffectLighting.getSelected()], ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType, invertMouseWheel: this.invertMouseWheel.getChecked(), forceAttackKey: this.forceAttackKeys[this.forceAttackKey.getSelected()], windowKeyBindings: { ...this.windowKeyBindings }, titleStatus: this.titleStatus.getChecked(), titleStatusCp: this.titleStatusCp.getChecked(), titleStatusHp: this.titleStatusHp.getChecked(), titleStatusMp: this.titleStatusMp.getChecked() } as GameOptions_T);
     }
 }
 

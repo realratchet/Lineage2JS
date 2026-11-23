@@ -219,6 +219,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected templates: GamePackets.CharTemplate_T[] = [];
     protected characterNames: string[] = [];
     protected statusInfo: GamePackets.UserInfo_T = null;
+    protected readonly pageTitle = document.title;
     protected areHudWindowsAdded = false;
     protected screen: Screen_T = null;
     protected inputCtrl = false;
@@ -295,7 +296,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render");
 
         this.manNetwork = network;
-        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl", windowKeyBindings: getDefaultWindowKeyBindings() }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl", windowKeyBindings: getDefaultWindowKeyBindings(), titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
@@ -388,6 +389,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.inputCtrl = this.inputShift = false;
             this.endSkillPointerDrag();
         });
+        window.addEventListener("focus", () => this.updateTitle());
+        window.addEventListener("blur", () => this.updateTitle());
+        document.addEventListener("visibilitychange", () => this.updateTitle());
         this.loadOptions();
     }
 
@@ -1453,6 +1457,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.petitionFeedBackWnd.setVisible(false);
             this.fishViewportWnd.setVisible(false);
         } else if (screen !== "world") this.hideWorld();
+        this.updateTitle();
     }
 
     public showMessage(text: string) { // NCGodWnd::ShowMessage 0x10090bd0 fills the bottom NCMessageWnd bar; in the world, messages go to chat.
@@ -2188,6 +2193,25 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.inventoryWnd.setClass(info.classId);
         this.inventoryWnd.setDwarvenCraft(info.hasDwarvenCraft);
         this.setInventory(this.inventory);
+        this.updateTitle();
+    }
+
+    protected updateTitle() {
+        if (this.screen === "loading") return;
+
+        const info = this.statusInfo, game = this.options.game, arrParts = ["L2"];
+        let title = this.pageTitle;
+
+        if (this.screen === "world" && info) {
+            if (game.titleStatus && (document.hidden || !document.hasFocus())) {
+                if (game.titleStatusCp && info.curCp < info.maxCp) arrParts.push(`${Math.trunc(info.curCp * 100 / info.maxCp)}% 🟨`);
+                if (game.titleStatusHp && info.curHp < info.maxHp) arrParts.push(`${Math.trunc(info.curHp * 100 / info.maxHp)}% 🟥`);
+                if (game.titleStatusMp && info.curMp < info.maxMp) arrParts.push(`${Math.trunc(info.curMp * 100 / info.maxMp)}% 🟦`);
+            }
+            title = arrParts.length > 1 ? arrParts.join(" · ") : `${this.pageTitle} · ${info.name}`;
+        }
+
+        if (document.title !== title) document.title = title;
     }
 
     public toggleCharacterStatus() {
@@ -2714,6 +2738,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "oldChatting":
                 case "enterChatting":
                 case "invertMouseWheel":
+                case "titleStatus":
+                case "titleStatusCp":
+                case "titleStatusHp":
+                case "titleStatusMp":
                 case "myName":
                 case "npcName":
                 case "groupName":
@@ -2747,7 +2775,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         const asset = this.manNetwork.getParent().getComponent("asset");
 
-        this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
+        this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true, ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
         this.nwindow.setWindowKeyBindings(this.options.game.windowKeyBindings);
         for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd])
             if (wnd) wnd.updateKeyBindings();
@@ -2770,6 +2798,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }
         this.layer.setTransparencyMode(this.screen === "world" && this.options.game.transparencyMode);
         this.nwindow.invalidate();
+        this.updateTitle();
     }
 
     protected applyUIScale(scale: number) {
@@ -3102,6 +3131,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.inventoryWnd.setClass(info.classId);
         this.inventoryWnd.setDwarvenCraft(info.hasDwarvenCraft);
         this.trainWnd.setStatus(info);
+        this.updateTitle();
     }
 
     public setInventoryLimit(limit: number) { this.inventoryWnd.setLimit(limit); }
