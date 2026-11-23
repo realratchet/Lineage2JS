@@ -24,11 +24,11 @@ module.exports = function(source) {
     switch (name) {
         case "WebGLBindingStates.js": {
             const start = source.indexOf("\tfunction needsUpdate( object, geometry, program, index ) {"), end = source.indexOf("\n\tfunction saveCache(", start);
-            const marker = "currentState.attributes = cache;";
+            const marker = "currentState.attributes = cache;", setupEnd = "\t\t}\n\n\t}\n\n\tfunction createVertexArrayObject() {";
 
             if (start < 0 || end < start) throw new Error(`Unsupported three.js ${name}.`);
 
-            return replaceOnce(source.slice(0, start) + `function needsUpdate( object, geometry, program, index ) {
+            source = replaceOnce(source.slice(0, start) + `function needsUpdate( object, geometry, program, index ) {
     const cachedAttributes = currentState.attributes, geometryAttributes = geometry.attributes, names = currentState.attributeNames;
     if ( names === undefined ) return true;
     for ( let i = 0; i < names.length; i ++ ) {
@@ -43,7 +43,28 @@ module.exports = function(source) {
     }
     return currentState.index !== index;
 }
-` + source.slice(end), name, marker, marker + "\n\t\tcurrentState.attributeNames = Object.keys( cache );");
+` + source.slice(end), name, marker, marker + "\n\t\tcurrentState.attributeNames = Object.keys( cache );\n\t\tcurrentState.defaultNames = currentState.attributeNames.filter( name => cache[ name ].attribute === undefined );");
+
+            return replaceOnce(source, name, setupEnd, `\t\t} else setDefaultAttributeValues( material, program ); // generic attribute values are context state, a cached vertex array does not restore them
+
+\t}
+
+\tfunction setDefaultAttributeValues( material, program ) {
+    const names = currentState.defaultNames, values = material.defaultAttributeValues;
+    if ( values === undefined ) return;
+    const programAttributes = program.getAttributes();
+    for ( let i = 0; i < names.length; i ++ ) {
+        const value = values[ names[ i ] ];
+        if ( value === undefined ) continue;
+        const location = programAttributes[ names[ i ] ].location;
+        if ( value.length === 2 ) gl.vertexAttrib2fv( location, value );
+        else if ( value.length === 3 ) gl.vertexAttrib3fv( location, value );
+        else if ( value.length === 4 ) gl.vertexAttrib4fv( location, value );
+        else gl.vertexAttrib1fv( location, value );
+    }
+\t}
+
+\tfunction createVertexArrayObject() {`);
         }
         case "WebGLRenderer.js": // a draw whose program is still linking is skipped, getUniforms would block on the link
             source = replaceOnce(source, name, "\t\t\tconst program = setProgram( camera, scene, geometry, material, object );\n", "\t\t\tconst program = setProgram( camera, scene, geometry, material, object );\n\n\t\t\tif ( program === null ) return;\n");
