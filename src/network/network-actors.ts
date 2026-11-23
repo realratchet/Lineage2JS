@@ -973,7 +973,7 @@ export class NetworkActors {
     }
 
     protected findNpcSpawnLocation(object: NetObject_T, actor: BaseActor, environment: number = object.environment): Vector3 {
-        if (environment === 1) return object.position;
+        if (environment === 1) return tmpNpcSpawnPosition.copy(object.position).setZ(object.position.z - actor.getCollisionHeight()); // OnNpcInfo 0x7498ae spawns at the packet position
 
         const render = this.network.getParent().getComponent("render");
 
