@@ -159,6 +159,10 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         let library = this.library;
 
         if (!soundName) {
+            const network = this.audioManager.getParent().getComponent("network");
+
+            if (network.isInWorld() && !network.isPlayingReplay() && actor.getUnrealScriptProperty("bNpc")) return; // UAnimNotify_Sound::Notify 0x94d9e7
+
             const boots = this.library.pawnSounds?.boots;
             const bootsSound = boots?.length ? boots[Math.floor(Math.random() * boots.length)] : null;
 
@@ -193,7 +197,8 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
                         sounds = stepSounds;
                         library = stepLibrary;
                     }
-                } else if (terrain) {
+                } else if (!base) return; // UAnimNotify_Sound::Notify 0x94de2a
+                else if (terrain) {
                     const render = this.audioManager.getParent().getComponent("render");
 
                     if (actor === render.player) {

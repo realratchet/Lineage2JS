@@ -1780,12 +1780,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
     public isFlyingMovement(): boolean { return this.physicsMode === "flying"; }
     public getSpeed(): number { return this.velocity.length(); }
-    public isUnderwaterMovement(): boolean {
-        tmpWaterPosition.copy(this.getPosition()).addScaledVector(tmpUp, this.collisionHeight * 2);
-
-        return !!this.getWaterVolumeAt(tmpWaterPosition);
-    }
-
     public setFlying(isFlying: boolean) {
         this.setBase(null);
         if (!this.nMover) this.physicsMode = isFlying ? "flying" : "falling";

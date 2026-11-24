@@ -42,6 +42,7 @@ import PawnAttackComponent from "../objects/components/pawn-attack-component";
 import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
 import { WeaponType, type NpcSkillAttack_T } from "./unreal/un-pawn";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import WaterHitEffectComponent from "../physics/components/water-hit-effect-component";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import { ScriptComponent } from "../game/script-component";
 import type LocalSpaceSkeleton from "../objects/local-space-skeleton";
@@ -167,6 +168,7 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
     if (!actor.findComponent("transform")) actor.addComponent(new TransformComponent(renderManager));
     if (!actor.findComponent("npcLifecycle")) actor.addComponent(new NpcLifecycleComponent());
     if (!actor.findComponent("pawnRenderable")) actor.addComponent(new PawnRenderableComponent(renderManager));
+    if (!actor.findComponent("waterHitEffect")) actor.addComponent(new WaterHitEffectComponent());
 }
 
 function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {

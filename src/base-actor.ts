@@ -371,7 +371,6 @@ export class BaseActor extends GameObject implements ICollidable {
     public isSwimmingMovement(): boolean { return this.movementComponent.isSwimmingMovement(); }
     public isFlyingMovement(): boolean { return this.movementComponent.isFlyingMovement(); }
     public getSpeed(): number { return this.movementComponent.getSpeed(); }
-    public isUnderwaterMovement(): boolean { return this.movementComponent.isUnderwaterMovement(); }
     public setFlying(isFlying: boolean): void { this.movementComponent.setFlying(isFlying); }
     public setAirSpeed(airSpeed: number): void { this.movementComponent.setAirSpeed(airSpeed); }
     public setMovementSpeeds(groundSpeed: number, walkSpeed: number, waterSpeed: number): void { this.movementComponent.setMovementSpeeds(groundSpeed, walkSpeed, waterSpeed); }
