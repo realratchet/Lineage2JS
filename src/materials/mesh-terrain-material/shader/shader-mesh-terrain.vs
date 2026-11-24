@@ -1,4 +1,4 @@
-#ifndef USE_PROJECTOR_RECEIVER
+#if defined(USE_WORLD_SKILL_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER)
 #define USE_SKILL_LIGHTS
 #endif
 #ifdef USE_SKILL_LIGHTS
@@ -170,7 +170,7 @@ void main() {
     #include <worldpos_vertex>
     #include <envmap_vertex>
     #include <fog_vertex>
-    vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+    vRangeAlpha = (clippingSphere.w - length((vec4(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz, 0.0) * viewMatrix).xy)) / clippingFade;
     vSectorFade = sectorFade;
 
     #ifdef USE_UV_TEXTURE

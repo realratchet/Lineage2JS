@@ -159,6 +159,10 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         let library = this.library;
 
         if (!soundName) {
+            const network = this.audioManager.getParent().getComponent("network");
+
+            if (network.isInWorld() && !network.isPlayingReplay() && actor.getUnrealScriptProperty("bNpc")) return; // UAnimNotify_Sound::Notify 0x94d9e7
+
             const boots = this.library.pawnSounds?.boots;
             const bootsSound = boots?.length ? boots[Math.floor(Math.random() * boots.length)] : null;
 
@@ -170,7 +174,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
                 ? isWalking ? info.waterWalkSounds : info.waterRunSounds
                 : isWalking ? info.defaultWalkSounds : info.defaultRunSounds;
 
-            if (actor.scriptClassId && !isSwimming) {
+            if (actor.scriptClassId) {
                 const base = actor.getUnrealScriptProperty("Base") as unknown as Actor;
                 const foot = actor.getUnrealScriptProperty("FootVolume") as unknown as Actor;
                 const terrain = !!base && !!base.scriptClassId && actor.getComponent<ScriptComponent>("script").getVM().isA(base, "TerrainInfo");
@@ -179,8 +183,13 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
                 if (authored) {
                     soundName = authored.sound;
                     library = authored.library;
-                } else if (foot && foot.getUnrealScriptProperty("bL2WaterVolume")) sounds = isWalking ? info.waterWalkSounds : info.waterRunSounds;
-                else if (foot && foot.getUnrealScriptProperty("bL2StepVolume")) {
+                } else if (foot && foot.getUnrealScriptProperty("bL2WaterVolume")) {
+                    const body = actor.getUnrealScriptProperty("PhysicsVolume") as unknown as Actor;
+
+                    if (body && body.getUnrealScriptProperty("bL2WaterVolume")) return; // UAnimNotify_Sound::Notify 0x94dc09
+
+                    sounds = isWalking ? info.waterWalkSounds : info.waterRunSounds;
+                } else if (foot && foot.getUnrealScriptProperty("bL2StepVolume")) {
                     const stepLibrary = foot.getComponent<ScriptComponent>("script").getVM().getLibrary();
                     const stepSounds = stepLibrary.stepSounds[foot.getUnrealScriptProperty("StepSoundID") as number];
 
@@ -188,7 +197,8 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
                         sounds = stepSounds;
                         library = stepLibrary;
                     }
-                } else if (terrain) {
+                } else if (!base) return; // UAnimNotify_Sound::Notify 0x94de2a
+                else if (terrain) {
                     const render = this.audioManager.getParent().getComponent("render");
 
                     if (actor === render.player) {
@@ -217,14 +227,14 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
     }
 
     protected playSwimSound(info: IAnimationSwimSoundNotifyDecodeInfo): void {
-        const actor = this.getParent();
+        const actor = this.getParent(), foot = actor.getUnrealScriptProperty("FootVolume") as unknown as Actor;
 
-        if (!actor.isSwimmingMovement()) return;
+        if (!foot || !foot.getUnrealScriptProperty("bL2WaterVolume")) return; // UAnimNotify_SwimSound::Notify 0x94d41b
 
-        const soundSet = actor.isUnderwaterMovement() ? info.underwater : info.surface;
+        const soundSet = actor.getUnrealScriptProperty("bSwimAfloat") && (actor.getUnrealScriptProperty("HitLocation") as number[]).some(value => value !== 0) ? info.surface : info.underwater; // 0x94d436
 
         if (!soundSet) throw new Error(`Swim sound notify '${info.objectName}' has no audio profile.`);
-        if (Math.random() * 100 >= soundSet.random) return;
+        if (Math.floor(Math.random() * 32768) < soundSet.random) return; // 0x94d4f9: appRand() against the percentage
 
         const soundName = soundSet.sounds[Math.floor(Math.random() * soundSet.sounds.length)];
 

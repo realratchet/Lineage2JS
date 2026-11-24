@@ -7,7 +7,7 @@ import { PhysicsComponent } from "./physics-component";
 import L2NMover from "../l2-nmover";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import { PMoveType_T } from "../../assets/unreal/un-controller";
-import { findVolumeTransition } from "../volume-bsp";
+import { RideType_T } from "../../assets/unreal/un-pawn";
 import { sinRotator } from "../../assets/unreal/utils/rotator";
 import type PhysicsVolume from "../../objects/physics-volume";
 import type BaseActor from "../../base-actor";
@@ -18,6 +18,7 @@ import type { CheckResult_T, CollisionQuery_T, CollisionOverlapQuery_T } from ".
 import { getLatentAction, getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
+import type LitSkinnedMesh from "../../objects/lit-skinned-mesh";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
 import type PlayerController from "../../objects/player-controller";
 import type LandmarkComponent from "../../rendering/components/landmark-component";
@@ -29,6 +30,11 @@ const tmpFloorPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
 const tmpWaterEnd = new Vector3();
 const tmpSwimStart = new Vector3();
+const tmpSwimOrigin = new Vector3();
+const tmpSwimDelta = new Vector3();
+const tmpWaterLine = new Vector3();
+const tmpWaterDelta = new Vector3();
+const tmpOldHitNormal = new Vector3();
 const tmpBodyPosition = new Vector3();
 const tmpMovement = new Vector3();
 const tmpRemaining = new Vector3();
@@ -72,9 +78,11 @@ const tmpSpawnExtent = new Vector3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 const arrMoveTemps = [tmpPosition, tmpBodyPosition, tmpStepPosition, tmpStepNormal, tmpRemaining, tmpNormal, tmpStepUp];
 let moveActorDepth = 0;
+let swimHit: CheckResult_T = null;
 
 const COLLISION_RADIUS = 7.5; // Live retail pawn APawn+752.
 const COLLISION_HEIGHT = 23; // Live retail pawn APawn+756.
+const NAVIGATION_POINT_RADIUS = 80; // Live retail ANavigationPoint default object +752.
 const WYVERN_COLLISION_RADIUS = 60; // Live retail wyvern; l2j-lisvus npc.sql agrees.
 const WYVERN_COLLISION_HEIGHT = 80; // Live retail wyvern; l2j-lisvus npc.sql instead has 58.
 const MAX_STEP_HEIGHT = 10; // EngineClasses.h UCONST_MAXSTEPHEIGHT; retail APawn::stepUp 0x8cf65f.
@@ -99,6 +107,7 @@ const AIR_SPEED = 118.09999084472656; // Live retail wyvern APawn+5232.
 const ACCEL_RATE = 2048; // Live retail player APawn+5240; Engine.u Pawn default.
 const SPAWN_FLOOR_PROBE = 1000;
 const WATERLINE_DEPTH = 13; // Retail APawn::findWaterLine 0x8d2959.
+const BUBBLE_INTERVAL = Math.fround(0.9); // Retail APawn::UpdateBubbles 0x8c2a4f.
 // APawn::SpawnEnterEvent (0x8b47e0): rise moves 5/9 of its full offset per second.
 const ENTER_RISE_RATE = 5 / 9;
 export const PAWN_TELEPORTED_EVENT = "pawnTeleported";
@@ -421,6 +430,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ);
         const maxSpeed = this.getMovementSpeed();
 
+        if (this.actorState.locomotion && isThreeDimensional && !desired.actor && this.reachedDestination(position, distanceX, distanceY, distanceZ)) { // APawn::moveToward 0x8b80b2
+            this.actorState.locomotion = false;
+            this.vehicleId = 0;
+        }
+
         const willReachDestination = this.actorState.locomotion && Math.max(0, distance - desired.offset) <= maxSpeed * deltaTime;
 
         if (this.actorState.locomotion) {
@@ -434,13 +448,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             this.setDesiredHeading(tmpMovement.x - position.x, tmpMovement.y - position.y);
         } else if (this.actorState.locomotion && desired.faceMovement) this.setDesiredHeading(distanceX, distanceY);
 
-        if (this.physicsMode === "walking" && waterVolume) this.physicsMode = "swimming";
-
         switch (this.physicsMode) {
             case "none": this.velocity.set(0, 0, 0); break;
             case "walking": this.physWalking(position, deltaTime); break;
             case "falling": this.physFalling(position, deltaTime); break;
-            case "swimming": this.physSwimming(position, deltaTime, waterVolume); break;
+            case "swimming": this.physSwimming(position, deltaTime); break;
             case "flying": this.physFlying(position, deltaTime); break;
             case "nMover": this.physNMover(position, deltaTime); break;
             default: throw new Error(`Unknown player physics mode '${this.physicsMode}'.`);
@@ -463,6 +475,29 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
         this.updateBaseRelativePosition();
         this.waterVolume = this.getWaterVolume(position);
+    }
+
+    protected reachedDestination(position: Vector3, x: number, y: number, z: number): boolean { // APawn::ReachedDestination 0x8b08f0, no goal actor
+        const parent = this.getParent();
+
+        if (!parent.scriptClassId) return false;
+
+        const vm = this.getComponent<ScriptComponent>("script").getVM(), fullHeight = getProperty(vm.getDefaultObject(parent.scriptClassId), "CollisionHeight") as number;
+        const threshold = Math.min(this.collisionRadius, 30), limit = z > 0 ? fullHeight + fullHeight - this.collisionHeight : this.collisionHeight;
+
+        if (x * x + y * y > threshold * threshold) return false;
+        if (Math.abs(z) <= limit) return true;
+        if (Math.abs(z) > limit + limit) return false;
+
+        const hit = this.castShape(position, tmpDown.set(0, 0, -6), true);
+
+        if (!hit || hit.normal.z >= 0.95 || hit.normal.z < MIN_FLOOR_Z) return false;
+
+        const slope = Math.sqrt(1 / (hit.normal.z * hit.normal.z) - 1);
+
+        if (z < 0 && -z < fullHeight + this.collisionRadius * slope) return true;
+
+        return this.collisionRadius < NAVIGATION_POINT_RADIUS && z < fullHeight + (NAVIGATION_POINT_RADIUS + 15 - this.collisionRadius) * slope;
     }
 
     protected calcVelocity(position: Vector3, accelDir: Vector3, deltaTime: number, maxSpeed: number) {
@@ -590,7 +625,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
 
-        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed(0));
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed());
         if (this.isPhysicInit && this.velocity.x === 0 && this.velocity.y === 0 && this.velocity.z === 0) return; // bPhysicInit, APawn::physWalking 0x8d49eb
 
         tmpDesiredMove.copy(this.velocity);
@@ -610,8 +645,15 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             const deltaY = tmpMovement.y;
             const desiredDistance = tmpMovement.length();
 
-            if (desiredDistance > 0) this.moveWalking(position, tmpMovement);
-            else remainingTime = 0;
+            if (desiredDistance > 0) {
+                this.moveWalking(position, tmpMovement);
+
+                if ((this.physicsMode as PhysicsMode_T) !== "falling" && this.isWaterVolume("HeadVolume")) { // APawn::physWalking 0x8d5305
+                    this.physicsMode = "swimming";
+                    this.startSwimming(position, tmpWalkingSubStart, tmpOldVelocity.copy(this.velocity), timeTick, remainingTime, iterations);
+                    return;
+                }
+            } else remainingTime = 0;
 
             const floorMovement = tmpMovement.set(0, 0, -FLOOR_CHECK_DISTANCE);
             const floorHit = this.castShape(position, floorMovement);
@@ -630,6 +672,12 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                         this.isPhysicInit = true; // APawn::physWalking 0x8d554d
 
                     this.setBase(floorHit.actor, tmpNormal);
+
+                    if ((this.physicsMode as PhysicsMode_T) === "swimming") { // APawn::physWalking 0x8d5554, 0x8d570b
+                        this.startSwimming(position, tmpWalkingSubStart, tmpOldVelocity.copy(this.velocity), timeTick, remainingTime, iterations);
+                        return;
+                    }
+
                     continue;
                 }
 
@@ -961,25 +1009,14 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         tmpMovement.addVectors(tmpOldVelocity, this.velocity).multiplyScalar(0.5 * deltaTime);
 
         const start = tmpSwimStart.copy(position);
-        const waterTime = this.findWaterTransition(position, tmpMovement, false);
-
-        const pendingHit = this.castShape(position, tmpMovement);
-
-        if (waterTime < (pendingHit ? pendingHit.time : 1)) {
-            position.addScaledVector(tmpMovement, waterTime);
-            const remainingTime = deltaTime * (1 - waterTime);
-
-            if (this.velocity.z < 0 && this.velocity.z > -160)
-                this.velocity.z = -80 - Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y) * 0.7;
-
-            this.physicsMode = "swimming";
-            if (remainingTime > 0.01) this.physSwimming(position, remainingTime, this.getWaterVolume(position), iterations + 1);
-            return;
-        }
-
         const hit = this.moveActor(position, tmpMovement);
 
-        if (!hit) return;
+        if (this.checkStartSwimming("PhysicsVolume", position, start, deltaTime, hit ? deltaTime * (1 - hit.time) : 0, iterations + 1)) return; // APawn::physFalling 0x8d91ec
+
+        if (!hit) {
+            this.checkStartSwimming("HeadVolume", position, start, deltaTime, 0, iterations + 1); // APawn::physFalling 0x8d9797
+            return;
+        }
 
         this.getHitNormal(hit, tmpNormal);
 
@@ -1006,63 +1043,216 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             this.moveSwept(position, tmpRemaining);
         }
 
+        if (this.checkStartSwimming("HeadVolume", position, start, deltaTime, 0, iterations + 1)) return;
+
         this.velocity.copy(position).sub(start).multiplyScalar(1 / deltaTime);
 
     }
 
-    protected physSwimming(position: Vector3, deltaTime: number, volume: IWaterVolumeDecodeInfo | null, iterations: number = 0) {
+    protected physSwimming(position: Vector3, deltaTime: number, iterations: number = 0) { // APawn::physSwimming 0x8d6a20
         if (deltaTime < 0.0003 || iterations > 7) return;
 
-        this.setBase(null);
-        if (!volume) {
-            this.physicsMode = "falling";
-            this.physFalling(position, deltaTime, iterations + 1);
-            return;
-        }
+        const parent = this.getParent(), body = parent.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
 
+        iterations++;
+        this.setBase(null);
         this.isGrounded = false;
+        tmpSwimStart.copy(position);
         tmpAccelDir.copy(this.acceleration);
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
-        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed(1));
 
-        tmpSwimStart.copy(position);
-        const body = this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
-        tmpMovement.copy(this.velocity).addScaledVector(tmpVelocityDelta.fromArray(body.getUnrealScriptProperty("ZoneVelocity") as Vector3Arr), 25 * deltaTime).multiplyScalar(deltaTime);
-        const hit = this.moveWithWallResponse(position, tmpMovement);
-        const nextVolume = this.getWaterVolume(position);
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed());
+        tmpVelocityDelta.fromArray(body.getUnrealScriptProperty("ZoneVelocity") as Vector3Arr);
 
-        tmpMovement.copy(position).sub(tmpSwimStart);
+        if (!(parent as any).isPlayer && tmpVelocityDelta.lengthSq() <= 90000) tmpVelocityDelta.set(0, 0, 0);
+        else tmpVelocityDelta.multiplyScalar(25 * deltaTime);
 
-        if (nextVolume) {
-            this.velocity.copy(tmpMovement).multiplyScalar(1 / deltaTime);
+        tmpMovement.copy(this.velocity).add(tmpVelocityDelta).multiplyScalar(deltaTime);
+        tmpSwimDelta.copy(tmpMovement);
+
+        let remainingTime = deltaTime * this.swim(position, tmpMovement);
+
+        if (!tmpMovement.equals(tmpSwimDelta)) this.velocity.copy(tmpMovement).multiplyScalar(1 / deltaTime).sub(tmpVelocityDelta);
+
+        if (swimHit) {
+            const hit = swimHit;
+
+            this.getHitNormal(hit, tmpOldHitNormal);
+            this.floor.copy(tmpOldHitNormal);
+            tmpGravityDirection.set(0, 0, (body.getUnrealScriptProperty("Gravity") as Vector3Arr)[2] > 0 ? 1 : -1);
+            tmpDesiredDirection.copy(tmpMovement);
+            tmpVelocityDirection.copy(this.velocity);
+
+            if (tmpDesiredDirection.lengthSq() > 0) tmpDesiredDirection.normalize();
+            if (tmpVelocityDirection.lengthSq() > 0) tmpVelocityDirection.normalize();
+
+            const gravityVelocityDot = tmpGravityDirection.dot(tmpVelocityDirection);
+
+            if (Math.abs(tmpOldHitNormal.z) < 0.2 && gravityVelocityDot < 0.5 && gravityVelocityDot > -0.2) {
+                const stepZ = position.z;
+
+                this.stepUp(position, tmpDesiredDirection, tmpRemaining.copy(tmpMovement).multiplyScalar(1 - hit.time), hit);
+                tmpSwimStart.z += position.z - stepZ;
+            } else {
+                this.processHitWall(hit.normal, hit.actor);
+                position.copy(this.getPosition());
+                tmpRemaining.copy(tmpMovement).addScaledVector(tmpOldHitNormal, -tmpMovement.dot(tmpOldHitNormal)).multiplyScalar(1 - hit.time);
+
+                if (tmpRemaining.dot(tmpMovement) >= 0) {
+                    remainingTime *= this.swim(position, tmpRemaining) * (1 - (swimHit ? swimHit.time : 1));
+
+                    if (swimHit) {
+                        this.processHitWall(swimHit.normal, swimHit.actor);
+                        position.copy(this.getPosition());
+                        this.getHitNormal(swimHit, tmpNormal);
+                        twoWallAdjust(tmpDesiredDirection, tmpRemaining, tmpNormal, tmpOldHitNormal, swimHit.time);
+                        remainingTime *= this.swim(position, tmpRemaining) * (1 - (swimHit ? swimHit.time : 1));
+                    }
+                }
+            }
+        } else this.floor.set(0, 0, 1);
+
+        this.updateBubbles(deltaTime);
+
+        if (remainingTime < deltaTime) {
+            const velocityZ = this.velocity.z;
+
+            this.velocity.copy(position).sub(tmpSwimStart).multiplyScalar(1 / (deltaTime - remainingTime));
+
+            if (!(parent.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume).getUnrealScriptProperty("bWaterVolume")) this.velocity.z = velocityZ;
+        }
+
+        if (!this.isWaterVolume("HeadVolume")) {
+            if ((this.physicsMode as PhysicsMode_T) === "swimming") {
+                this.physicsMode = "walking";
+                this.floor.set(0, 0, 1);
+            }
+
+            if (this.velocity.z < 160 && this.velocity.z > 0)
+                this.velocity.z = 40 + Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y) * 0.4;
+        }
+
+        if ((this.physicsMode as PhysicsMode_T) !== "swimming") this.startNewPhysics(position, remainingTime, iterations);
+    }
+
+    protected updateBubbles(deltaTime: number) { // APawn::UpdateBubbles 0x8c2a00
+        const parent = this.getParent(), mesh = this.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
+
+        if (!mesh || parent.getUnrealScriptProperty("bSwimAfloat") || deltaTime / (deltaTime + BUBBLE_INTERVAL) <= Math.random()) return;
+
+        const asset = this.renderManager.getParent().getComponent("asset"), bone = Math.trunc(Math.random() * (mesh.skeleton.bones.length - 1)), bubble = asset.createEffect("LineageEffect.e_u061_bubble");
+
+        this.renderManager.addTransientEffect(bubble, parent);
+        parent.attachObjectToBone(bubble, bone);
+
+        const controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T, alias = mesh.tagAliases.findIndex(name => name.toLowerCase() === "e_bone");
+
+        if (bone % 3 || parent.getUnrealScriptProperty("bNpc") || !controller || getProperty(controller, "bDead") || alias < 0) return;
+
+        const breath = asset.createEffect("LineageEffect.e_u061_breath");
+
+        this.renderManager.addTransientEffect(breath, parent);
+        parent.attachObjectToBone(breath, mesh.tagNames[alias]);
+    }
+
+    protected swim(position: Vector3, delta: Vector3): number { // APawn::Swim 0x8d5fd0
+        tmpSwimOrigin.copy(position);
+        swimHit = this.moveActor(position, delta);
+
+        const ground = this.castShape(position, tmpDown.set(0, 0, -this.collisionHeight / 3), true);
+
+        this.getParent().setUnrealScriptProperty("bHitGroundInWater", !!ground && ground.normal.z >= MIN_FLOOR_Z);
+
+        if (this.isWaterVolume("HeadVolume")) return 0;
+
+        const end = this.findWaterLine(tmpSwimOrigin, position, tmpWaterLine);
+
+        if (end.equals(position)) return 0;
+
+        tmpWaterDelta.subVectors(end, position);
+
+        const airTime = tmpWaterDelta.dot(tmpWaterEnd.subVectors(position, tmpSwimOrigin)) > 0 ? 0 : tmpWaterDelta.length() / delta.length();
+
+        swimHit = this.moveActor(position, tmpWaterDelta);
+        delta.subVectors(end, tmpSwimOrigin);
+
+        return airTime;
+    }
+
+    protected findWaterLine(inWater: Vector3, outOfWater: Vector3, target: Vector3): Vector3 { // APawn::findWaterLine 0x8d2920
+        target.copy(outOfWater);
+        tmpWaterPosition.copy(outOfWater).setZ(outOfWater.z + this.collisionHeight + WATERLINE_DEPTH);
+        tmpWaterEnd.copy(inWater).setZ(inWater.z + this.collisionHeight);
+
+        const water = this.physicsManager.physicsVolumeLineCheck(tmpWaterPosition, tmpWaterEnd, this.getParent(), true);
+
+        if (!water || !water.actor.getUnrealScriptProperty("bL2WaterVolume")) return target;
+
+        const waterTime = water.time;
+        const query: CollisionQuery_T = { location: tmpWaterPosition, delta: tmpWaterEnd.sub(tmpWaterPosition), extent: tmpTraceExtent.set(0, 0, 0), sourceActor: this.getParent(), sourceProfile: this.collisionProfile, sourceCollider: this.collider, sourceBody: this.rigidbody, sourceIsPlayer: true, onlyWorldGeometry: true, ignorePawns: true };
+        const world = this.physicsManager.singleLineCheck(query);
+
+        if (world && world.time < waterTime) return target;
+
+        target.z = Math.min(inWater.z, outOfWater.z);
+
+        return target;
+    }
+
+    protected startSwimming(position: Vector3, oldLocation: Vector3, oldVelocity: Vector3, timeTick: number, remainingTime: number, iterations: number) { // APawn::startSwimming 0x8d78b0
+        const parent = this.getParent(), terminalVelocity = (parent.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume).getUnrealScriptProperty("TerminalVelocity") as number;
+
+        if (timeTick > 0) this.velocity.copy(position).sub(oldLocation).multiplyScalar(1 / timeTick);
+
+        this.velocity.multiplyScalar(2).sub(oldVelocity);
+
+        if (this.velocity.lengthSq() > terminalVelocity * terminalVelocity) this.velocity.normalize().multiplyScalar(terminalVelocity);
+
+        const end = this.findWaterLine(position, oldLocation, tmpWaterLine);
+
+        if (!end.equals(position)) {
+            tmpWaterDelta.subVectors(end, position);
+            remainingTime += timeTick * tmpWaterDelta.length() / position.distanceTo(oldLocation);
+            this.moveActor(position, tmpWaterDelta);
+        }
+
+        if (!this.isWaterVolume("HeadVolume")) {
+            this.physicsMode = "walking";
+            this.floor.set(0, 0, 1);
             return;
         }
 
-        let remainingTime = 0;
+        parent.setUnrealScriptProperty("bHitGroundInWater", false);
+        parent.setUnrealScriptProperty("bSwimAfloat", false);
 
-        if (!hit) {
-            const outZ = position.z;
+        if (this.velocity.z > -160 && this.velocity.z < 0)
+            this.velocity.z = -80 - Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y) * 0.7;
 
-            this.moveSwept(position, tmpDown.set(0, 0, Math.min(0, tmpSwimStart.z - position.z)));
-            remainingTime = deltaTime * Math.min(1, Math.abs(position.z - outZ) / tmpMovement.length());
-            tmpMovement.copy(position).sub(tmpSwimStart);
+        if (remainingTime > 0.01 && iterations < 8) this.physSwimming(position, remainingTime, iterations);
+    }
 
-            if (this.getWaterVolume(position)) {
-                if (remainingTime < deltaTime)
-                    this.velocity.copy(tmpMovement).multiplyScalar(1 / (deltaTime - remainingTime));
+    protected checkStartSwimming(volume: string, position: Vector3, oldLocation: Vector3, timeTick: number, remainingTime: number, iterations: number): boolean {
+        const parent = this.getParent(), ridePawn = parent.getUnrealScriptProperty("RidePawn") as ScriptHost_T;
 
-                return;
-            }
+        if (!this.isWaterVolume(volume) || parent.getUnrealScriptProperty("bRide")) return false;
+        if (ridePawn && getProperty(ridePawn, "bRide") && getProperty(ridePawn, "CurRideType") === RideType_T.RD_WYVERN) return false;
+
+        this.physicsMode = "swimming";
+        this.startSwimming(position, oldLocation, tmpOldVelocity, timeTick, remainingTime, iterations);
+
+        return true;
+    }
+
+    protected startNewPhysics(position: Vector3, deltaTime: number, iterations: number) { // APawn::startNewPhysics 0x8d63e0
+        if (deltaTime < 0.0003 || iterations > 7) return;
+
+        switch (this.physicsMode) {
+            case "walking": this.physWalking(position, deltaTime, iterations); break;
+            case "falling": this.physFalling(position, deltaTime, iterations); break;
+            case "swimming": this.physSwimming(position, deltaTime, iterations); break;
+            case "flying": this.physFlying(position, deltaTime); break;
         }
-
-        this.velocity.copy(tmpMovement).multiplyScalar(1 / Math.max(0.0003, deltaTime - remainingTime));
-
-        if (this.velocity.z > 0 && this.velocity.z < 160)
-            this.velocity.z = 40 + Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y) * 0.4;
-
-        this.physicsMode = "falling";
-        this.physFalling(position, remainingTime, iterations + 1);
     }
 
     protected physFlying(position: Vector3, deltaTime: number) {
@@ -1181,6 +1371,12 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return this.getWaterVolumeAt(tmpWaterPosition);
     }
 
+    protected isWaterVolume(name: string): boolean {
+        const volume = this.getParent().getUnrealScriptProperty(name) as unknown as PhysicsVolume;
+
+        return !!volume && !!volume.getUnrealScriptProperty("bL2WaterVolume");
+    }
+
     protected getWaterVolumeAt(position: Vector3): IWaterVolumeDecodeInfo | null {
         const owner = this.getParent(), sectors = this.renderManager.getLoadedSectors();
         const main = this.renderManager.getLevel(), ownerLevel = owner.getUnrealScriptProperty("Level");
@@ -1208,18 +1404,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         }
 
         throw new Error(`Water volume '${selected.name}' has no decoded water data.`);
-    }
-
-    protected findWaterTransition(position: Vector3, movement: Vector3, startsInWater: boolean): number {
-        tmpWaterEnd.copy(position).add(movement);
-        const volume = startsInWater ? this.getWaterVolume(position) : this.getWaterVolume(tmpWaterEnd);
-
-        if (!volume) return 1;
-
-        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
-        tmpWaterEnd.addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
-
-        return findVolumeTransition(tmpWaterPosition, tmpWaterEnd, volume.bsp, startsInWater);
     }
 
     public moveActor(position: Vector3, movement: Vector3, ignoreCollision: boolean = false): CheckResult_T | null {
@@ -1403,7 +1587,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             "idle" :
             this.physicsMode === "falling" ?
                 "falling" :
-                this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : isTurning && this.getParent().scriptClassId ? "turning" : "idle";
+                this.physicsMode === "swimming" && !parent.getUnrealScriptProperty("bHitGroundInWater") ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : isTurning && this.getParent().scriptClassId ? "turning" : "idle";
 
         if (state === this.actorState.state && this.getComponent<AnimationComponent>("animation").isPlayingMovement(state)) return;
 
@@ -1427,7 +1611,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (controller) {
             setProperty(controller, "Destination", position.toArray().map(Math.fround));
             // AController::MoveTo 0x1053425e keeps Destination in center space.
-            if (getProperty(controller, "bCameraWalking")) this.actorState.desired.position.z -= this.collisionHeight;
+            this.actorState.desired.position.z -= this.collisionHeight;
         }
     }
 
@@ -1596,12 +1780,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
     public isFlyingMovement(): boolean { return this.physicsMode === "flying"; }
     public getSpeed(): number { return this.velocity.length(); }
-    public isUnderwaterMovement(): boolean {
-        tmpWaterPosition.copy(this.getPosition()).addScaledVector(tmpUp, this.collisionHeight * 2);
-
-        return !!this.getWaterVolumeAt(tmpWaterPosition);
-    }
-
     public setFlying(isFlying: boolean) {
         this.setBase(null);
         if (!this.nMover) this.physicsMode = isFlying ? "flying" : "falling";
@@ -1854,8 +2032,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public adjustPawnLocation(position: Vector3) {
-        if (this.physicsMode === "flying" || !this.isInteractive() || !this.renderManager.isSectorCollisionReady(position)) return this.adjustLocation(position);
-        if (!this.physicsManager.farMoveActor(this.getParent(), this.findAdjustmentLocation(position, false))) return; // AdjustPawnLocation 0x7427c7: a rejected FarMoveActor moves nothing
+        const environment = this.getParent().getUnrealScriptProperty("Environment"), isLocation = environment === 1 || environment === 2; // AdjustPawnLocation 0x742682: no floor trace, the server position is the Location
+
+        if (!this.isInteractive() || !this.renderManager.isSectorCollisionReady(position)) return this.adjustLocation(isLocation ? tmpFloorPosition.copy(position).setZ(position.z - this.collisionHeight) : position, !isLocation);
+        if (!this.physicsManager.farMoveActor(this.getParent(), isLocation ? position : this.findAdjustmentLocation(position, false))) return; // AdjustPawnLocation 0x7427c7: a rejected FarMoveActor moves nothing
 
         this.adjustLocation(this.getPosition(), false);
     }
@@ -2000,7 +2180,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected getMovementSpeed(environment = -1): number {
-        if (environment === -1) environment = this.physicsMode === "swimming" ? 1 : this.physicsMode === "flying" ? 2 : 0;
+        if (environment === -1) environment = this.physicsMode === "flying" ? 2 : !this.getParent().scriptClassId ? this.physicsMode === "swimming" ? 1 : 0 : this.getParent().getUnrealScriptProperty("Environment") === 1 ? 1 : 0; // APawn::physWalking 0x8d4997 and physSwimming 0x8d6b38 pick by Environment.
         if (this.getParent().scriptClassId) return this.getParent().getUnrealScriptProperty(environment === 1 ? "WaterSpeed" : environment === 2 ? "AirSpeed" : "GroundSpeed") as number;
 
         const speed = environment === 1 ? this.waterSpeed : environment === 2 ? this.airSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;

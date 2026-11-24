@@ -1555,14 +1555,16 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);
+            tmpMouseIntersection.z += renderManager.player.getCollisionHeight();
             renderManager.player.goTo(tmpMouseIntersection);
             if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(
-                tmpMouseIntersection,
+                physicsIntersection.location,
                 physicsIntersection.normal,
                 (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null
             );
         } else if (pickDistance > 0) {
             tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
+            tmpMouseIntersection.z += renderManager.player.getCollisionHeight();
             renderManager.player.goTo(tmpMouseIntersection);
         }
 

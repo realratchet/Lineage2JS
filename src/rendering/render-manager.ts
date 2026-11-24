@@ -47,6 +47,7 @@ import type PawnMesh from "../objects/pawn-mesh";
 import type DynamicLight from "../objects/dynamic-light";
 import { ALPHA_CORE_REF, NUM_ACTOR_LIGHTS, usesAlphaCore, type default as MeshStaticMaterial } from "../materials/mesh-static-material/mesh-static-material";
 import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
+import { sortTerrainDecorations, type default as TerrainDecoration } from "../objects/terrain-decoration";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
 import type UIManager from "../game/ui-manager";
@@ -160,6 +161,9 @@ type PawnLightingState_T = {
     lights: DynamicLight[]
 };
 type Disposable_T = { dispose(): void };
+const SWITCH_SKILL_LIGHTS = 1;
+
+type SwitchedMaterial_T = THREE.ShaderMaterial & { shaderSwitches?: number, isStaticMeshMaterial?: boolean, isTerrainMaterial?: boolean };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean }, shadowPrograms?: { isReady(): boolean }[] };
 type SectorWarmup_T = {
     sector: SectorObject,
@@ -337,6 +341,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly overHeadAlarm = new OverHeadAlarm();
     protected readonly wideScreenBars = new WideScreenBars();
     protected readonly fogBlend = new FogBlendState();
+    protected shaderSwitches = 0;
     protected fogSource: L2Environment | ZoneObject | FogInfoObject | null = null;
     protected readonly skyColors: ColorByte[] = [];
     protected readonly prevSkyColors: ColorByte[] = [];
@@ -492,6 +497,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.pawnCrowd = new PawnCrowd(this.renderer);
         this.renderer.render = (scene, camera) => {
             setReversedDepth(this.renderer, camera.reversedDepth);
+            this.shaderSwitches = this.skillLightProbe.mode === "all" ? SWITCH_SKILL_LIGHTS : 0;
             if (scene !== this.scene) {
                 render.call(this.renderer, scene, camera);
                 return;
@@ -529,6 +535,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (!(object as PawnMesh).isPawnMesh && (object as LitSkinnedMesh).skeleton && ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).isAtlasPacked)
                 ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).resolveMatrices();
 
+            this.applyShaderSwitches(material);
             if (scene === this.scene || scene === this.nameplateScene) this.nameplateDepth.beforeRender(material, object); // a fading pawn in the shadow pass made it copy the 256x256 shadow depth
             if ((material as RefractionMaterial_T).refractionMask && scene === this.scene) {
                 if ((geometry as InstancedBufferGeometry).instanceCount === 0) return;
@@ -576,7 +583,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             let count = 0, coreCount = 0;
             for (const item of worldList.transparent) {
                 const material = item.material as MeshStaticMaterial;
-                if (!(item.object as CollidingMesh).isStaticMeshActor || !material.isStaticMeshMaterial || !usesAlphaCore(material)) continue;
+                if (!material.isStaticMeshMaterial) continue;
+                if ((item.object as TerrainDecoration).isTerrainDecoration ? ALPHA_CORE_REF.value <= 0 || !material.transparent || material.blending !== NormalBlending : !(item.object as CollidingMesh).isStaticMeshActor || !usesAlphaCore(material)) continue;
 
                 const core = this.arrAlphaCores[coreCount] || (this.arrAlphaCores[coreCount] = {});
                 Object.assign(core, item);
@@ -1846,6 +1854,25 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
+    protected applyShaderSwitches(material: THREE.Material | THREE.Material[]) {
+        if (Array.isArray(material)) {
+            for (const value of material) this.applyShaderSwitches(value);
+            return;
+        }
+
+        const switched = material as SwitchedMaterial_T, defines = switched.defines;
+        if (switched.shaderSwitches === this.shaderSwitches) return;
+
+        switched.shaderSwitches = this.shaderSwitches; // alpha core and fringe share one defines object, so the defines alone cannot tell who is stale
+        if (!defines) return;
+
+        const hasSkillLights = (switched.isStaticMeshMaterial || switched.isTerrainMaterial) && defines.USE_ACTOR_LIGHTS === undefined;
+        if (!hasSkillLights && defines.USE_WORLD_SKILL_LIGHTS === undefined) return;
+        if (hasSkillLights && this.shaderSwitches & SWITCH_SKILL_LIGHTS) defines.USE_WORLD_SKILL_LIGHTS = "";
+        else delete defines.USE_WORLD_SKILL_LIGHTS;
+        material.needsUpdate = true;
+    }
+
     public setRenderDeco(enabled: boolean) {
         this.renderDeco = enabled;
         this.arrSceneSectors.forEach(sector => sector.setRenderDeco(enabled));
@@ -2136,6 +2163,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 false,
                 this.manGame.getCurrentTime()
             );
+        }
+
+        if (!auxiliary && this.sortTransparent) {
+            for (const sector of this.arrSceneSectors)
+                if (sector.visible) sector.offerDecorationSort(bspCullingPosition);
+
+            sortTerrainDecorations(bspCullingPosition);
         }
 
         this.updatePawnVisibility(frustum, viewOrigin);
@@ -2695,6 +2729,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         tmpShaderCompileGroup.fog = this.scene.fog || tmpShaderCompileFog;
+        for (const object of tmpShaderCompileGroup.children)
+            if ((object as THREE.Mesh).material) this.applyShaderSwitches((object as THREE.Mesh).material);
         if (tmpShaderCompileGroup.children.length) {
             const reversed = this.renderer.state.buffers.depth.getReversed();
             setReversedDepth(this.renderer, this.camera.reversedDepth);
@@ -3402,6 +3438,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected compileSectorMaterial(binding: SectorMaterialBinding_T): void {
         const object = binding.object, material = object.material;
         object.material = binding.material;
+        this.applyShaderSwitches(binding.material);
 
         const reversed = this.renderer.state.buffers.depth.getReversed();
         tmpShaderCompileGroup.fog = this.scene.fog || tmpShaderCompileFog;

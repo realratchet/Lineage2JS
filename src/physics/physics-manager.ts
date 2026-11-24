@@ -6,7 +6,7 @@ import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, Phys
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
-import type WaterEffectsComponent from "./components/water-effects-component";
+import type WaterHitEffectComponent from "./components/water-hit-effect-component";
 import type { ScriptComponent } from "../game/script-component";
 
 import { pointPrimitive, queryPrimitive } from "./collision-primitive";
@@ -429,7 +429,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (pointPrimitive(primitive, tmpWaterHitLocation, zeroWaterExtent)) tmpWaterHitLocation.set(0, 0, 0);
         owner.setUnrealScriptProperty("HitLocation", tmpWaterHitLocation.toArray());
         if (entered && !test && tmpWaterHitLocation.lengthSq() !== 0)
-            owner.findComponent<WaterEffectsComponent>("waterEffects")?.recordWaterEntry(volume, tmpWaterHitLocation);
+            owner.findComponent<WaterHitEffectComponent>("waterHitEffect")?.recordWaterEntry(volume, tmpWaterHitLocation);
     }
 
     public setActorZone(actor: Actor, test: boolean = false, forceRefresh: boolean = false): void {

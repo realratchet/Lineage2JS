@@ -684,6 +684,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.alphaCore.blendSrc = this.alphaCore.blendSrcAlpha = OneFactor;
         this.alphaCore.blendDst = ZeroFactor;
         this.alphaCore.blendDstAlpha = OneMinusSrcAlphaFactor;
+        this.alphaCore.depthWrite = true;
 
         this.alphaFringe = this.createAlphaPass({ alphaCeil: ALPHA_CORE_REF });
         this.alphaFringe.depthWrite = false;

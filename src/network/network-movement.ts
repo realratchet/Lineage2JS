@@ -72,7 +72,7 @@ export class NetworkMovement {
                 tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
                 base.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
                 this.network.session.game.validatePosition(tmpVehicleOrigin, player.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
-            } else this.network.session.game.validatePosition(player.position, player.getRotationYaw());
+            } else this.network.session.game.validatePosition(this.network.getPlayerLocation(), player.getRotationYaw()); // Engine 0x8673dc: pawn Location.
         }
 
         if (!isMoving || !player.isInteractive()) this.stuckCheckAt = 0;
@@ -95,7 +95,7 @@ export class NetworkMovement {
 
         if (!isHitWall) player.stopMoving();
         if (base && base.isVehicle) this.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
-        else if (!isHitWall) this.network.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+        else if (!isHitWall) this.network.session.game.cannotMoveAnymore(this.network.getPlayerLocation(), player.getRotationYaw()); // Engine 0x8cfcd4: pawn Location.
         if (!isHitWall) this.stuckCheckAt = 0;
     }
 

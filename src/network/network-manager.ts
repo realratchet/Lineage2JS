@@ -29,6 +29,7 @@ import type { ICollidable } from "../objects/objects";
 import { getDistance } from "./network-location";
 
 const TARGET_COMMAND_DELAY = Math.fround(0.001);
+const tmpPlayerLocation = new Vector3();
 
 export class NetworkManager implements IEngineComponent<GameManager> {
     public readonly session = new NetworkSession(this);
@@ -56,6 +57,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getParent(): GameManager { return this.manGame; }
     public getGameClient() { return this.session.game; }
     public isInWorld() { return this.actors.inWorld; }
+    public getPlayerLocation(): Vector3 { return tmpPlayerLocation.fromArray(this.manGame.getComponent("render").player.getUnrealScriptProperty("Location") as number[]); } // UInput::Exec 0x845110, 0x84b79f, 0x84b90b send the pawn Location.
     public isWorldLoading() { return this.ui?.getScreen() === "loading"; }
     public isPlayingReplay() { return !!this.session.game?.isPlayingReplay(); }
 
@@ -366,14 +368,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public requestMoveTo(point: Vector3, actor: ICollidable = null) {
         if (this.actors.missingSector) return;
 
-        const player = this.manGame.getComponent("render").player;
-
         if (actor && (actor as Vehicle).isVehicle) {
             this.movement.requestMoveInVehicle(actor as Vehicle, point);
             return;
         }
 
-        this.session.game.moveBackwardToLocation(point, player.position);
+        this.session.game.moveBackwardToLocation(point, this.getPlayerLocation());
         if (!this.isPlayingReplay()) this.checkTutorialClientEvent(1); // UInput::Exec PlayerPawnMoveTo 0x84b90b..0x84b91f
     }
 
@@ -397,29 +397,27 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const objectId = this.getActorObjectId(actor);
         if (!objectId) return false;
 
-        if (isCtrl) this.session.game.attackRequest(objectId, this.manGame.getComponent("render").player.position, isShift);
-        else this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
+        if (isCtrl) this.session.game.attackRequest(objectId, this.getPlayerLocation(), isShift);
+        else this.session.game.action(objectId, this.getPlayerLocation(), isShift);
 
         return true;
     }
 
     public requestPartyMemberAction(objectId: number, isShift: boolean, isCtrl: boolean) { // NWindow 0x1010daa0 -> 0x10071c00 / 0x100718b0
-        const player = this.manGame.getComponent("render").player;
-
-        if (isCtrl) this.session.game.attackRequest(objectId, player.position, isShift);
-        else this.session.game.action(objectId, player.position, isShift);
+        if (isCtrl) this.session.game.attackRequest(objectId, this.getPlayerLocation(), isShift);
+        else this.session.game.action(objectId, this.getPlayerLocation(), isShift);
     }
 
     public requestPartyMemberTarget(objectId: number) { // NWindow 0x1010db60 -> 0x10071a60: the member's own selected target
         const member = this.actors.objects.get(objectId), target = member && this.actors.objects.get(member.selectedId);
 
-        if (target) this.session.game.action(target.objectId, this.manGame.getComponent("render").player.position, false);
+        if (target) this.session.game.action(target.objectId, this.getPlayerLocation(), false);
     }
 
     public requestPetAction(objectId: number, isShift: boolean) {
         if (objectId <= 0 || !this.actors.objects.get(this.actors.userId)) return;
 
-        this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
+        this.session.game.action(objectId, this.getPlayerLocation(), isShift);
     }
 
     public getPickup(raycaster: Raycaster, maxDistance: number): GroundPickup {
@@ -468,7 +466,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!nearest) return false;
 
-        this.session.game.action(nearest.objectId, this.manGame.getComponent("render").player.position, isShift);
+        this.session.game.action(nearest.objectId, this.getPlayerLocation(), isShift);
         return true;
     }
 
@@ -1200,10 +1198,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 const targetId = this.getTargetId();
 
                 if (this.actors.hasServerObject(targetId)) {
-                    const position = this.manGame.getComponent("render").player.position;
-
-                    if (ctrl) this.session.game.attackRequest(targetId, position, shift);
-                    else this.session.game.action(targetId, position, shift);
+                    if (ctrl) this.session.game.attackRequest(targetId, this.getPlayerLocation(), shift);
+                    else this.session.game.action(targetId, this.getPlayerLocation(), shift);
                 }
                 break;
             }
@@ -1219,21 +1215,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 if (next) {
                     this.nextTargetLock = true;
-                    this.session.game.action(next.objectId, this.manGame.getComponent("render").player.position, shift);
+                    this.session.game.action(next.objectId, this.getPlayerLocation(), shift);
                 }
                 break;
             }
             case ActionType_T.Pickup: {
                 const item = this.getNearestItem(200, -1);
 
-                if (item) this.session.game.action(item.objectId, this.manGame.getComponent("render").player.position, shift);
+                if (item) this.session.game.action(item.objectId, this.getPlayerLocation(), shift);
                 break;
             }
             case ActionType_T.assist: {
                 const target = this.actors.objects.get(this.getTargetId());
 
                 if (target && target.actor && this.actors.hasServerObject(target.selectedId))
-                    this.session.game.action(target.selectedId, this.manGame.getComponent("render").player.position, shift);
+                    this.session.game.action(target.selectedId, this.getPlayerLocation(), shift);
                 break;
             }
             case ActionType_T.partyinvite: case ActionType_T.partydismiss: {

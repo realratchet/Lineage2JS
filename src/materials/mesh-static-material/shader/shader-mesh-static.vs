@@ -1,4 +1,4 @@
-#if !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
+#if defined(USE_WORLD_SKILL_LIGHTS) && !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
 #define USE_SKILL_LIGHTS
 #endif
 #ifdef USE_SKILL_LIGHTS
@@ -398,7 +398,7 @@ varying vec3 vSkillLightNormal;
 #ifdef USE_RANGE_FADE
     varying float vRangeAlpha;
     #ifdef USE_RANGE_FADE_FRAGMENT
-        varying vec3 vRangeOffset;
+        varying vec2 vRangeOffset;
     #endif
     uniform vec4 clippingSphere;
     uniform float clippingFade;
@@ -1113,10 +1113,10 @@ void main() {
     #include <fog_vertex>
     #ifdef USE_RANGE_FADE
         #ifdef USE_RANGE_FADE_FRAGMENT
-            vRangeOffset = mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz;
+            vRangeOffset = (vec4(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz, 0.0) * viewMatrix).xy;
             vRangeAlpha = sectorFade;
         #else
-            vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+            vRangeAlpha = (clippingSphere.w - length((vec4(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz, 0.0) * viewMatrix).xy)) / clippingFade;
             #ifdef USE_LIT_ATTRIBUTES
                 vRangeAlpha = max(actorRangeIgnored, vRangeAlpha);
             #endif

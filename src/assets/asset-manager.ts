@@ -42,6 +42,7 @@ import PawnAttackComponent from "../objects/components/pawn-attack-component";
 import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
 import { WeaponType, type NpcSkillAttack_T } from "./unreal/un-pawn";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import WaterHitEffectComponent from "../physics/components/water-hit-effect-component";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import { ScriptComponent } from "../game/script-component";
 import type LocalSpaceSkeleton from "../objects/local-space-skeleton";
@@ -167,6 +168,7 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
     if (!actor.findComponent("transform")) actor.addComponent(new TransformComponent(renderManager));
     if (!actor.findComponent("npcLifecycle")) actor.addComponent(new NpcLifecycleComponent());
     if (!actor.findComponent("pawnRenderable")) actor.addComponent(new PawnRenderableComponent(renderManager));
+    if (!actor.findComponent("waterHitEffect")) actor.addComponent(new WaterHitEffectComponent());
 }
 
 function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
@@ -421,7 +423,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
                 return await this.decodeWorker.decodeEffectTemplates(
                     this.loadSettings,
-                    [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"],
+                    [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura", "LineageEffect.e_u061_bubble", "LineageEffect.e_u061_breath"],
                     [controller.getUnderWaterLoopSound()],
                     [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"]
                 );
