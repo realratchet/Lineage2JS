@@ -2769,7 +2769,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "skillEffectLighting":
                     if (value !== "all" && value !== "pawnOnly" && value !== "none") throw new Error(`Invalid game option '${key}'.`);
                     break;
-                default: throw new Error(`Unknown game option '${key}'.`);
+                default: console.warn(`Unknown game option '${key}'.`);
             }
         }
 
