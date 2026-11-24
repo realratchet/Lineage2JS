@@ -560,7 +560,7 @@ uniform float opacity;
 #ifdef USE_RANGE_FADE
     varying float vRangeAlpha;
     #ifdef USE_RANGE_FADE_FRAGMENT
-        varying vec3 vRangeOffset;
+        varying vec2 vRangeOffset;
         uniform vec4 clippingSphere;
         uniform float clippingFade;
         uniform float indoorRangeIgnored;
