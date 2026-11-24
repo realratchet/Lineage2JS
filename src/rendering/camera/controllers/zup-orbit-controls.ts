@@ -310,12 +310,9 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
             scope.domElement.removeEventListener("contextmenu", onContextMenu);
 
             scope.domElement.removeEventListener("pointerdown", onPointerDown);
-            scope.domElement.removeEventListener("pointercancel", onPointerCancel);
             scope.domElement.removeEventListener("wheel", onMouseWheel);
 
-            scope.domElement.removeEventListener("pointermove", onPointerMove);
-            scope.domElement.removeEventListener("pointerup", onPointerUp);
-
+            if (pointers.length > 0) onWindowBlur();
 
             if (scope.domElementKeyEvents !== null) {
 
@@ -330,6 +327,7 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
         //
 
         const scope = this;
+        const pointerWindow: Window = scope.domElement.ownerDocument.defaultView;
 
         const STATE = {
             NONE: -1,
@@ -835,8 +833,11 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 scope.domElement.setPointerCapture(event.pointerId);
 
-                scope.domElement.addEventListener("pointermove", onPointerMove);
-                scope.domElement.addEventListener("pointerup", onPointerUp);
+                // Keep receiving drag events if pointer capture is lost over a UI window.
+                pointerWindow.addEventListener("pointermove", onPointerMove, true);
+                pointerWindow.addEventListener("pointerup", onPointerUp, true);
+                pointerWindow.addEventListener("pointercancel", onPointerUp, true);
+                pointerWindow.addEventListener("blur", onWindowBlur);
 
             }
 
@@ -858,6 +859,13 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
         function onPointerMove(event: PointerEvent) {
 
+            const pointer = pointers.find(pointer => pointer.pointerId === event.pointerId);
+
+            if (!pointer) return;
+            if (pointer.pointerType === "mouse" && pointer.button === 2 && !(event.buttons & 2)) {
+                onPointerUp(event);
+                return;
+            }
             if (scope.enabled === false) return;
 
             if (event.pointerType === "touch") {
@@ -874,29 +882,37 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
         function onPointerUp(event: PointerEvent) {
 
-            removePointer(event);
+            if (!removePointer(event.pointerId)) return;
+            if (pointers.length === 0) stopListeningForPointers();
 
-            if (pointers.length === 0) {
+            endInteraction();
 
-                scope.domElement.releasePointerCapture(event.pointerId);
+        }
 
-                scope.domElement.removeEventListener("pointermove", onPointerMove);
-                scope.domElement.removeEventListener("pointerup", onPointerUp);
+        function onWindowBlur() {
 
-            }
+            while (pointers.length > 0) removePointer(pointers[pointers.length - 1].pointerId);
+            stopListeningForPointers();
+            endInteraction();
+
+        }
+
+        function stopListeningForPointers() {
+
+            pointerWindow.removeEventListener("pointermove", onPointerMove, true);
+            pointerWindow.removeEventListener("pointerup", onPointerUp, true);
+            pointerWindow.removeEventListener("pointercancel", onPointerUp, true);
+            pointerWindow.removeEventListener("blur", onWindowBlur);
+
+        }
+
+        function endInteraction() {
 
             if (state === STATE.ROTATE) scope.onCameraInput?.("release", 0, 0);
 
             scope.dispatchEvent(_endEvent);
 
             state = STATE.NONE;
-
-        }
-
-        function onPointerCancel(event: PointerEvent) {
-
-            if (state === STATE.ROTATE) scope.onCameraInput?.("release", 0, 0);
-            removePointer(event);
 
         }
 
@@ -1205,20 +1221,15 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
         }
 
-        function removePointer(event: PointerEvent) {
+        function removePointer(pointerId: number): boolean {
 
-            delete pointerPositions[event.pointerId];
+            const index = pointers.findIndex(pointer => pointer.pointerId === pointerId);
 
-            for (let i = 0; i < pointers.length; i++) {
-
-                if (pointers[i].pointerId == event.pointerId) {
-
-                    pointers.splice(i, 1);
-                    return;
-
-                }
-
-            }
+            if (index === -1) return false;
+            if (scope.domElement.hasPointerCapture(pointerId)) scope.domElement.releasePointerCapture(pointerId);
+            delete pointerPositions[pointerId];
+            pointers.splice(index, 1);
+            return true;
 
         }
 
@@ -1250,7 +1261,6 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
         scope.domElement.addEventListener("contextmenu", onContextMenu);
 
         scope.domElement.addEventListener("pointerdown", onPointerDown);
-        scope.domElement.addEventListener("pointercancel", onPointerCancel);
         scope.domElement.addEventListener("wheel", onMouseWheel, { passive: false });
 
         // force an update at start
