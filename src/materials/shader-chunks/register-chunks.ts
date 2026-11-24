@@ -1,5 +1,7 @@
 import { ShaderChunk } from "three";
 import Chunk_L2FogFragment from "./l2_fog_fragment.glsl";
+import Chunk_FogInfoParsFragment from "./fog_info_pars_fragment.glsl";
+import Chunk_FogInfoFragment from "./fog_info_fragment.glsl";
 import Chunk_ActorLight from "./actor_light.glsl";
 import Chunk_ProjectorFragment from "./projector_fragment.glsl";
 import Chunk_ProjectorReceiver from "./projector_receiver.glsl";
@@ -12,6 +14,8 @@ const chunks = ShaderChunk as Record<string, string>;
 chunks.static_mesh_lod_vertex = Chunk_StaticMeshLodVertex;
 chunks.static_mesh_lod_fragment = Chunk_StaticMeshLodFragment;
 chunks.l2_fog_fragment = chunks.l2_fog_fragment ?? Chunk_L2FogFragment;
+if (chunks.fog_info_fragment === undefined) chunks.fog_pars_fragment += Chunk_FogInfoParsFragment;
+chunks.fog_info_fragment = chunks.fog_info_fragment ?? Chunk_FogInfoFragment;
 chunks.actor_light = chunks.actor_light ?? Chunk_ActorLight;
 chunks.projector_fragment = chunks.projector_fragment ?? Chunk_ProjectorFragment;
 chunks.projector_receiver = chunks.projector_receiver ?? Chunk_ProjectorReceiver;

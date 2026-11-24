@@ -7,6 +7,9 @@ vec4 getProjectorColor(vec4 vProjection, vec3 diffuse, float facing) {
     if (materialBlending == PB_AlphaBlend) texel.rgb = mix(diffuse, texel.rgb, texel.a);
     #ifdef USE_FOG
         float fog = smoothstep(fogNear, fogFar, vFogDepth);
+        #ifdef USE_FOG_INFO
+            fog = 1.0 - (1.0 - fog) * (1.0 - getFogInfo().a);
+        #endif
     #else
         float fog = 0.0;
     #endif

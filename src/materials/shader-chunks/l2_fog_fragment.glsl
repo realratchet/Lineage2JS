@@ -14,5 +14,6 @@
     #endif
 
     gl_FragColor.rgb = mix( gl_FragColor.rgb, fogMixColor, fogFactor );
+    #include <fog_info_fragment>
     gl_FragColor.a = max(gl_FragColor.a, 0.0);
 #endif
