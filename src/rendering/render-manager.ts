@@ -47,6 +47,7 @@ import type PawnMesh from "../objects/pawn-mesh";
 import type DynamicLight from "../objects/dynamic-light";
 import { ALPHA_CORE_REF, NUM_ACTOR_LIGHTS, usesAlphaCore, type default as MeshStaticMaterial } from "../materials/mesh-static-material/mesh-static-material";
 import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
+import { sortTerrainDecorations, type default as TerrainDecoration } from "../objects/terrain-decoration";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
 import type UIManager from "../game/ui-manager";
@@ -582,7 +583,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             let count = 0, coreCount = 0;
             for (const item of worldList.transparent) {
                 const material = item.material as MeshStaticMaterial;
-                if (!(item.object as CollidingMesh).isStaticMeshActor || !material.isStaticMeshMaterial || !usesAlphaCore(material)) continue;
+                if (!material.isStaticMeshMaterial) continue;
+                if ((item.object as TerrainDecoration).isTerrainDecoration ? ALPHA_CORE_REF.value <= 0 || !material.transparent || material.blending !== NormalBlending : !(item.object as CollidingMesh).isStaticMeshActor || !usesAlphaCore(material)) continue;
 
                 const core = this.arrAlphaCores[coreCount] || (this.arrAlphaCores[coreCount] = {});
                 Object.assign(core, item);
@@ -2161,6 +2163,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 false,
                 this.manGame.getCurrentTime()
             );
+        }
+
+        if (!auxiliary && this.sortTransparent) {
+            for (const sector of this.arrSceneSectors)
+                if (sector.visible) sector.offerDecorationSort(bspCullingPosition);
+
+            sortTerrainDecorations(bspCullingPosition);
         }
 
         this.updatePawnVisibility(frustum, viewOrigin);

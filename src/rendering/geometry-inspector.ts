@@ -5,6 +5,7 @@ import type { SectorObject } from "../objects/zone-object";
 import type CollidingMesh from "../objects/colliding-mesh";
 import type Terrain from "../objects/terrain";
 import type TerrainDecoration from "../objects/terrain-decoration";
+import { ESortOrder_T } from "../assets/unreal/un-deco-layer";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import type PawnMesh from "../objects/pawn-mesh";
 import type BaseActor from "../base-actor";
@@ -743,7 +744,7 @@ export class GeometryInspector {
             row("Segment", object.terrainSegment),
             row("Fade range", formatVector(object.fadeoutRadius)),
             row("Force render", object.forceRender),
-            row("Draw order", object.renderOrder)
+            row("Draw order", ESortOrder_T[object.drawOrder])
         ];
         const highlight = getMeshHighlight(object);
 

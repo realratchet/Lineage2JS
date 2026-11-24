@@ -21,6 +21,12 @@ export type ITerrainDecorationDecodeInfo = IBaseObjectDecodeInfo & {
     forceRender: boolean
 };
 
+export enum ESortOrder_T {
+    SORT_NoSort,
+    SORT_BackToFront,
+    SORT_FrontToBack
+}
+
 type DecoRandom_T = { seed: number };
 
 const rotatorRadians = Math.PI / 32768;
