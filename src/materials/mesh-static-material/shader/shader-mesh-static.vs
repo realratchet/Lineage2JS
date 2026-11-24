@@ -1,4 +1,4 @@
-#if !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
+#if defined(USE_WORLD_SKILL_LIGHTS) && !defined(USE_ACTOR_LIGHTS) && !defined(USE_PROJECTOR_RECEIVER) && (defined(USE_LIGHTMAP) || defined(USE_LIT_ATTRIBUTES) || defined(USE_INSTANCED_ATTRIBUTES) || defined(USE_AMBIENT))
 #define USE_SKILL_LIGHTS
 #endif
 #ifdef USE_SKILL_LIGHTS
