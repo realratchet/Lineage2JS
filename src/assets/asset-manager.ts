@@ -255,6 +255,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected characterPrecache: Promise<void> = null;
     protected startupLevelLibrary: DecodeLibrary = null;
     protected effectLibrary: DecodeLibrary = null;
+    protected effectVM: UnScriptVM = null;
     protected arrCursors: string[] = [];
     protected cursorLoad: Promise<void> = null;
     protected bigHeadScales: Promise<Record<string, number>> = null;
@@ -466,6 +467,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (effectLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         this.effectLibrary = effectLibrary;
+        this.effectVM = new UnScriptVM(effectLibrary);
 
         if (characterLibrary) await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
@@ -618,7 +620,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (!info) throw new Error(`Effect template '${classPath}' is missing.`);
 
-        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath);
+        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath, this.effectVM);
     }
 
     protected async applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX, request: number = null) {

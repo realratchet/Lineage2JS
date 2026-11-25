@@ -4,6 +4,7 @@ import WaterHitEffect from "../../rendering/water-hit-effect";
 import type PhysicsManager from "../../physics/physics-manager";
 import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
 import type PhysicsVolume from "../../objects/physics-volume";
+import { isInShadowRange } from "../../objects/shadow-projector";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { SectorObject } from "../../objects/zone-object";
@@ -53,7 +54,7 @@ export class WaterHitEffectComponent extends PhysicsComponent<BaseActor> {
         const foot = owner.getUnrealScriptProperty("FootVolume") as unknown as PhysicsVolume;
         const entered = foot && foot === this.waterEntryVolume;
         this.waterEntryVolume = null;
-        if (!owner.getComponent<PawnRenderableComponent>("pawnRenderable").isRendered || !foot || !foot.getUnrealScriptProperty("bL2WaterVolume")) return;
+        if (!owner.getComponent<PawnRenderableComponent>("pawnRenderable").isRendered || !isInShadowRange(owner.position, this.renderManager.player.position) || !foot || !foot.getUnrealScriptProperty("bL2WaterVolume")) return;
         const volumeLevel = foot.getUnrealScriptProperty("Level");
         const sector = this.renderManager.getLoadedSectors().find(sector => sector.levelInfoActor === volumeLevel);
         if (!sector) throw new Error(`Water volume '${foot.name}' has no registered level for water effects.`);

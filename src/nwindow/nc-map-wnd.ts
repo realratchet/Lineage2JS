@@ -598,9 +598,14 @@ export class NCMapWnd {
             this.zoneCaption.setAttribute("aria-label", text);
         }
 
-        [this.positionX, this.positionY] = this.project(x, y, height >= -6874 && height <= -4874);
-        this.layer.place(this.marker, this.positionX - 16, this.positionY - 16);
-        this.paintPlayerMarker();
+        const [positionX, positionY] = this.project(x, y, height >= -6874 && height <= -4874);
+
+        if (positionX !== this.positionX || positionY !== this.positionY) {
+            this.positionX = positionX;
+            this.positionY = positionY;
+            this.layer.place(this.marker, this.positionX - 16, this.positionY - 16);
+            this.paintPlayerMarker();
+        }
         if (center) this.centerPosition();
     }
 

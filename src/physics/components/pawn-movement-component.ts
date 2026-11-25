@@ -24,6 +24,7 @@ import type PlayerController from "../../objects/player-controller";
 import type LandmarkComponent from "../../rendering/components/landmark-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
+import { isInShadowRange } from "../../objects/shadow-projector";
 
 const tmpPosition = new Vector3();
 const tmpFloorPosition = new Vector3();
@@ -1139,7 +1140,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected updateBubbles(deltaTime: number) { // APawn::UpdateBubbles 0x8c2a00
         const parent = this.getParent(), mesh = this.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
 
-        if (!mesh || parent.getUnrealScriptProperty("bSwimAfloat") || deltaTime / (deltaTime + BUBBLE_INTERVAL) <= Math.random()) return;
+        if (!mesh || parent.getUnrealScriptProperty("bSwimAfloat") || !isInShadowRange(parent.position, this.renderManager.player.position) || deltaTime / (deltaTime + BUBBLE_INTERVAL) <= Math.random()) return;
 
         const asset = this.renderManager.getParent().getComponent("asset"), bone = Math.trunc(Math.random() * (mesh.skeleton.bones.length - 1)), bubble = asset.createEffect("LineageEffect.e_u061_bubble");
 
