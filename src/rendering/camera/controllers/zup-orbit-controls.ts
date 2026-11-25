@@ -313,8 +313,8 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
             scope.domElement.removeEventListener("pointercancel", onPointerCancel);
             scope.domElement.removeEventListener("wheel", onMouseWheel);
 
-            scope.domElement.removeEventListener("pointermove", onPointerMove);
-            scope.domElement.removeEventListener("pointerup", onPointerUp);
+            scope.domElement.ownerDocument.removeEventListener("pointermove", onPointerMove);
+            scope.domElement.ownerDocument.removeEventListener("pointerup", onPointerUp);
 
 
             if (scope.domElementKeyEvents !== null) {
@@ -835,8 +835,8 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 scope.domElement.setPointerCapture(event.pointerId);
 
-                scope.domElement.addEventListener("pointermove", onPointerMove);
-                scope.domElement.addEventListener("pointerup", onPointerUp);
+                scope.domElement.ownerDocument.addEventListener("pointermove", onPointerMove);
+                scope.domElement.ownerDocument.addEventListener("pointerup", onPointerUp);
 
             }
 
@@ -880,8 +880,8 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
                 scope.domElement.releasePointerCapture(event.pointerId);
 
-                scope.domElement.removeEventListener("pointermove", onPointerMove);
-                scope.domElement.removeEventListener("pointerup", onPointerUp);
+                scope.domElement.ownerDocument.removeEventListener("pointermove", onPointerMove);
+                scope.domElement.ownerDocument.removeEventListener("pointerup", onPointerUp);
 
             }
 
