@@ -198,7 +198,8 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
                         library = stepLibrary;
                     }
                 } else if (!base) return; // UAnimNotify_Sound::Notify 0x94de2a
-                else if (terrain) {
+                else if (!terrain) sounds = info.defaultActorWalkSounds; // 0x94e119 GetSound(.., 3); GetSound 0x940f45 reads DefaultActorWalkSound for walk and run
+                else {
                     const render = this.audioManager.getParent().getComponent("render");
 
                     if (actor === render.player) {
