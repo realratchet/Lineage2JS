@@ -9,11 +9,15 @@ import type { ALAudioConfig_T, BackgroundAudio_T } from "../assets/unreal/conf-f
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const AL_SOURCE_RADIUS_FALLBACK = 10; // ALAudioSubsystem::PlaySound uses 10 when Radius is zero.
+const AL_MAX_RADIUS_MULTIPLIER = 50; // Core.dll GAudioMaxRadiusMultiplier.
 const AMBIENT_CELL_SIZE = 4096;
 const arrNoAmbientSounds: AmbientSoundComponent[] = [];
 const tmpPosition = new Vector3();
 
 function getAmbientCellKey(x: number, y: number): number { return (x + 32768) * 65536 + (y + 32768); }
+function getActorGain(volume: number, distance: number, range: number): number {
+    return Math.min(Math.max(volume * (1 - distance / range), 0), 1);
+}
 
 type AmbientInfo_T = {
     dataUri: string | Uint8Array | Blob,
@@ -26,7 +30,7 @@ type AmbientInfo_T = {
     looping: boolean
 };
 
-type ChannelNodes_T = { gain: GainNode, panner: PannerNode, owner: Object3D, offset: Vector3 };
+type ChannelNodes_T = { gain: GainNode, panner: PannerNode, owner: Object3D, offset: Vector3, volume: number, actorRange: number };
 
 type AmbientChannel_T = {
     source?: AudioBufferSourceNode,
@@ -85,6 +89,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected underwaterPlayId = 0;
     protected isUnderwater = false;
     protected alAudio: ALAudioConfig_T = null;
+    protected readonly listenerPosition = new Vector3();
 
     protected currentPlayId = 0;
 
@@ -441,6 +446,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
             nodes.panner.positionX.value = -tmpPosition.x;
             nodes.panner.positionY.value = tmpPosition.y;
             nodes.panner.positionZ.value = tmpPosition.z;
+            if (nodes.actorRange > 0) {
+                const distance = tmpPosition.distanceTo(this.listenerPosition);
+                nodes.gain.gain.value = getActorGain(nodes.volume, distance, nodes.actorRange);
+            }
         }
 
         if (this.requestedVoice && !this.gameManager.isWorldLoading()) {
@@ -940,7 +949,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         let nodes = this.arrChannelNodes.pop(); // a gain and panner per sound left thousands of nodes for every major GC to delete
 
         if (!nodes) {
-            nodes = { gain: this.audioContext.createGain(), panner: this.audioContext.createPanner(), owner: null, offset: new Vector3() };
+            nodes = { gain: this.audioContext.createGain(), panner: this.audioContext.createPanner(), owner: null, offset: new Vector3(), volume: 0, actorRange: 0 };
             nodes.panner.panningModel = "equalpower"; // hrtf convolution is too costly at 32 concurrent panners
             nodes.panner.distanceModel = "inverse";
         }
@@ -1034,9 +1043,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const soundId = soundName && soundName.toLowerCase();
 
         const sourcePosition = position as any;
-        const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
-        const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
-        const z = sourcePosition.z === undefined ? sourcePosition[2] : sourcePosition.z;
+        let x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
+        let y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
+        let z = sourcePosition.z === undefined ? sourcePosition[2] : sourcePosition.z;
         const sourceRadius = refDistance === 0 ? AL_SOURCE_RADIUS_FALLBACK : refDistance;
         const sourceMaxDistance = maxDistance === 0 ? sourceRadius * 100 : maxDistance;
 
@@ -1052,7 +1061,19 @@ export class AudioManager implements IEngineComponent<GameManager> {
         if (!buffer || this.gameManager.isWorldLoading()) return;
         if (skipIfPlaying && owner && this.isPlaying(owner, soundName)) return;
 
-        const nodes = this.acquireChannelNodes(isCombat ? this.combatGainNode : this.effectsGainNode, volume, attenuate, x, y, z, sourceRadius, sourceMaxDistance);
+        if (owner) {
+            owner.getWorldPosition(tmpPosition);
+            x = tmpPosition.x + dx;
+            y = tmpPosition.y + dy;
+            z = tmpPosition.z + dz;
+        }
+
+        const actorRange = owner && attenuate ? sourceRadius * AL_MAX_RADIUS_MULTIPLIER : 0;
+        const distance = actorRange ? Math.hypot(x - this.listenerPosition.x, y - this.listenerPosition.y, z - this.listenerPosition.z) : 0;
+        const initialVolume = actorRange ? getActorGain(volume, distance, actorRange) : volume;
+        const nodes = this.acquireChannelNodes(isCombat ? this.combatGainNode : this.effectsGainNode, initialVolume, attenuate, x, y, z, sourceRadius, sourceMaxDistance);
+        nodes.volume = volume;
+        nodes.actorRange = actorRange;
 
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
@@ -1118,6 +1139,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
     public updateListenerPosition(px: number, py: number, pz: number, fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) {
         const listener = this.audioContext.listener;
+        this.listenerPosition.set(px, py, pz);
 
         // Reflect X at the Web Audio boundary to match the camera's mirrored projection.
         if (listener.positionX) {
