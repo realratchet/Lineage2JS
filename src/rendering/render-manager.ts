@@ -47,6 +47,7 @@ import type PawnMesh from "../objects/pawn-mesh";
 import type DynamicLight from "../objects/dynamic-light";
 import { ALPHA_CORE_REF, NUM_ACTOR_LIGHTS, usesAlphaCore, type default as MeshStaticMaterial } from "../materials/mesh-static-material/mesh-static-material";
 import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
+import { sortTerrainDecorations, type default as TerrainDecoration } from "../objects/terrain-decoration";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
 import type UIManager from "../game/ui-manager";
@@ -161,8 +162,8 @@ type PawnLightingState_T = {
     lights: DynamicLight[]
 };
 type Disposable_T = { dispose(): void };
-const SWITCH_FOG_INFO = 1;
-const SWITCH_SKILL_LIGHTS = 2;
+const SWITCH_SKILL_LIGHTS = 1;
+const SWITCH_FOG_INFO = 2;
 
 type SwitchedMaterial_T = THREE.ShaderMaterial & { shaderSwitches?: number, isStaticMeshMaterial?: boolean, isTerrainMaterial?: boolean };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean }, shadowPrograms?: { isReady(): boolean }[] };
@@ -499,7 +500,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.pawnCrowd = new PawnCrowd(this.renderer);
         this.renderer.render = (scene, camera) => {
             setReversedDepth(this.renderer, camera.reversedDepth);
-            this.shaderSwitches = (this.fogInfoVolumes.enabled ? SWITCH_FOG_INFO : 0) | (this.skillLightProbe.mode === "all" ? SWITCH_SKILL_LIGHTS : 0);
+            this.shaderSwitches = (this.fogInfoVolumes.enabled ? SWITCH_FOG_INFO : 0)
+                | (this.skillLightProbe.mode === "all" ? SWITCH_SKILL_LIGHTS : 0);
             if (scene !== this.scene) {
                 render.call(this.renderer, scene, camera);
                 return;
@@ -585,7 +587,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             let count = 0, coreCount = 0;
             for (const item of worldList.transparent) {
                 const material = item.material as MeshStaticMaterial;
-                if (!(item.object as CollidingMesh).isStaticMeshActor || !material.isStaticMeshMaterial || !usesAlphaCore(material)) continue;
+                if (!material.isStaticMeshMaterial) continue;
+                if ((item.object as TerrainDecoration).isTerrainDecoration ? ALPHA_CORE_REF.value <= 0 || !material.transparent || material.blending !== NormalBlending : !(item.object as CollidingMesh).isStaticMeshActor || !usesAlphaCore(material)) continue;
 
                 const core = this.arrAlphaCores[coreCount] || (this.arrAlphaCores[coreCount] = {});
                 Object.assign(core, item);
@@ -2171,6 +2174,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 false,
                 this.manGame.getCurrentTime()
             );
+        }
+
+        if (!auxiliary && this.sortTransparent) {
+            for (const sector of this.arrSceneSectors)
+                if (sector.visible) sector.offerDecorationSort(bspCullingPosition);
+
+            sortTerrainDecorations(bspCullingPosition);
         }
 
         this.updatePawnVisibility(frustum, viewOrigin);

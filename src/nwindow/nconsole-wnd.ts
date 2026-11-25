@@ -2180,6 +2180,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public setStatus(info: GamePackets.UserInfo_T) {
+        const previous = this.statusInfo;
+
         this.statusInfo = info;
         this.optionWnd.updateGMControls();
         this.trainWnd.setStatus(info);
@@ -2192,7 +2194,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.inventoryWnd.setWeight(info.curLoad, info.maxLoad);
         this.inventoryWnd.setClass(info.classId);
         this.inventoryWnd.setDwarvenCraft(info.hasDwarvenCraft);
-        this.setInventory(this.inventory);
+        if (previous?.objectId !== info.objectId || previous.paperdollObjects.length !== info.paperdollObjects.length ||
+            info.paperdollObjects.some((objectId, slot) => objectId !== previous.paperdollObjects[slot]))
+            this.setInventory(this.inventory);
         this.updateTitle();
     }
 
@@ -2770,7 +2774,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "skillEffectLighting":
                     if (value !== "all" && value !== "pawnOnly" && value !== "none") throw new Error(`Invalid game option '${key}'.`);
                     break;
-                default: throw new Error(`Unknown game option '${key}'.`);
+                default: console.warn(`Unknown game option '${key}'.`);
             }
         }
 

@@ -22,7 +22,7 @@ varying vec4 vProjection;
     uniform vec3 projectorDirection;
     varying vec3 vClip0;
     varying vec3 vClip1;
-    varying vec3 vRangeOffset;
+    varying vec2 vRangeOffset;
     varying float vFacing;
 #else
     varying vec3 vFacing;
@@ -37,7 +37,7 @@ void main() {
     #include <logdepthbuf_vertex>
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vProjection = projectorMatrix * worldPosition;
-    vec3 rangeOffset = mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz;
+    vec2 rangeOffset = (vec4(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz, 0.0) * viewMatrix).xy;
     #ifdef PROJECTOR_BSP
         vClip0 = vec3(dot(projectorPlanes[0], worldPosition), dot(projectorPlanes[1], worldPosition), dot(projectorPlanes[2], worldPosition));
         vClip1 = vec3(dot(projectorPlanes[3], worldPosition), dot(projectorPlanes[4], worldPosition), dot(projectorPlanes[5], worldPosition));
@@ -69,7 +69,7 @@ varying vec4 vProjection;
     uniform float clippingFade;
     varying vec3 vClip0;
     varying vec3 vClip1;
-    varying vec3 vRangeOffset;
+    varying vec2 vRangeOffset;
     varying float vFacing;
 #else
     varying vec3 vFacing;

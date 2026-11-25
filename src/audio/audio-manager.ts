@@ -438,7 +438,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         for (const nodes of this.arrActorChannels) { // ALAudio.dll UALAudioSubsystem::Update 0x1000d1ea..0x1000d217
             nodes.owner.getWorldPosition(tmpPosition).add(nodes.offset);
-            nodes.panner.positionX.value = tmpPosition.x;
+            nodes.panner.positionX.value = -tmpPosition.x;
             nodes.panner.positionY.value = tmpPosition.y;
             nodes.panner.positionZ.value = tmpPosition.z;
         }
@@ -956,7 +956,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         panner.refDistance = refDistance;
         panner.maxDistance = maxDistance;
         panner.rolloffFactor = this.alAudio.rollOff;
-        panner.positionX.value = x;
+        panner.positionX.value = -x;
         panner.positionY.value = y;
         panner.positionZ.value = z;
         gain.connect(panner);
@@ -1119,19 +1119,20 @@ export class AudioManager implements IEngineComponent<GameManager> {
     public updateListenerPosition(px: number, py: number, pz: number, fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) {
         const listener = this.audioContext.listener;
 
+        // Reflect X at the Web Audio boundary to match the camera's mirrored projection.
         if (listener.positionX) {
-            listener.positionX.value = px;
+            listener.positionX.value = -px;
             listener.positionY.value = py;
             listener.positionZ.value = pz;
-            listener.forwardX.value = fx;
+            listener.forwardX.value = -fx;
             listener.forwardY.value = fy;
             listener.forwardZ.value = fz;
-            listener.upX.value = ux;
+            listener.upX.value = -ux;
             listener.upY.value = uy;
             listener.upZ.value = uz;
         } else {
-            listener.setPosition(px, py, pz);
-            listener.setOrientation(fx, fy, fz, ux, uy, uz);
+            listener.setPosition(-px, py, pz);
+            listener.setOrientation(-fx, fy, fz, -ux, uy, uz);
         }
     }
 

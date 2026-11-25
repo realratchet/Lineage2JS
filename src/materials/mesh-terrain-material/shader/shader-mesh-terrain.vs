@@ -170,7 +170,7 @@ void main() {
     #include <worldpos_vertex>
     #include <envmap_vertex>
     #include <fog_vertex>
-    vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+    vRangeAlpha = (clippingSphere.w - length((vec4(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz, 0.0) * viewMatrix).xy)) / clippingFade;
     vSectorFade = sectorFade;
 
     #ifdef USE_UV_TEXTURE

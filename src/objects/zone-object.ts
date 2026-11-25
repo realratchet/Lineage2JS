@@ -2689,6 +2689,13 @@ export class SectorObject extends GameObject {
         return this.emitterObjectsByUuid.get(actorUuid) ?? EMPTY_EMITTER_LIST;
     }
 
+    public offerDecorationSort(cameraPosition: THREE.Vector3) {
+        if (!this.terrainRenderables) return;
+
+        for (const decorations of this.terrainRenderables.decorations.values())
+            for (let i = 0; i < decorations.length; i++) decorations[i].offerSort(cameraPosition);
+    }
+
     protected updateTerrainSectors(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, zoneVisible: boolean = true) {
         if (!this.terrainRenderables) {
             const batches: Mesh[] = [];

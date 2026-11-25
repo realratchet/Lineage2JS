@@ -560,7 +560,7 @@ uniform float opacity;
 #ifdef USE_RANGE_FADE
     varying float vRangeAlpha;
     #ifdef USE_RANGE_FADE_FRAGMENT
-        varying vec3 vRangeOffset;
+        varying vec2 vRangeOffset;
         uniform vec4 clippingSphere;
         uniform float clippingFade;
         uniform float indoorRangeIgnored;
@@ -803,6 +803,9 @@ void main() {
         return;
     #endif
     if (texModifierAlpha < 0.0) {
+        #ifdef USE_TERRAIN_DECORATION_FADE
+            diffuseColor.a *= vTerrainDecorationFade;
+        #endif
         #include <alphatest_fragment>
         #ifdef USE_ALPHATEST
             if (alphaCeil > 0.0 && diffuseColor.a >= alphaCeil) discard;
@@ -945,7 +948,7 @@ void main() {
     #include <colorspace_fragment>
 
     #ifdef USE_TERRAIN_DECORATION_FADE
-        gl_FragColor.a *= vTerrainDecorationFade;
+        if (texModifierAlpha >= 0.0) gl_FragColor.a *= vTerrainDecorationFade;
     #endif
 
     #include <l2_fog_fragment>

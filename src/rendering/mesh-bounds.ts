@@ -3,7 +3,7 @@ import { Box3, Matrix4, Sphere, Vector3 } from "three";
 import ShadowProjector from "../objects/shadow-projector";
 
 type Sway_T = { position: any, sway: any, positionVersion: number, swayVersion: number, margin: Vector3, bounds: Box3, bounded: boolean };
-type Instances_T = { matrix: any, version: number, count: number, sway: Sway_T, bounds: Box3 };
+type Instances_T = { matrix: any, count: number, sway: Sway_T, bounds: Box3 };
 
 const tmpInstanceBox = new Box3();
 const tmpBox = new Box3();
@@ -135,8 +135,8 @@ export class MeshBounds {
         if (!sway.bounded) return false;
         if (object.isTerrainDecoration) {
             let cached = this.cacheInstances.get(object);
-            if (!cached || cached.matrix !== object.instanceMatrix || cached.version !== object.instanceMatrix.version || cached.count !== object.count || cached.sway !== sway) {
-                cached = { matrix: object.instanceMatrix, version: object.instanceMatrix.version, count: object.count, sway, bounds: new Box3() };
+            if (!cached || cached.matrix !== object.instanceMatrix || cached.count !== object.count || cached.sway !== sway) {
+                cached = { matrix: object.instanceMatrix, count: object.count, sway, bounds: new Box3() };
                 for (let i = 0; i < object.count; i++) {
                     object.getMatrixAt(i, tmpInstanceMatrix);
                     tmpInstanceBox.copy(sway.bounds).expandByVector(sway.margin).applyMatrix4(tmpInstanceMatrix);
