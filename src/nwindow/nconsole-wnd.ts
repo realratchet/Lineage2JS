@@ -371,7 +371,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             const target = event.target as HTMLElement;
 
             if (event.code === "Backquote" || this.manGame.getComponent("input").isFreeCameraEnabled()) return;
-            if (asset.playerController.isEnterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (asset.playerController.isEnterChatting || this.screen !== "world" || event.key.length !== 1 && !event.key.startsWith("Arrow") || event.ctrlKey || event.altKey || event.metaKey) return;
             if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
             if (event.key === " " && target.closest('[role="checkbox"], [role="tab"], [role="button"], [role="combobox"]')) return;
 
