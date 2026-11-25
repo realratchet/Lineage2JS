@@ -858,6 +858,7 @@ export class ZUpOrbitControls extends EventDispatcher<{ change: {}, start: {}, e
 
         function onPointerMove(event: PointerEvent) {
 
+            if (event.buttons === 0) return onPointerUp(event);
             if (scope.enabled === false) return;
 
             if (event.pointerType === "touch") {
