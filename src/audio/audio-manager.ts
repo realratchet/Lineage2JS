@@ -35,6 +35,7 @@ type ChannelNodes_T = { gain: GainNode, panner: PannerNode, owner: Object3D, off
 type AmbientChannel_T = {
     source?: AudioBufferSourceNode,
     nodes?: ChannelNodes_T,
+    stereo?: { splitter: ChannelSplitterNode, left: GainNode, right: GainNode, merger: ChannelMergerNode },
     priority: number,
     isAudible: boolean,
     info: AmbientInfo_T
@@ -686,6 +687,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected isAmbientGridDirty = true;
     protected readonly ambientCandidates: AmbientCandidate_T[] = [];
     protected readonly ambientPosition = new Vector3();
+    protected readonly ambientPanAxis = new Vector3(0, 1, 0);
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
@@ -768,7 +770,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
             if (active) {
                 active.priority = priority;
                 active.isAudible = true;
-                if (active.nodes) active.nodes.gain.gain.value = this.getAmbientGain(info.uuid, active.info);
+                if (active.nodes) {
+                    active.nodes.gain.gain.value = this.getAmbientGain(info.uuid, active.info);
+                    this.updateNativeAmbientPan(active);
+                }
                 continue;
             }
             if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.soundData, info.randomChance, currentTime)) continue;
@@ -1000,9 +1005,39 @@ export class AudioManager implements IEngineComponent<GameManager> {
         return Math.min(Math.max(info.volume * (1 - Math.sqrt(dx * dx + dy * dy + dz * dz) / info.maxDistance), 0), 1); // ALAudio.dll 0x1000db89..0x1000dc45, before OpenAL attenuation.
     }
 
+    protected updateNativeAmbientPan(entry: AmbientChannel_T): void {
+        const stereo = entry.stereo;
+        if (!stereo) return;
+
+        const info = entry.info;
+        const dx = info.position[0] - this.ambientPosition.x;
+        const dy = info.position[1] - this.ambientPosition.y;
+        const dz = info.position[2] - this.ambientPosition.z;
+        const distance = Math.hypot(dx, dy, dz);
+        const lateral = distance ? Math.max(-1, Math.min(1, (dx * this.ambientPanAxis.x + dy * this.ambientPanAxis.y + dz * this.ambientPanAxis.z) / distance)) : 0;
+        const leftShare = 0.5 - 0.4 * Math.sign(lateral) * Math.sqrt(Math.abs(lateral));
+        const referenceDistance = Math.max(info.refDistance, 1);
+        const clampedDistance = Math.max(referenceDistance, Math.min(distance, info.maxDistance));
+        const distanceGain = referenceDistance / (referenceDistance + this.alAudio.rollOff * (clampedDistance - referenceDistance));
+
+        stereo.left.gain.value = distanceGain * Math.sqrt(leftShare);
+        stereo.right.gain.value = distanceGain * Math.sqrt(1 - leftShare);
+    }
+
     protected startAmbientSource(id: string, buffer: AudioBuffer, entry: AmbientChannel_T) {
         const info = entry.info;
-        const nodes = this.acquireChannelNodes(this.ambientGainNode, this.getAmbientGain(id, info), true, info.position[0], info.position[1], info.position[2], info.refDistance, info.maxDistance);
+        const splitter = this.audioContext.createChannelSplitter(2);
+        const nodes = this.acquireChannelNodes(splitter, this.getAmbientGain(id, info), false, info.position[0], info.position[1], info.position[2], info.refDistance, info.maxDistance);
+        const left = this.audioContext.createGain();
+        const right = this.audioContext.createGain();
+        const merger = this.audioContext.createChannelMerger(2);
+        splitter.connect(left, 0);
+        splitter.connect(right, buffer.numberOfChannels > 1 ? 1 : 0);
+        left.connect(merger, 0, 0);
+        right.connect(merger, 0, 1);
+        merger.connect(this.ambientGainNode);
+        entry.stereo = { splitter, left, right, merger };
+        this.updateNativeAmbientPan(entry);
 
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
@@ -1121,6 +1156,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
             entry.source = undefined;
         }
         if (entry.nodes) {
+            if (entry.stereo) {
+                entry.stereo.splitter.disconnect();
+                entry.stereo.left.disconnect();
+                entry.stereo.right.disconnect();
+                entry.stereo.merger.disconnect();
+                entry.stereo = undefined;
+            }
             this.releaseChannelNodes(entry.nodes);
             entry.nodes = undefined;
         }
@@ -1140,6 +1182,17 @@ export class AudioManager implements IEngineComponent<GameManager> {
     public updateListenerPosition(px: number, py: number, pz: number, fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) {
         const listener = this.audioContext.listener;
         this.listenerPosition.set(px, py, pz);
+        const forwardLength = Math.hypot(fx, fy, fz);
+        const upLength = Math.hypot(ux, uy, uz);
+        const rightX = uy * fz - uz * fy;
+        const rightY = uz * fx - ux * fz;
+        const rightZ = ux * fy - uy * fx;
+        const rightLength = Math.hypot(rightX, rightY, rightZ);
+        if (forwardLength > 1e-6 && upLength > 1e-6 && rightLength > 1e-6) {
+            // The Chronicle IV software mixer's transposed listener basis makes pitch affect ambient panning.
+            this.ambientPanAxis.set(rightX / rightLength, fx / forwardLength, -ux / upLength);
+            for (const entry of this.activeAmbientSounds.values()) this.updateNativeAmbientPan(entry);
+        }
 
         // Reflect X at the Web Audio boundary to match the camera's mirrored projection.
         if (listener.positionX) {
