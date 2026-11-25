@@ -395,6 +395,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 this.blending = CustomBlending;
                 this.blendSrc = ZeroFactor;
                 this.blendDst = OneMinusSrcColorFactor;
+                this.blendSrcAlpha = ZeroFactor;
+                this.blendDstAlpha = OneFactor;
                 this.transparent = true;
                 this.depthWrite = false;
                 break;
