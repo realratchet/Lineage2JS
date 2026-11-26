@@ -42,18 +42,17 @@ for (const group of Object.values(CHARACTER_ARMOR_GROUPS)) {
 }
 
 SCHEMA_ARMORGRP_DAT.push(
-    { type: new UTF16ContainerType(), name: "unknown_mesh" },
-    { type: new UTF16ContainerType(), name: "unknown_texture" },
+    { type: new UTF16ContainerType(), name: "reserved_mesh" },
+    { type: new UTF16ContainerType(), name: "reserved_texture" },
+    { type: new UTF16ContainerType(), name: "reserved_additional_mesh" },
+    { type: new UTF16ContainerType(), name: "reserved_additional_texture" },
     { type: new UTF16ContainerType(), name: "npc_mesh" },
     { type: new UTF16ContainerType(), name: "npc_texture" },
-    { type: new UTF16ContainerType(), name: "accessory_mesh" },
-    { type: new UTF16ContainerType(), name: "accessory_texture" },
     { type: "utf16", name: "attack_effect" },
     { type: new UTF16ContainerType(), name: "item_sound" },
     { type: "utf16", name: "drop_sound" },
     { type: "utf16", name: "equip_sound" },
-    { type: "uint32", name: "unknown_1" },
-    { type: "uint32", name: "unknown_2" },
+    { type: new UTF16ContainerType(), name: "idle_sound" },
     { type: "uint32", name: "armor_type" },
     { type: "uint32", name: "crystal_type" },
     { type: "uint32", name: "avoid_modifier" },

@@ -3,6 +3,7 @@ import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import SysString_T from "./sys-string";
+import { ActionType_T } from "../network/command-parser";
 
 const TEX_BACK = "L2UI_CH3.ActionWnd.Action_Back";
 const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
@@ -59,7 +60,7 @@ export class NCActionWnd { // C4 NWindow RVA 0x506a0 (groups), 0x4d2a0 (labels).
     }
 
     protected paintActions() { // NWindow RVA 0x50100: class-gated manufacture and mountable pet/mounted user.
-        const actions = Object.entries(this.layer.getManager().strings.actions).filter(([id, action]) => (!action.requiresMount || this.canMount) && (Number(id) !== 37 || [53, 54, 55, 56, 57, 117, 118].includes(this.classId)));
+        const actions = Object.entries(this.layer.getManager().strings.actions).filter(([id, action]) => (!action.requiresMount || this.canMount) && (Number(id) !== ActionType_T.manufacture || [53, 54, 55, 56, 57, 117, 118].includes(this.classId)));
 
         this.clearSelection();
         this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());

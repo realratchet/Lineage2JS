@@ -237,7 +237,7 @@ export class NCShopWnd {
         const item = this.getPressedItem(side);
         if (item && this.onMove) this.onMove(side, item, false, false);
     }
-    protected getLabelIds() { return this.isPreview ? [811, 812, 813] : [this.isSell ? 138 : 137, this.isSell ? 137 : 139, this.isSell ? 143 : 142]; }
+    protected getLabelIds() { return this.isPreview ? [SysString_T.TryOnList, SysString_T.SelectionList, SysString_T.Cost] : [this.isSell ? SysString_T.Inventory : SysString_T.ItemsOnSale, this.isSell ? SysString_T.ItemsOnSale : SysString_T.ItemsToBuy, this.isSell ? SysString_T.SellListPrice : SysString_T.BuyListPrice]; }
     protected getTooltipContext(side: number): number { return this.isStore ? 0 : this.isSell ? 8 : side ? 4 : 7; }
     protected getIcon(item: ShopItem_T) {
         const icon = this.layer.getManager().strings.itemIcons[item.itemId];

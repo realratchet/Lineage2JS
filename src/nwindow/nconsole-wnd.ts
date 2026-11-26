@@ -41,6 +41,8 @@ import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type ChatFilter
 import type GameManager from "../game/game-manager";
 import SystemMessage_T from "./system-message";
 import SysString_T from "./sys-string";
+import { CommandType_T } from "../network/command-parser";
+import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 
 export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, hasQuestMark: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, clanCrestId: number, allyCrestId: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, matchedStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
 
@@ -52,7 +54,7 @@ const arrGaugeOrder = [GamePackets.GaugeColor_T.CYAN, GamePackets.GaugeColor_T.R
 const arrBalloonTextures = ["L2UI_ch3.ChatBack.balloon1_1", "L2UI_ch3.ChatBack.balloon1_2", "L2UI_ch3.ChatBack.balloon1_3", "L2UI_ch3.ChatBack.balloon1_4", "L2UI_ch3.ChatBack.balloon2_1", "L2UI_ch3.ChatBack.balloon2_2", "L2UI_ch3.ChatBack.balloon2_3", "L2UI_ch3.ChatBack.balloon2_4"];
 const storeMatchColors: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [0xff00ff00, 0xff3cff3c], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [0xff00ffff, 0xff3cffc8], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [0xffffff00, 0xffc0ff00], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [0xff3cc8ff, 0xff1788f2] };
 const arrChatStoreTypes = [GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE_MANAGE];
-const storeBalloons: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [SysString_T.PrivateStoreSell, 0xffeaa5f5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [SysString_T.PrivateStoreBuy, 0xfffdfea5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [SysString_T.PrivateCreation, 0xffffbb33], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [SysString_T.PrivateStoreSaleByBulk, 0xfffc7575] }; // FDynamicActor::DrawChat 0x106185ef..0x1061889d: sysstring label, text colour.
+const storeBalloons: Record<number, [SysString_T, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [SysString_T.PrivateStoreSell, 0xffeaa5f5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [SysString_T.PrivateStoreBuy, 0xfffdfea5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [SysString_T.PrivateCreation, 0xffffbb33], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [SysString_T.PrivateStoreSaleByBulk, 0xfffc7575] }; // FDynamicActor::DrawChat 0x106185ef..0x1061889d: sysstring label, text colour.
 const equipmentSlots: Record<number, number> = { 1: 0, 8: 4, 64: 1, 128: 5, 256: 7, 512: 10, 1024: 6, 2048: 11, 4096: 12, 8192: 2, 16384: 5, 32768: 6, 65536: 3, 131072: 6 }; // NWindow 0x100744e0, primary cells for 16 / 15 / 17.
 const tmpNameplateAnchor = new Vector3();
 const tmpBalloonAnchor = new Vector3();
@@ -329,7 +331,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "NumpadSubtract": key = 109; break;
                 default: return;
             }
-            if (key !== 27 && this.screen !== "world" || !network.inputReplay(key, event.type === "keydown" ? 1 : 3)) return;
+            if (key !== EInputKey_T.IK_Escape && this.screen !== "world" || !network.inputReplay(key, event.type === "keydown" ? EInputAction_T.IST_Press : EInputAction_T.IST_Release)) return;
 
             event.preventDefault();
             event.stopImmediatePropagation();
@@ -588,10 +590,11 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.calcWnd = this.skin.createCalcWnd(this.layer);
         this.questListInfoWnd = this.skin.createQuestListInfoWnd(this.layer);
         this.questListInfoWnd.onLocation = quest => {
-            const location = { id: quest.id, name: this.strings.npcNames[quest.unk3], x: quest.entityX, y: quest.entityY, z: quest.entityZ, unk0: quest.unk0 };
+            const location = { id: quest.id, name: this.strings.npcNames[quest.startNpcId], x: quest.entityX, y: quest.entityY, z: quest.entityZ, isHuntingTarget: quest.isHuntingTarget };
 
             this.mapWnd.setQuestLocation(location);
             this.manNetwork.community.questArrowDestination = location;
+            this.manNetwork.community.isQuestArrowOn = true;
             this.manNetwork.community.mapMarkers.length = 0;
             this.mapWnd.setTargetLocations(this.manNetwork.community.mapMarkers);
         };
@@ -602,7 +605,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.manorSeedSettingWnd = this.skin.createManorSeedSettingWnd(this.layer);
         this.manorCropSettingWnd = this.skin.createManorCropSettingWnd(this.layer);
         for (const wnd of [this.manorSeedSettingWnd, this.manorCropSettingWnd]) {
-            wnd.setAlertHandler(text => this.dialogBox.show(text, DialogType_T.OK, null, true, 0, 0, true));
+            wnd.setAlertHandler(text => this.dialogBox.show(text, DialogType_T.OK, null, true, 0, undefined, true));
             wnd.onConfirm = (text, onOk) => this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true);
         }
         this.manorSeedSettingWnd.onSubmit = (manorId, items) => network.setManorSeeds(manorId, items);
@@ -990,8 +993,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.heroTowerWnd.onDiary = classId => network.bypass(`_diary?class=${classId}&page=1`);
         this.heroTowerWnd.setCrestGetter((crestId, isAlly) => network.getHeroCrest(crestId, isAlly));
         this.commandInfoWnd = this.skin.createCommandInfoWnd(this.layer);
-        this.commandInfoWnd.onUpdate = () => network.userCommand(97);
-        this.commandInfoWnd.onLeave = () => network.userCommand(96);
+        this.commandInfoWnd.onUpdate = () => network.userCommand(CommandType_T.channelinfo);
+        this.commandInfoWnd.onLeave = () => network.userCommand(CommandType_T.channelleave);
         this.commandInfoWnd.onOust = name => network.oustFromCommandChannel(name);
         this.commandInfoWnd.onSay = (text, type) => network.say(text, type);
         this.gmDetailWnd = this.skin.createGMDetailStatusWnd(this.layer);
@@ -1305,12 +1308,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.mapWnd.openPosition(position.x, position.y, position.z);
         };
         this.townMapWnd = this.skin.createTownMapWnd(this.layer);
-        this.mainWnd.questWnd.onLocationChange = location => {
-            const previous = this.mapWnd.getQuestLocation();
-
+        this.mainWnd.questWnd.onLocationChange = location => { // NWindow Quest paint 0x100ec51c..57f raises the arrow only for an npc target; clear 0x100ec100.
             this.mapWnd.setQuestLocation(location);
-            if (location && (location.unk0 === 0 || previous && network.community.questArrowDestination === previous)) network.community.questArrowDestination = location;
-            else if (!location && network.community.questArrowDestination === previous) network.community.questArrowDestination = null;
+            if (!location) network.community.isQuestArrowOn = false;
+            else {
+                network.community.questArrowDestination = location;
+                if (!location.isHuntingTarget) network.community.isQuestArrowOn = true;
+            }
         };
         this.macroWnd = this.skin.createMacroWnd(this.layer);
         this.macroWnd.shortcuts = network.items.shortcuts;
@@ -1465,15 +1469,15 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         else this.messageWnd.show(text);
     }
 
-    protected siegeConfirm(id: number, name: string, onOk: () => void) { this.dialogBox.show(this.formatSystemMessage(id, name), DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true, 0, id); }
+    protected siegeConfirm(id: SystemMessage_T, name: string, onOk: () => void) { this.dialogBox.show(this.formatSystemMessage(id, name), DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true, 0, id); }
     protected confirmLink(text: string, onOk: () => void) { this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }); }
-    protected confirm(text: string, onYes: () => void, messageId = 0) { this.lobbyDialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
-    public showNotice(messageId: number) { this.dialogBox.show(this.nwindow.getSystemMessage(messageId), DialogType_T.OK, null, true, 0, messageId); }
+    protected confirm(text: string, onYes: () => void, messageId?: SystemMessage_T) { this.lobbyDialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
+    public showNotice(messageId: SystemMessage_T) { this.dialogBox.show(this.nwindow.getSystemMessage(messageId), DialogType_T.OK, null, true, 0, messageId); }
 
-    public playSystemMessageSound(id: number) { this.nwindow.playSystemMessageSound(id); }
+    public playSystemMessageSound(id: SystemMessage_T) { this.nwindow.playSystemMessageSound(id); }
 
-    public showConfirm(messageId: number, text: string, onAnswer: (isOk: boolean) => void) {
-        if (messageId === 0) this.dialogBox.hide();
+    public showConfirm(messageId: SystemMessage_T, text: string, onAnswer: (isOk: boolean) => void) {
+        if (!messageId) this.dialogBox.hide();
         else this.dialogBox.show(text, DialogType_T.OK_CANCEL, onAnswer, messageId !== SystemMessage_T.ResurrectionInvitation, 0, messageId); // NCGaraDialogBox::SetDialog, NWindow RVA 0x8b90: replacement does not decline resurrection.
     }
 
@@ -1482,26 +1486,28 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             if (!name) return true;
 
             this.dialogBox.hide();
-            this.showConfirm(1251, this.formatSystemMessage(SystemMessage_T.ConfirmDismissAlliance, name), isOk => { if (isOk) this.manNetwork.dismissAllyClan(name); });
+            this.showConfirm(SystemMessage_T.ConfirmDismissAlliance, this.formatSystemMessage(SystemMessage_T.ConfirmDismissAlliance, name), isOk => { if (isOk) this.manNetwork.dismissAllyClan(name); });
             return false;
         }, "", 0, SystemMessage_T.EnterClanToExpel);
     }
 
-    public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) { this.yesNoDialogBox.show(
-        this.formatSystemMessage([SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution], name),
-        DialogType_T.YES_NO,
-        onAnswer,
-        true,
-        10000,
-        [SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution]
-    ); }
+    public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) {
+        this.yesNoDialogBox.show(
+            this.formatSystemMessage([SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution], name),
+            DialogType_T.YES_NO,
+            onAnswer,
+            true,
+            10000,
+            [SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution]
+        );
+    }
     public showTradeInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.TradeInvitation, name), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.TradeInvitation); }
     public showAllyInvite(requestor: string, allyName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.AllianceInvitation, requestor, allyName), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.AllianceInvitation); }
     public showPledgeInvite(requestor: string, pledgeName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.ClanInvitation, requestor, pledgeName), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.ClanInvitation); }
     public showFriendInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.FriendInvitation, name), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.FriendInvitation); }
     public showCommandChannelInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.CommandChannelInvitation, name), DialogType_T.YES_NO, onAnswer, true, 0, SystemMessage_T.CommandChannelInvitation); }
 
-    protected formatSystemMessage(id: number, ...params: string[]): string {
+    protected formatSystemMessage(id: SystemMessage_T, ...params: string[]): string {
         return this.nwindow.getSystemMessage(id).replace(/\$[sc](\d)/g, (_match, index) => params[Number(index) - 1] ?? "");
     }
 
@@ -1568,7 +1574,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         await this.refreshReplayList();
     }
 
-    public getSystemMessage(id: number) { return this.nwindow.getSystemMessage(id); }
+    public getSystemMessage(id: SystemMessage_T) { return this.nwindow.getSystemMessage(id); }
 
     public setLoginBusy(isBusy: boolean) { this.loginWnd.setBusy(isBusy); }
 
@@ -2722,7 +2728,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected applyGameOptions(options: Partial<GameOptions_T>) {
-        if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error(`Invalid game options.`);
+        if (!options || typeof options !== "object" || Array.isArray(options))
+            throw new Error(`Invalid game options.`);
 
         for (const [key, value] of Object.entries(options)) {
             switch (key) {
@@ -2781,32 +2788,42 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true, ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
         this.nwindow.setWindowKeyBindings(this.options.game.windowKeyBindings);
-        for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd])
-            if (wnd) wnd.updateKeyBindings();
+
+        for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd]) {
+            wnd?.updateKeyBindings();
+        }
+
         asset.playerController.isEnterChatting = this.options.game.enterChatting;
+
         this.manGame.getComponent("input").setInvertMouseWheel(this.options.game.invertMouseWheel);
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
         this.manRender.setStaticMeshLod(this.options.game.staticMeshLod);
         this.manRender.setSortTransparent(this.options.game.sortTransparent);
+
         this.manRender.skillLightProbe.mode = this.options.game.skillEffectLighting;
+
         this.manRender.setRenderDeco(this.options.game.renderDeco);
         this.manRender.setUseTrilinear(this.options.game.useTrilinear);
         this.manRender.setTextureDetail(this.options.game.textureDetail);
         this.manRender.setAntiAliasing(this.options.game.antiAliasing);
+
         document.documentElement.classList.toggle("nwindow-default-cursor", !this.options.game.useColorCursor);
+
         if (this.chatWnd) {
             this.chatWnd.setSystemMsgWnd(this.options.game.systemMsgWnd);
             this.chatWnd.setOldChatting(this.options.game.oldChatting);
             this.chatWnd.setSystemMessageFilters(this.options.game.systemMsgWndDamage, this.options.game.systemMsgWndExpendableItem);
         }
+
         this.layer.setTransparencyMode(this.screen === "world" && this.options.game.transparencyMode);
         this.nwindow.invalidate();
         this.updateTitle();
     }
 
     protected applyUIScale(scale: number) {
-        if (!UI_SCALES.includes(scale)) throw new Error(`Invalid UI scale '${scale}'.`);
+        if (!UI_SCALES.includes(scale))
+            throw new Error(`Invalid UI scale '${scale}'.`);
 
         this.nwindow.setUIScale(scale);
         this.layer.resize();
@@ -2827,7 +2844,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public isAutoTrackingPawnEnabled() { return this.options.game.autoTrackingPawn; }
 
-    public isQuestArrowEnabled() { return this.options.game.arrowMode; }
+    public isQuestArrowEnabled() { return this.options.game.arrowMode && this.mainWnd.questWnd.getLocationChecked(); } // NWindow 0x100826e0
 
     public getGameOptions() { return { ...this.options.game, windowKeyBindings: { ...this.options.game.windowKeyBindings } }; }
 
@@ -2839,9 +2856,14 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 if (!["all", "combat", "notices", "none"].includes(value as string)) throw new Error(`Invalid background audio '${value}'.`);
                 continue;
             }
-            if (!["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"].includes(key)) throw new Error(`Unknown audio option '${key}'.`);
-            if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new Error(`Invalid audio option '${key}'.`);
+
+            if (!["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"].includes(key))
+                throw new Error(`Unknown audio option '${key}'.`);
+
+            if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)
+                throw new Error(`Invalid audio option '${key}'.`);
         }
+
         this.options.audio = { ...this.manNetwork.getParent().getComponent("asset").userConfig.audio, backgroundAudio: "notices", ...options };
         const audio = this.manNetwork.getParent().getComponent("audio");
 
@@ -2852,8 +2874,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         audio.setMusicVolume(this.options.audio.musicVolume);
         audio.setWavVoiceVolume(this.options.audio.wavVoiceVolume);
         audio.setOggVoiceVolume(this.options.audio.oggVoiceVolume);
+
         if (this.options.audio.musicVolume === 0) audio.cancelMusic();
         else if (wasMusicOff) this.manRender.cancelMusic();
+
         if (this.options.audio.wavVoiceVolume === 0) audio.stopAllVoice(false);
         if (this.options.audio.oggVoiceVolume === 0) audio.stopAllVoice(true);
     }
@@ -2914,7 +2938,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
             this.manNetwork.abortQuest(id);
             this.mainWnd.questWnd.clearLocation();
-        }, true, 0, id > 0 ? 182 : 1201);
+        }, true, 0, id > 0 ? SystemMessage_T.ConfirmQuitQuest : SystemMessage_T.SelectQuestToQuit);
         if (id > 0) this.dialogBox.owner = this.mainWnd.questWnd.element;
     }
 
@@ -2992,7 +3016,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                     if (action === "declareWar") network.startPledgeWar(name);
                     else network.stopPledgeWar(name);
                     return true;
-                }, "", 0, action === "declareWar" ? 1531 : 1532);
+                }, "", 0, action === "declareWar" ? SystemMessage_T.EnterClanToDeclareWar : SystemMessage_T.EnterClanToEndWar);
                 break;
             case "leave": {
                 if (!this.statusInfo || this.statusInfo.clanRelation & 0x40) { this.clanError(SystemMessage_T.ClanLeaderCannotWithdraw); break; }
@@ -3017,10 +3041,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
                 dialog.show(this.getCrestMessage(isSmall, isAlly), action === "setCrest" ? DialogType_T.OK : DialogType_T.OK_CANCEL, isOk => {
                     if (isOk) this.pickCrest(isSmall, isAlly);
-                }, true, 0, isAlly ? 515 : isSmall ? 211 : 1478);
+                }, true, 0, isAlly ? SystemMessage_T.EnterAllianceCrestFileName : isSmall ? SystemMessage_T.InvalidClanCrestFormat : SystemMessage_T.InvalidClanInsigniaFormat);
                 break;
             }
-            case "penalty": network.userCommand(100); break;
+            case "penalty": network.userCommand(CommandType_T.clanpenalty); break;
             case "community": this.communityWnd.openClan(); break;
             default: throw new Error(`Unknown clan action '${action}'.`);
         }

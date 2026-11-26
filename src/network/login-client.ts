@@ -2,6 +2,7 @@ import L2Socket from "./l2-socket";
 import PacketReader from "./packet-reader";
 import PacketWriter from "./packet-writer";
 import { L2Blowfish, LOGIN_STATIC_KEY, LOGIN_RSA_BLOCK_SIZE, buildLoginCredentials, encryptRSANoPadding, openLoginPacket, sealLoginPacket, unscrambleModulus } from "./l2-crypt";
+import SystemMessage_T from "../nwindow/system-message";
 
 const LOGIN_PROTOCOL_REVISION = 0xc621;
 const PING_SOCKET_KEEP_MS = 45000;
@@ -40,10 +41,10 @@ export type GameServerInfo_T = {
 export type SessionKey_T = { loginOk1: number, loginOk2: number, playOk1: number, playOk2: number };
 
 const LOGIN_FAIL_MESSAGES: Record<number, number[]> = { // NWindow 0x1006f1d0 OnAuthLoginFail switch, joined with "%s %s" / "%s %s %s"
-    1: [448], 2: [449, 450], 3: [449, 450], 4: [461, 462, 463], 5: [453, 454], 6: [461, 462, 463], 7: [455],
-    8: [461, 462, 463], 9: [461, 462, 463], 10: [461, 462, 463], 11: [461, 462, 463], 12: [456], 13: [461, 462, 463], 14: [461, 462, 463],
-    15: [1650], 16: [457], 17: [396], 18: [458, 459, 460], 19: [398], 20: [399], 21: [461], 22: [621],
-    30: [756], 31: [1243], 32: [1242], 33: [1340], 35: [1407]
+    1: [SystemMessage_T.LoginSystemError], 2: [SystemMessage_T.PasswordMismatch, SystemMessage_T.ConfirmAccountInfo], 3: [SystemMessage_T.PasswordMismatch, SystemMessage_T.ConfirmAccountInfo], 4: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 5: [SystemMessage_T.AccountInfoIncorrect, SystemMessage_T.ContactCustomerService], 6: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 7: [SystemMessage_T.AccountInUse],
+    8: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 9: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 10: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 11: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 12: [SystemMessage_T.AgeRestriction], 13: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod], 14: [SystemMessage_T.AccessFailed, SystemMessage_T.TryAgainLater, SystemMessage_T.LoginMessagePeriod],
+    15: [SystemMessage_T.ServerOverloaded], 16: [SystemMessage_T.ServerUnderMaintenance], 17: [SystemMessage_T.ChangeTemporaryPassword], 18: [SystemMessage_T.UsageTermExpired, SystemMessage_T.VisitOfficialWebsite, SystemMessage_T.ToReactivateAccount], 19: [SystemMessage_T.NoTimeLeftOnAccount], 20: [SystemMessage_T.SystemError], 21: [SystemMessage_T.AccessFailed], 22: [SystemMessage_T.KoreaOnlyServer],
+    30: [SystemMessage_T.WeeklyUsageTimeFinished], 31: [SystemMessage_T.InvalidSecurityCardNumber], 32: [SystemMessage_T.AgeUnverifiedNightLogin], 33: [SystemMessage_T.CouponServerDenied], 35: [SystemMessage_T.DualLoginNotAllowed]
 };
 
 export class LoginClient {

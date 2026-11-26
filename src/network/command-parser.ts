@@ -112,6 +112,7 @@ export enum CommandType_T { // CommandName-e.dat IDs used by FL2GameData::GetCom
 }
 
 export enum ActionType_T { // ActionName-e.dat macro command IDs.
+    sitstand = 0,
     walkrun = 1,
     attack = 2,
     trade = 3,

@@ -19,7 +19,7 @@ const HEIGHT = 326;
 const CHANGE_WIDTH = 256;
 const CHANGE_HEIGHT = 201;
 
-function formatMessage(layer: NDomLayer, id: number, ...params: number[]) { return layer.getManager().getSystemMessage(id).replace(/\$s(\d)/g, (_match, index) => String(params[Number(index) - 1] ?? "")); }
+function formatMessage(layer: NDomLayer, id: SystemMessage_T, ...params: number[]) { return layer.getManager().getSystemMessage(id).replace(/\$s(\d)/g, (_match, index) => String(params[Number(index) - 1] ?? "")); }
 function toInt(text: string) { return parseInt(text, 10) || 0; } // _wtoi
 
 class NCManorInfoChangeWnd { // shared by NCManorSeedInfoChangeWnd / NCManorCropInfoChangeWnd
@@ -67,7 +67,7 @@ class NCManorInfoChangeWnd { // shared by NCManorSeedInfoChangeWnd / NCManorCrop
         this.amountEdit.focus();
     }
 
-    protected validate(limitMessage: number, priceMessage: number) {
+    protected validate(limitMessage: SystemMessage_T, priceMessage: SystemMessage_T) {
         const amount = toInt(this.amountEdit.getValue()), price = toInt(this.priceEdit.getValue());
 
         if (amount < 0 || this.limit < amount) this.alert(formatMessage(this.layer, limitMessage, 0, this.limit));
@@ -164,7 +164,7 @@ class NCManorInfoSettingWnd { // NCManorInfoSettingWnd: OnCreate 0x10136ce0, pai
 
     protected onChangeClick() {}
 
-    protected confirm(messageId: number, onOk: () => void) { if (this.onConfirm) this.onConfirm(this.layer.getManager().getSystemMessage(messageId), onOk); } // 0x10139140 / 0x10139220: dialog 87 / 86
+    protected confirm(messageId: SystemMessage_T, onOk: () => void) { if (this.onConfirm) this.onConfirm(this.layer.getManager().getSystemMessage(messageId), onOk); } // 0x10139140 / 0x10139220: dialog 87 / 86
 
     protected setNextCells(arrIndices: number[], getValue: (row: ListRow_T, index: number) => string) {
         const rows = this.list.getRows();

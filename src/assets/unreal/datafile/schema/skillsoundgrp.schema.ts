@@ -16,17 +16,17 @@ for (let i = 1; i <= 3; i++) {
     }
 }
 
-const characterGroups = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman", "RESERVED"];
+const characterGroups = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman", "reserved"];
 
 for (const characterGroup of characterGroups)
-    SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "utf16", name: `${characterGroup}_sub${characterGroup === "RESERVED" ? "_?" : ""}` });
+    SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "utf16", name: `${characterGroup}_cast` });
 
 for (const characterGroup of characterGroups)
-    SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "utf16", name: `${characterGroup}_throw${characterGroup === "RESERVED" ? "_?" : ""}` });
+    SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "utf16", name: `${characterGroup}_magic` });
 
 SCHEMA_SKILLSOUNDGRP_DAT.push(
-    { type: "float", name: "sound_vol" },
-    { type: "float", name: "sound_rad" }
+    { type: "float", name: "cast_volume" },
+    { type: "float", name: "cast_rad" }
 );
 
 export default SCHEMA_SKILLSOUNDGRP_DAT;

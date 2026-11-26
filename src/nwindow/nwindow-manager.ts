@@ -7,6 +7,7 @@ import type SkinTextures from "./skin-textures";
 import SysString_T, { CLASS_NAME_OFFSET } from "./sys-string";
 import { getDefaultWindowKeyBindings, replaceWindowKeyBindings } from "../game/window-key-bindings";
 import type { WindowKeyBindings_T } from "../game/window-key-bindings";
+import SystemMessage_T from "./system-message";
 
 const SNAP_DISTANCE = 10;
 
@@ -83,7 +84,7 @@ export class NWindowManager {
 
     public invalidate() { this.isDirty = true; }
 
-    public playSystemMessageSound(id: number) {
+    public playSystemMessageSound(id: SystemMessage_T) {
         const audio = this.asset.getParent().getComponent("audio");
         const sound = this.strings.systemMessageSounds[id], voice = this.strings.systemMessageVoices[id];
 
@@ -270,8 +271,8 @@ export class NWindowManager {
 
     public setWindowKeyBindings(bindings: WindowKeyBindings_T) { this.windowKeyBindings = { ...bindings }; }
     public formatWindowKeyText(text: string) { return replaceWindowKeyBindings(text, this.windowKeyBindings); }
-    public getSysString(id: number): string { return this.formatWindowKeyText(this.strings.sysStrings[id] ?? ""); } // GL2GameData+0x9871c+id*12 in NWindow is the sysstring-e.dat table.
-    public getSystemMessage(id: number): string { return this.strings.systemMessages[id] ?? ""; }
+    public getSysString(id: SysString_T): string { return this.formatWindowKeyText(this.strings.sysStrings[id] ?? ""); } // GL2GameData+0x9871c+id*12 in NWindow is the sysstring-e.dat table.
+    public getSystemMessage(id: SystemMessage_T): string { return this.strings.systemMessages[id] ?? ""; }
 
     public filterText(value: string) {
         const replacement = this.getSysString(SysString_T.ObsceneNameReplacement);

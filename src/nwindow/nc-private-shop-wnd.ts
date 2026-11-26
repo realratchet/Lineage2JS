@@ -130,7 +130,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
         return total >= 0 && total <= 2e9;
     }
     protected getTransferCount(item: ShopItem_T, count: number) { return this.isOwn ? count : super.getTransferCount(item, count); }
-    protected getLabelIds() { return this.isOwn ? [138, 137, 143] : [137, 139, 142]; }
+    protected getLabelIds() { return this.isOwn ? [SysString_T.Inventory, SysString_T.ItemsOnSale, SysString_T.SellListPrice] : [SysString_T.ItemsOnSale, SysString_T.ItemsToBuy, SysString_T.BuyListPrice]; }
     protected getTooltipContext(side: number): number { return this.isOwn ? side ? 4 : 0 : this.isPackage || side === 0 ? 4 : 0; }
     protected drawTotal() {
         super.drawTotal();

@@ -5,8 +5,18 @@ import * as GamePackets from "./game-packets";
 import PacketReader from "./packet-reader";
 import Radar, { type RadarState_T } from "../rendering/radar";
 import type { NetObject_T } from "./network-actors";
+import { CommandType_T } from "./command-parser";
+import SystemMessage_T from "../nwindow/system-message";
 
 type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number, crest: HTMLCanvasElement, allyCrest: HTMLCanvasElement };
+
+function removeMarkers(arrMarkers: GamePackets.Location_T[], location: GamePackets.Location_T) { // NWindow 0x100ff970, 0x100cb290 walk forward and skip the duplicate after a removed one.
+    for (let i = arrMarkers.length - 1; i >= 0; i--) {
+        const marker = arrMarkers[i];
+
+        if (marker.x === location.x && marker.y === location.y && marker.z === location.z) arrMarkers.splice(i, 1);
+    }
+}
 
 export class NetworkCommunity {
     public readonly friends = new Map<number, GamePackets.FriendEntry_T>();
@@ -32,6 +42,7 @@ export class NetworkCommunity {
     public readonly clanLargeCrestIds = new Map<number, number>();
     public readonly allyCrests = new Map<number, Uint8Array>();
     public questArrowDestination: GamePackets.Location_T = null;
+    public isQuestArrowOn = false;
     public readonly mapMarkers: GamePackets.Location_T[] = [];
     public readonly radarMarkers: GamePackets.Location_T[] = [];
     protected readonly radarState: RadarState_T = { party: [], target: null, markers: this.radarMarkers };
@@ -85,9 +96,9 @@ export class NetworkCommunity {
 
         render.questArrow.createEffect = path => asset.createScriptObject(render, library, path);
         render.questArrow.canDraw = () => this.network.actors.inWorld && !this.network.movement.isObserving();
-        render.questArrow.getDestination = () => this.network.ui.isQuestArrowEnabled() ? this.questArrowDestination : null;
+        render.questArrow.getDestination = () => this.isQuestArrowOn && this.network.ui.isQuestArrowEnabled() ? this.questArrowDestination : null;
         render.questArrow.onArrival = () => {
-            this.questArrowDestination = null;
+            this.isQuestArrowOn = false;
             this.radarMarkers.length = 0;
             this.mapMarkers.length = 0;
             this.network.ui.setMapMarkers(this.mapMarkers);
@@ -611,7 +622,7 @@ export class NetworkCommunity {
         this.network.ui.showConfirm(message.id, message.text, isOk => this.network.session.game.dlgAnswer(message.id, isOk));
     }
 
-    public playSystemMessageSound(id: number) {
+    public playSystemMessageSound(id: SystemMessage_T) {
         this.network.ui.playSystemMessageSound(id);
     }
 
@@ -853,23 +864,15 @@ export class NetworkCommunity {
         switch (radar.action) {
             case GamePackets.RadarAction_T.ADD:
                 this.questArrowDestination = { x: radar.x, y: radar.y, z: radar.z };
+                this.isQuestArrowOn = true;
                 if (radar.type === GamePackets.RadarType_T.RADAR || radar.type === GamePackets.RadarType_T.BOTH) this.radarMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
                 if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH) this.mapMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
                 break;
             case GamePackets.RadarAction_T.REMOVE: {
-                if (radar.type === GamePackets.RadarType_T.RADAR || radar.type === GamePackets.RadarType_T.BOTH) {
-                    const index = this.radarMarkers.findIndex(marker => marker.x === radar.x && marker.y === radar.y && marker.z === radar.z);
-
-                    if (index >= 0) this.radarMarkers.splice(index, 1);
-                }
-                if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH)
-                    for (let i = 0; i < this.mapMarkers.length; i++) {
-                        const marker = this.mapMarkers[i];
-
-                        if (marker.x === radar.x && marker.y === radar.y && marker.z === radar.z) this.mapMarkers.splice(i, 1);
-                    }
+                if (radar.type === GamePackets.RadarType_T.RADAR || radar.type === GamePackets.RadarType_T.BOTH) removeMarkers(this.radarMarkers, radar);
+                if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH) removeMarkers(this.mapMarkers, radar);
             } break;
-            case GamePackets.RadarAction_T.CLEAR: this.questArrowDestination = null; this.radarMarkers.length = this.mapMarkers.length = 0; break;
+            case GamePackets.RadarAction_T.CLEAR: this.isQuestArrowOn = false; this.radarMarkers.length = this.mapMarkers.length = 0; break;
             default: throw new Error(`Unknown RadarControl action '${radar.action}'.`);
         }
 
@@ -1014,7 +1017,7 @@ export class NetworkCommunity {
 
     public block(type: GamePackets.BlockType_T, name: string = null) { if (this.network.actors.inWorld) this.network.session.game.requestBlock(type, name); }
 
-    public userCommand(id: number) { if (this.network.actors.inWorld) this.network.session.game.requestUserCommand(id); }
+    public userCommand(id: CommandType_T) { if (this.network.actors.inWorld) this.network.session.game.requestUserCommand(id); }
 
     public evaluate(objectId: number) { if (this.network.actors.inWorld) this.network.session.game.requestEvaluate(objectId); }
 

@@ -35,8 +35,8 @@ export const SCHEMA_CHARGRP_DAT: ISchemaValue[] = [
     { type: new UTF16SizedContainerType("cntp"), name: "voice_snd_pole" },
     { type: "uint32", name: "cntb" },
     { type: new UTF16SizedContainerType("cntb"), name: "voice_snd_bow" },
-    { type: "uint32", name: "cntu" },
-    { type: new UTF16SizedContainerType("cntu"), name: "voice_snd_unknown" },
+    { type: "uint32", name: "cntt" },
+    { type: new UTF16SizedContainerType("cntt"), name: "voice_snd_throw" },
     { type: "uint32", name: "cntf" },
     { type: new UTF16SizedContainerType("cntf"), name: "voice_snd_fist" }
 ];

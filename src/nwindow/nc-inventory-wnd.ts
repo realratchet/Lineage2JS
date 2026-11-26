@@ -567,12 +567,12 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         const textures = [...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[getCrystalGradeSymbol(item.info.crystalType)]] : [])]).filter(path => path && path.toLowerCase() !== "none"))];
 
-        if (textures.some(path => !this.layer.hasTexture(path))) this.paintItems(!isFull);
+        if (textures.some(path => !this.layer.hasTexture(path))) this.paintItems(!isFull, !isFull);
         await this.layer.loadTextures(textures);
 
         if (this.items !== items) return;
 
-        this.paintItems(!isFull);
+        this.paintItems(!isFull, !isFull);
     }
 
     protected paintTabs() {
@@ -633,6 +633,9 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         this.layer.renderText(this.adena, text, 0xffdcdcdc);
         this.layer.place(this.adena, 199 - this.layer.measureText(text), 356);
+
+        if (preserveTooltip && !this.tooltip.hidden)
+            this.arrInput.forEach((_input, source) => { if (this.getInputPane(source).matches(":hover")) this.showInputTooltip(source); });
     }
 
     protected addItem(parent: HTMLElement, x: number, y: number, item: InventoryEntry_T, icon = item.icon, isSecondary = false) {
