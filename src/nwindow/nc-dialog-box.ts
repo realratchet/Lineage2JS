@@ -162,7 +162,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
 
         this.element.hidden = false;
         this.layer.setModal(this.element, isModal);
-        if (messageId) manager.playSystemMessageSound(messageId); // NCGaraDialogBox::Show 0x100095c0 submits item_sound, then sys_msg_ref.
+        if (messageId) manager.playSystemMessageSound(messageId); // NCGaraDialogBox::Show 0x100095c0 submits sound, then voice.
         this.renderText(text.split("\\n").join("\r\n"));
         this.placeOnScreen(this.screenWidth, this.screenHeight);
         this.element.focus();

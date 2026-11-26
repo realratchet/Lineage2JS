@@ -10,6 +10,14 @@ import SystemMessage_T from "../nwindow/system-message";
 
 type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number, crest: HTMLCanvasElement, allyCrest: HTMLCanvasElement };
 
+function removeMarkers(arrMarkers: GamePackets.Location_T[], location: GamePackets.Location_T) { // NWindow 0x100ff970, 0x100cb290 walk forward and skip the duplicate after a removed one.
+    for (let i = arrMarkers.length - 1; i >= 0; i--) {
+        const marker = arrMarkers[i];
+
+        if (marker.x === location.x && marker.y === location.y && marker.z === location.z) arrMarkers.splice(i, 1);
+    }
+}
+
 export class NetworkCommunity {
     public readonly friends = new Map<number, GamePackets.FriendEntry_T>();
     public readonly partyMembers = new Map<number, GamePackets.PartyMember_T>();
@@ -861,17 +869,8 @@ export class NetworkCommunity {
                 if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH) this.mapMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
                 break;
             case GamePackets.RadarAction_T.REMOVE: {
-                if (radar.type === GamePackets.RadarType_T.RADAR || radar.type === GamePackets.RadarType_T.BOTH) {
-                    const index = this.radarMarkers.findIndex(marker => marker.x === radar.x && marker.y === radar.y && marker.z === radar.z);
-
-                    if (index >= 0) this.radarMarkers.splice(index, 1);
-                }
-                if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH)
-                    for (let i = 0; i < this.mapMarkers.length; i++) {
-                        const marker = this.mapMarkers[i];
-
-                        if (marker.x === radar.x && marker.y === radar.y && marker.z === radar.z) this.mapMarkers.splice(i, 1);
-                    }
+                if (radar.type === GamePackets.RadarType_T.RADAR || radar.type === GamePackets.RadarType_T.BOTH) removeMarkers(this.radarMarkers, radar);
+                if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH) removeMarkers(this.mapMarkers, radar);
             } break;
             case GamePackets.RadarAction_T.CLEAR: this.isQuestArrowOn = false; this.radarMarkers.length = this.mapMarkers.length = 0; break;
             default: throw new Error(`Unknown RadarControl action '${radar.action}'.`);
