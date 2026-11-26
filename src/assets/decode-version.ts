@@ -1,1 +1,1 @@
-export const DECODE_CACHE_VERSION = 5;
+export const DECODE_CACHE_VERSION = 6;
