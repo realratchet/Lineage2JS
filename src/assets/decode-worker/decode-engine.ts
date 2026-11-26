@@ -1042,7 +1042,7 @@ export class DecodeEngine {
             shield: shield && shield.tag === 0 ? { sounds: shield.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
         });
 
-        library.pawnSounds.attackVoice = await Promise.all(["voice_snd_hand", "voice_snd_1hs", "voice_snd_2hs", "voice_snd_dual", "voice_snd_pole", "voice_snd_bow", "voice_snd_unknown", "voice_snd_fist"].map(async field => {
+        library.pawnSounds.attackVoice = await Promise.all(["voice_snd_hand", "voice_snd_1hs", "voice_snd_2hs", "voice_snd_dual", "voice_snd_pole", "voice_snd_bow", "voice_snd_throw", "voice_snd_fist"].map(async field => {
             const paths = row[field] as string[];
 
             return await Promise.all(paths.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
@@ -2256,7 +2256,7 @@ export class DecodeEngine {
             socialSounds,
             systemMessages: Object.fromEntries(messages.datarows.map((row: any) => [row.id, row.message])),
             systemMessageGroups: Object.fromEntries(messages.datarows.map((row: any) => [row.id, row.group])),
-            systemMessageColors: Object.fromEntries(messages.datarows.map((row: any) => [row.id, ((row.UNK_1 & 0xff) << 24 | row.rgb[2] << 16 | row.rgb[1] << 8 | row.rgb[0]) >>> 0])), // NWindow 0x1005c274 uses the record's rgb + alpha bytes verbatim as an 0xAARRGGBB dword.
+            systemMessageColors: Object.fromEntries(messages.datarows.map((row: any) => [row.id, ((row.alpha & 0xff) << 24 | row.rgb[2] << 16 | row.rgb[1] << 8 | row.rgb[0]) >>> 0])), // NWindow 0x1005c274 uses the record's rgb + alpha bytes verbatim as an 0xAARRGGBB dword.
             systemMessageSounds: Object.fromEntries(messages.datarows.filter((row: any) => row.item_sound && row.item_sound !== "None").map((row: any) => [row.id, row.item_sound])),
             systemMessageVoices: Object.fromEntries(messages.datarows.filter((row: any) => row.sys_msg_ref && row.sys_msg_ref !== "None").map((row: any) => [row.id, row.sys_msg_ref])),
             sysStrings: Object.fromEntries(sysStrings.datarows.map((row: any) => [row.id, row.name])),
@@ -2438,11 +2438,11 @@ export class DecodeEngine {
                     if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds[`${prefix}_sound_vol_${i}`] as number, radius: sounds[`${prefix}_sound_rad_${i}`] as number });
                 }
 
-                if (phase === "casting" || phase === "shot") // Engine.dll PlaySkillSound 0x797f3c: after the phase sounds, the _sub (casting) or _throw (shot) voice of the pawn's CharClassID.
+                if (phase === "casting" || phase === "shot") // Engine.dll PlaySkillSound 0x797f3c: after the phase sounds, the _cast (casting) or _magic (shot) voice of the pawn's CharClassID.
                     SKILL_VOICE_GROUPS.forEach(([charClassId, group]) => {
-                        const sound = sounds[`${group}_${phase === "casting" ? "sub" : "throw"}`] as string;
+                        const sound = sounds[`${group}_${phase === "casting" ? "cast" : "magic"}`] as string;
 
-                        if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds.sound_vol as number, radius: sounds.sound_rad as number, charClassId });
+                        if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds.cast_volume as number, radius: sounds.cast_rad as number, charClassId });
                     });
             }
         }
@@ -3579,7 +3579,7 @@ export class DecodeEngine {
         const skillVisualsById = new Map<number, { level: number, hitTime: number, animationCategory: string, castStyle: number, isMagic: boolean, visualEffect: string, isMultiShot: boolean }>();
         const skillAttacksByNpcId = new Map<number, NpcSkillAttack_T[]>();
         const enterEventsById = new Map(enterEvents.datarows.map(row => [row.id as number, {
-            sound: row.skill_sound as string,
+            sound: row.sound_name as string,
             soundVolume: row.sound_vol as number,
             soundRadius: row.sound_rad as number,
             isRise: row.isrise as number,
@@ -3658,7 +3658,7 @@ export class DecodeEngine {
             alternateTextures: (row.tex2 as string[]).filter(path => path && path.toLowerCase() !== "none"),
             skillAttacks: skillAttacksByNpcId.get(row.tag as number) || [],
             enterEvent: enterEventsById.get(row.tag as number) || null,
-            questMark: row.UNK1 > 0 ? { minLevel: row.levelLimLo as number, maxLevel: row.levelLimHi as number, classIds: row.UNK2 as number[] } : null,
+            questMark: row.quest_be > 0 ? { minLevel: row.levelLimLo as number, maxLevel: row.levelLimHi as number, classIds: row.class_limit as number[] } : null,
             // Engine.dll NpcDataLoad 0x73205d/0x7320ad and 0x732103..0x732159.
             sounds: {
                 defense: { sounds: (row.sound2 as string[]).slice(0, 5), volume: row.soundVolume as number, radius: row.soundRadius as number },

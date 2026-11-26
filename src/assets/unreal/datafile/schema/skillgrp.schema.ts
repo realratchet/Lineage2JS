@@ -16,8 +16,8 @@ export const SCHEMA_SKILLGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "is_ench" },
     { type: "uint32", name: "ench_skill_id" },
     { type: "uint32", name: "hp_consume" },
-    { type: "int32", name: "UNK_0" },
-    { type: "int32", name: "UNK_1" }
+    { type: "int32", name: "rumble_self" },
+    { type: "int32", name: "rumble_target" }
 ];
 
 export default SCHEMA_SKILLGRP_DAT;

@@ -1489,14 +1489,16 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }, "", 0, SystemMessage_T.EnterClanToExpel);
     }
 
-    public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) { this.yesNoDialogBox.show(
-        this.formatSystemMessage([SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution], name),
-        DialogType_T.YES_NO,
-        onAnswer,
-        true,
-        10000,
-        [SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution]
-    ); }
+    public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) {
+        this.yesNoDialogBox.show(
+            this.formatSystemMessage([SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution], name),
+            DialogType_T.YES_NO,
+            onAnswer,
+            true,
+            10000,
+            [SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution]
+        );
+    }
     public showTradeInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.TradeInvitation, name), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.TradeInvitation); }
     public showAllyInvite(requestor: string, allyName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.AllianceInvitation, requestor, allyName), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.AllianceInvitation); }
     public showPledgeInvite(requestor: string, pledgeName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.ClanInvitation, requestor, pledgeName), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.ClanInvitation); }
@@ -2724,7 +2726,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected applyGameOptions(options: Partial<GameOptions_T>) {
-        if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error(`Invalid game options.`);
+        if (!options || typeof options !== "object" || Array.isArray(options))
+            throw new Error(`Invalid game options.`);
 
         for (const [key, value] of Object.entries(options)) {
             switch (key) {
@@ -2783,32 +2786,42 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true, ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
         this.nwindow.setWindowKeyBindings(this.options.game.windowKeyBindings);
-        for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd])
-            if (wnd) wnd.updateKeyBindings();
+
+        for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd]) {
+            wnd?.updateKeyBindings();
+        }
+
         asset.playerController.isEnterChatting = this.options.game.enterChatting;
+
         this.manGame.getComponent("input").setInvertMouseWheel(this.options.game.invertMouseWheel);
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
         this.manRender.setStaticMeshLod(this.options.game.staticMeshLod);
         this.manRender.setSortTransparent(this.options.game.sortTransparent);
+
         this.manRender.skillLightProbe.mode = this.options.game.skillEffectLighting;
+
         this.manRender.setRenderDeco(this.options.game.renderDeco);
         this.manRender.setUseTrilinear(this.options.game.useTrilinear);
         this.manRender.setTextureDetail(this.options.game.textureDetail);
         this.manRender.setAntiAliasing(this.options.game.antiAliasing);
+
         document.documentElement.classList.toggle("nwindow-default-cursor", !this.options.game.useColorCursor);
+
         if (this.chatWnd) {
             this.chatWnd.setSystemMsgWnd(this.options.game.systemMsgWnd);
             this.chatWnd.setOldChatting(this.options.game.oldChatting);
             this.chatWnd.setSystemMessageFilters(this.options.game.systemMsgWndDamage, this.options.game.systemMsgWndExpendableItem);
         }
+
         this.layer.setTransparencyMode(this.screen === "world" && this.options.game.transparencyMode);
         this.nwindow.invalidate();
         this.updateTitle();
     }
 
     protected applyUIScale(scale: number) {
-        if (!UI_SCALES.includes(scale)) throw new Error(`Invalid UI scale '${scale}'.`);
+        if (!UI_SCALES.includes(scale))
+            throw new Error(`Invalid UI scale '${scale}'.`);
 
         this.nwindow.setUIScale(scale);
         this.layer.resize();
@@ -2841,9 +2854,14 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 if (!["all", "combat", "notices", "none"].includes(value as string)) throw new Error(`Invalid background audio '${value}'.`);
                 continue;
             }
-            if (!["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"].includes(key)) throw new Error(`Unknown audio option '${key}'.`);
-            if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new Error(`Invalid audio option '${key}'.`);
+
+            if (!["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"].includes(key))
+                throw new Error(`Unknown audio option '${key}'.`);
+
+            if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)
+                throw new Error(`Invalid audio option '${key}'.`);
         }
+
         this.options.audio = { ...this.manNetwork.getParent().getComponent("asset").userConfig.audio, backgroundAudio: "notices", ...options };
         const audio = this.manNetwork.getParent().getComponent("audio");
 
@@ -2854,8 +2872,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         audio.setMusicVolume(this.options.audio.musicVolume);
         audio.setWavVoiceVolume(this.options.audio.wavVoiceVolume);
         audio.setOggVoiceVolume(this.options.audio.oggVoiceVolume);
+
         if (this.options.audio.musicVolume === 0) audio.cancelMusic();
         else if (wasMusicOff) this.manRender.cancelMusic();
+
         if (this.options.audio.wavVoiceVolume === 0) audio.stopAllVoice(false);
         if (this.options.audio.oggVoiceVolume === 0) audio.stopAllVoice(true);
     }
