@@ -605,7 +605,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.manorSeedSettingWnd = this.skin.createManorSeedSettingWnd(this.layer);
         this.manorCropSettingWnd = this.skin.createManorCropSettingWnd(this.layer);
         for (const wnd of [this.manorSeedSettingWnd, this.manorCropSettingWnd]) {
-            wnd.setAlertHandler(text => this.dialogBox.show(text, DialogType_T.OK, null, true, 0, undefined, true));
+            wnd.setAlertHandler(text => this.dialogBox.show(text, DialogType_T.OK, null, true, 0, SystemMessage_T.NoMessage, true));
             wnd.onConfirm = (text, onOk) => this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true);
         }
         this.manorSeedSettingWnd.onSubmit = (manorId, items) => network.setManorSeeds(manorId, items);
@@ -1471,13 +1471,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     protected siegeConfirm(id: SystemMessage_T, name: string, onOk: () => void) { this.dialogBox.show(this.formatSystemMessage(id, name), DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true, 0, id); }
     protected confirmLink(text: string, onOk: () => void) { this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }); }
-    protected confirm(text: string, onYes: () => void, messageId?: SystemMessage_T) { this.lobbyDialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
+    protected confirm(text: string, onYes: () => void, messageId = SystemMessage_T.NoMessage) { this.lobbyDialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
     public showNotice(messageId: SystemMessage_T) { this.dialogBox.show(this.nwindow.getSystemMessage(messageId), DialogType_T.OK, null, true, 0, messageId); }
 
     public playSystemMessageSound(id: SystemMessage_T) { this.nwindow.playSystemMessageSound(id); }
 
     public showConfirm(messageId: SystemMessage_T, text: string, onAnswer: (isOk: boolean) => void) {
-        if (messageId === 0) this.dialogBox.hide();
+        if (messageId === SystemMessage_T.NoMessage) this.dialogBox.hide();
         else this.dialogBox.show(text, DialogType_T.OK_CANCEL, onAnswer, messageId !== SystemMessage_T.ResurrectionInvitation, 0, messageId); // NCGaraDialogBox::SetDialog, NWindow RVA 0x8b90: replacement does not decline resurrection.
     }
 

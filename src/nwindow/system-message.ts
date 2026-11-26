@@ -1,5 +1,6 @@
 // systemmsg-e.dat
 export enum SystemMessage_T {
+    NoMessage = 0,
     AttackAvoided = 42,
     CriticalHit = 44,
     UseSkill = 46,
@@ -22,6 +23,7 @@ export enum SystemMessage_T {
     ConfirmQuitGame = 125,
     ConfirmRestartGame = 126,
     CharacterCreationFailed = 128,
+    IncorrectTarget = 144,
     TargetNotInGame = 145,
     CannotDiscardHere = 179,
     ConfirmQuitQuest = 182,
@@ -30,6 +32,7 @@ export enum SystemMessage_T {
     IncorrectCharacterName = 205,
     InvalidClanCrestFormat = 211,
     ClanLeaderCannotWithdraw = 239,
+    SelectTarget = 242,
     EnterTitle = 256,
     ClanDissolutionAlreadyRequested = 263,
     CharacterDeletionFailed = 306,

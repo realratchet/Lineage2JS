@@ -1263,7 +1263,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 if (target && target.kind !== "npc") this.community.evaluate(target.objectId);
                 else {
-                    const messageId = target ? 144 : 242;
+                    const messageId = target ? SystemMessage_T.IncorrectTarget : SystemMessage_T.SelectTarget;
 
                     this.ui.addSystemMessage(this.ui.getStrings().systemMessages[messageId], 0xffb09b79);
                     this.community.playSystemMessageSound(messageId);
