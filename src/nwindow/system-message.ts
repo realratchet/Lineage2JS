@@ -1,6 +1,5 @@
 // systemmsg-e.dat
 export enum SystemMessage_T {
-    NoMessage = 0,
     AttackAvoided = 42,
     CriticalHit = 44,
     UseSkill = 46,
