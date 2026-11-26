@@ -32,6 +32,7 @@ export class NetworkCommunity {
     public readonly clanLargeCrestIds = new Map<number, number>();
     public readonly allyCrests = new Map<number, Uint8Array>();
     public questArrowDestination: GamePackets.Location_T = null;
+    public isQuestArrowOn = false;
     public readonly mapMarkers: GamePackets.Location_T[] = [];
     public readonly radarMarkers: GamePackets.Location_T[] = [];
     protected readonly radarState: RadarState_T = { party: [], target: null, markers: this.radarMarkers };
@@ -85,9 +86,9 @@ export class NetworkCommunity {
 
         render.questArrow.createEffect = path => asset.createScriptObject(render, library, path);
         render.questArrow.canDraw = () => this.network.actors.inWorld && !this.network.movement.isObserving();
-        render.questArrow.getDestination = () => this.network.ui.isQuestArrowEnabled() ? this.questArrowDestination : null;
+        render.questArrow.getDestination = () => this.isQuestArrowOn && this.network.ui.isQuestArrowEnabled() ? this.questArrowDestination : null;
         render.questArrow.onArrival = () => {
-            this.questArrowDestination = null;
+            this.isQuestArrowOn = false;
             this.radarMarkers.length = 0;
             this.mapMarkers.length = 0;
             this.network.ui.setMapMarkers(this.mapMarkers);
@@ -853,6 +854,7 @@ export class NetworkCommunity {
         switch (radar.action) {
             case GamePackets.RadarAction_T.ADD:
                 this.questArrowDestination = { x: radar.x, y: radar.y, z: radar.z };
+                this.isQuestArrowOn = true;
                 if (radar.type === GamePackets.RadarType_T.RADAR || radar.type === GamePackets.RadarType_T.BOTH) this.radarMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
                 if (radar.type === GamePackets.RadarType_T.MAP || radar.type === GamePackets.RadarType_T.BOTH) this.mapMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
                 break;
@@ -869,7 +871,7 @@ export class NetworkCommunity {
                         if (marker.x === radar.x && marker.y === radar.y && marker.z === radar.z) this.mapMarkers.splice(i, 1);
                     }
             } break;
-            case GamePackets.RadarAction_T.CLEAR: this.questArrowDestination = null; this.radarMarkers.length = this.mapMarkers.length = 0; break;
+            case GamePackets.RadarAction_T.CLEAR: this.isQuestArrowOn = false; this.radarMarkers.length = this.mapMarkers.length = 0; break;
             default: throw new Error(`Unknown RadarControl action '${radar.action}'.`);
         }
 

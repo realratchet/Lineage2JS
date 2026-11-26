@@ -13,7 +13,7 @@ const TEX_SELECT_END = SKIN_SLOTS.listSelectEnd;
 const TEX_OUTLINE = "L2UI_CH3.Etc.menu_outline";
 
 type QuestNode_T = { kind: number, info: QuestInfo_T, completed: boolean, expanded: boolean, selected: boolean, children: QuestNode_T[], available: number[] };
-export type QuestLocation_T = { id: number, name: string, x: number, y: number, z: number, unk0: number };
+export type QuestLocation_T = { id: number, name: string, x: number, y: number, z: number, isHuntingTarget: boolean };
 
 export function createQuestHelp(layer: NDomLayer, parent: HTMLElement, anchor: HTMLElement, count: number) {
     const canvas = layer.getManager().canvas;
@@ -119,10 +119,9 @@ export class NCQuestWnd {
 
     public setStrings(strings: GameStrings_T) { this.strings = strings; }
     public getLocation() { return this.location; }
+    public getLocationChecked() { return this.isLocationChecked; }
 
     public clearLocation() {
-        if (!this.location) return;
-
         this.location = null;
         if (this.onLocationChange) this.onLocationChange(null);
     }
@@ -288,7 +287,7 @@ export class NCQuestWnd {
         } else {
             layer.text(this.list.content, title, 0xffdcdcdc, undefined, x + 19, y);
             if (info.entityName) layer.tile(this.list.content, x + 24 + width, y, 11, 11, 0, 0, 11, 11, `${TEX_PATH}QuestWndInfoIcon_5`);
-            if (node.completed && info.unk1) layer.text(this.list.content, this.strings.sysStrings[SysString_T.Complete], 0xffb09b79, undefined, x + width + (info.entityName ? 40 : 24), y);
+            if (node.completed && info.showsProgressComplete) layer.text(this.list.content, this.strings.sysStrings[SysString_T.Complete], 0xffb09b79, undefined, x + width + (info.entityName ? 40 : 24), y);
             height = 19;
         }
         if (node.expanded) for (const child of node.children) height += this.paintNode(child, node.children, x + 7, y + height);
@@ -308,7 +307,7 @@ export class NCQuestWnd {
         info.itemIds.forEach((id, index) => {
             const itemY = y + textHeight + index * 37;
             const required = info.itemCounts[index] | 0;
-            const available = node.completed && info.unk2 ? this.strings.sysStrings[SysString_T.Complete] : String(node.available[index]);
+            const available = node.completed && info.showsItemsComplete ? this.strings.sysStrings[SysString_T.Complete] : String(node.available[index]);
             const target = required > 0 ? String(required) : required === 0 ? this.strings.sysStrings[SysString_T.Unlimited] : `${-required | 0}${this.strings.sysStrings[SysString_T.Abnormal]}`;
 
             layer.tile(this.list.content, x, itemY + 5, 32, 32, 0, 0, 32, 32, this.strings.itemIcons[id]);
@@ -326,7 +325,7 @@ export class NCQuestWnd {
         if (!this.isLocationChecked || !node || node.kind !== 2 || node.completed || !node.info.entityName) { this.clearLocation(); return; }
 
         const info = node.info;
-        const location = { id: info.id, name: info.entityName, x: info.questX, y: info.questY, z: info.questZ, unk0: info.unk0 };
+        const location = { id: info.id, name: info.entityName, x: info.questX, y: info.questY, z: info.questZ, isHuntingTarget: info.isHuntingTarget };
 
         this.location = location;
         if (this.onLocationChange) this.onLocationChange(location);

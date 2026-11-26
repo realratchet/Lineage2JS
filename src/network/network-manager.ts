@@ -684,6 +684,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.movement.specialCamera = null;
         this.movement.cameraMode = 0;
         this.community.questArrowDestination = null;
+        this.community.isQuestArrowOn = false;
         this.manGame.getComponent("render").questArrow.reset();
         this.community.mapMarkers.length = 0;
         this.ui.setMapMarkers(this.community.mapMarkers);

@@ -588,10 +588,11 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.calcWnd = this.skin.createCalcWnd(this.layer);
         this.questListInfoWnd = this.skin.createQuestListInfoWnd(this.layer);
         this.questListInfoWnd.onLocation = quest => {
-            const location = { id: quest.id, name: this.strings.npcNames[quest.unk3], x: quest.entityX, y: quest.entityY, z: quest.entityZ, unk0: quest.unk0 };
+            const location = { id: quest.id, name: this.strings.npcNames[quest.startNpcId], x: quest.entityX, y: quest.entityY, z: quest.entityZ, isHuntingTarget: quest.isHuntingTarget };
 
             this.mapWnd.setQuestLocation(location);
             this.manNetwork.community.questArrowDestination = location;
+            this.manNetwork.community.isQuestArrowOn = true;
             this.manNetwork.community.mapMarkers.length = 0;
             this.mapWnd.setTargetLocations(this.manNetwork.community.mapMarkers);
         };
@@ -1305,12 +1306,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.mapWnd.openPosition(position.x, position.y, position.z);
         };
         this.townMapWnd = this.skin.createTownMapWnd(this.layer);
-        this.mainWnd.questWnd.onLocationChange = location => {
-            const previous = this.mapWnd.getQuestLocation();
-
+        this.mainWnd.questWnd.onLocationChange = location => { // NWindow Quest paint 0x100ec51c..57f raises the arrow only for an npc target; clear 0x100ec100.
             this.mapWnd.setQuestLocation(location);
-            if (location && (location.unk0 === 0 || previous && network.community.questArrowDestination === previous)) network.community.questArrowDestination = location;
-            else if (!location && network.community.questArrowDestination === previous) network.community.questArrowDestination = null;
+            if (!location) network.community.isQuestArrowOn = false;
+            else {
+                network.community.questArrowDestination = location;
+                if (!location.isHuntingTarget) network.community.isQuestArrowOn = true;
+            }
         };
         this.macroWnd = this.skin.createMacroWnd(this.layer);
         this.macroWnd.shortcuts = network.items.shortcuts;
@@ -2827,7 +2829,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public isAutoTrackingPawnEnabled() { return this.options.game.autoTrackingPawn; }
 
-    public isQuestArrowEnabled() { return this.options.game.arrowMode; }
+    public isQuestArrowEnabled() { return this.options.game.arrowMode && this.mainWnd.questWnd.getLocationChecked(); } // NWindow 0x100826e0
 
     public getGameOptions() { return { ...this.options.game, windowKeyBindings: { ...this.options.game.windowKeyBindings } }; }
 
