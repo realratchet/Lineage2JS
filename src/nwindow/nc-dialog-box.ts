@@ -119,7 +119,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
             this.layer.place(this.element, Math.trunc(screenWidth * 0.5 - 128), Math.trunc(screenHeight * 0.5 - 54));
     }
 
-    public show(text: string, type: DialogType_T, onResult: (isOk: boolean, value?: string) => void, cancelOnReplace = true, timerDuration = 0, messageId = 0, isModal = false) {
+    public show(text: string, type: DialogType_T, onResult: (isOk: boolean, value?: string) => void, cancelOnReplace = true, timerDuration = 0, messageId?: SystemMessage_T, isModal = false) {
         const manager = this.layer.getManager();
 
         if (this.isOpen()) {
@@ -184,7 +184,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         }
     }
 
-    public showQuantity(text: string, allCount: number, consumeType: number, onResult: (count: number, value?: string) => void, onError: (messageId: number) => void, isOverride = false, messageId = 0) {
+    public showQuantity(text: string, allCount: number, consumeType: number, onResult: (count: number, value?: string) => void, onError: (messageId: SystemMessage_T) => void, isOverride = false, messageId?: SystemMessage_T) {
         this.show(text, DialogType_T.OK_CANCEL, (isOk, value) => {
             if (!isOk) return;
 
@@ -205,7 +205,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         this.quantityEditor.focus();
     }
 
-    public showText(text: string, onResult: (value: string) => boolean, value = "", widthLimit = 0, messageId = 0) {
+    public showText(text: string, onResult: (value: string) => boolean, value = "", widthLimit = 0, messageId?: SystemMessage_T) {
         this.show(text, DialogType_T.OK_CANCEL, null, true, 0, messageId);
         this.onTextResult = onResult;
         this.textEditor.hidden = false;

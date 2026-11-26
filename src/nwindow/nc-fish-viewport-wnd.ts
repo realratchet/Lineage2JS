@@ -103,7 +103,7 @@ export class NCFishViewportWnd {
         this.paint();
     }
 
-    protected setMessage(id: number, delta: number, penalty = 0) {
+    protected setMessage(id: SysString_T, delta: number, penalty = 0) {
         this.message = penalty > 0 ? this.formatSystemMessage(id, String(penalty)) : this.layer.getManager().getSysString(id);
         this.delta = delta;
         this.redMessage = penalty > 0 || delta > 0;

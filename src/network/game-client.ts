@@ -6,6 +6,9 @@ import L2ReplayFile, { type ReplayCameraInstruction_T, type ReplayPacket_T } fro
 import L2ReplayRecorder, { isReplayPacket } from "./l2-replay-recorder";
 import * as GamePackets from "./game-packets";
 import type { SessionKey_T } from "./login-client";
+import { CommandType_T, ActionType_T } from "./command-parser";
+import SystemMessage_T from "../nwindow/system-message";
+import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 
 type GamePacketHandler_T = (opcode: GamePackets.GameServerPacket_T, packet: PacketReader) => void;
 type ReplayPlayback_T = { file: L2ReplayFile, time: number, duration: number, packetIndex: number, cameraIndex: number, lockCamera: boolean, useChatData: boolean, prepared: boolean, ended: boolean, paused: boolean, speed: number };
@@ -91,14 +94,14 @@ export class GameClient {
     public isReplayPaused() { return !!this.replayPlayback?.paused; }
     public useCameraInst() { return !!this.replayPlayback?.lockCamera; }
     public getReplayPlaySpeed() { return this.replayPlayback?.speed ?? 1; }
-    public inputReplay(key: number, action: number): boolean {
+    public inputReplay(key: EInputKey_T, action: EInputAction_T): boolean {
         const playback = this.replayPlayback;
 
-        if (!playback || key !== 32 && key !== 107 && key !== 109 || action !== 1 && action !== 3) return false;
-        if (action === 3) {
-            if (key === 32) playback.paused = !playback.paused;
-            else if (key === 107 && playback.speed <= 4) playback.speed *= 2;
-            else if (key === 109 && playback.speed >= 0.25) playback.speed *= 0.5;
+        if (!playback || key !== EInputKey_T.IK_Space && key !== EInputKey_T.IK_GreyPlus && key !== EInputKey_T.IK_GreyMinus || action !== EInputAction_T.IST_Press && action !== EInputAction_T.IST_Release) return false;
+        if (action === EInputAction_T.IST_Release) {
+            if (key === EInputKey_T.IK_Space) playback.paused = !playback.paused;
+            else if (key === EInputKey_T.IK_GreyPlus && playback.speed <= 4) playback.speed *= 2;
+            else if (key === EInputKey_T.IK_GreyMinus && playback.speed >= 0.25) playback.speed *= 0.5;
         }
         return true;
     }
@@ -225,7 +228,7 @@ export class GameClient {
         .d(itemId)
         .d(isEnabled ? 1 : 0)); }
     public requestSkillCoolTime() { this.send(this.write(GamePackets.GameClientPacket_T.RequestSkillCoolTime)); }
-    public dlgAnswer(messageId: number, isOk: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.DlgAnswer).d(messageId).d(isOk ? 1 : 0)); }
+    public dlgAnswer(messageId: SystemMessage_T, isOk: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.DlgAnswer).d(messageId).d(isOk ? 1 : 0)); }
     public appearing() { this.send(this.write(GamePackets.GameClientPacket_T.Appearing)); }
     public logout() { this.send(this.write(GamePackets.GameClientPacket_T.Logout)); }
     public requestRestart() { this.send(this.write(GamePackets.GameClientPacket_T.RequestRestart)); }
@@ -234,7 +237,7 @@ export class GameClient {
     public changeMoveType(isRunning: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.ChangeMoveType2).d(isRunning ? 1 : 0)); }
     public changeWaitType(isStanding: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.ChangeWaitType2).d(isStanding ? 1 : 0)); }
     public requestSocialAction(actionId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSocialAction).d(actionId)); }
-    public requestActionUse(actionId: number, ctrl: boolean, shift: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestActionUse).d(actionId).d(ctrl ? 1 : 0).c(shift ? 1 : 0)); }
+    public requestActionUse(actionId: ActionType_T, ctrl: boolean, shift: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestActionUse).d(actionId).d(ctrl ? 1 : 0).c(shift ? 1 : 0)); }
     public requestMagicSkillUse(skillId: number, ctrl: boolean, shift: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestMagicSkillUse).d(skillId).d(ctrl ? 1 : 0).c(shift ? 1 : 0)); }
     public requestBypassToServer(command: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestBypassToServer).S(command)); }
     public requestJoinPledge(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestJoinPledge).d(objectId)); }
@@ -561,7 +564,7 @@ export class GameClient {
     public requestQuestAbort(questId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestQuestAbort).d(questId)); }
     public requestDeleteMacro(id: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestDeleteMacro).d(id)); }
     public requestShortCutDel(slot: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestShortCutDel).d(slot)); }
-    public requestUserCommand(id: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestUserCommand).d(id)); }
+    public requestUserCommand(id: CommandType_T) { this.send(this.write(GamePackets.GameClientPacket_T.RequestUserCommand).d(id)); }
     public requestRemainTime() { this.send(this.write(GamePackets.GameClientPacket_T.RequestRemainTime)); }
     public requestEvaluate(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestEvaluate).d(objectId)); }
     public requestShowBoard(unknown: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestShowBoard).d(unknown)); }

@@ -2,6 +2,7 @@ import type NetworkManager from "./network-manager";
 import { CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT } from "@l2js/engine/datafile/schema/armorgrp.schema";
 import * as GamePackets from "./game-packets";
 import PacketReader from "./packet-reader";
+import SystemMessage_T from "../nwindow/system-message";
 
 export class NetworkItems {
     public readonly shortcuts = new Map<number, GamePackets.ShortCut_T>();
@@ -297,8 +298,8 @@ export class NetworkItems {
 
         const strings = this.network.ui.getStrings();
 
-        this.network.ui.addSystemMessage(strings.systemMessages[307], strings.systemMessageColors[307]);
-        this.network.community.playSystemMessageSound(307);
+        this.network.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.WarehouseTradeFailed], strings.systemMessageColors[SystemMessage_T.WarehouseTradeFailed]);
+        this.network.community.playSystemMessageSound(SystemMessage_T.WarehouseTradeFailed);
     }
 
     public onShopPreviewInfo(packet: PacketReader) {
@@ -1001,7 +1002,7 @@ export class NetworkItems {
         const player = this.network.getParent().getComponent("render").player;
 
         if (player.getUnrealScriptProperty("bGetOnVehicle")) {
-            this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(179), 0xffdcdcdc);
+            this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(SystemMessage_T.CannotDiscardHere), 0xffdcdcdc);
             return;
         }
 

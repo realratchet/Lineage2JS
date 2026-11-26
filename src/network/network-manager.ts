@@ -27,6 +27,8 @@ import type GameManager from "../game/game-manager";
 import type MovableObject from "../objects/movable-object";
 import type { ICollidable } from "../objects/objects";
 import { getDistance } from "./network-location";
+import SystemMessage_T from "../nwindow/system-message";
+import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 
 const TARGET_COMMAND_DELAY = Math.fround(0.001);
 const tmpPlayerLocation = new Vector3();
@@ -68,11 +70,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return Math.fround(Math.fround(deltaTime / 1000) * (this.session.replayLoading || this.session.replayStopAt >= 0 ? 1 : this.session.game.getReplayPlaySpeed())) * 1000;
     }
 
-    public inputReplay(key: number, action: number): boolean {
+    public inputReplay(key: EInputKey_T, action: EInputAction_T): boolean {
         if (!this.isPlayingReplay()) return false;
-        if (key !== 27) return this.session.game.inputReplay(key, action);
-        if (action !== 1 && action !== 3) return false;
-        if (action === 3) this.session.requestReplayStop();
+        if (key !== EInputKey_T.IK_Escape) return this.session.game.inputReplay(key, action);
+        if (action !== EInputAction_T.IST_Press && action !== EInputAction_T.IST_Release) return false;
+        if (action === EInputAction_T.IST_Release) this.session.requestReplayStop();
 
         return true;
     }
@@ -200,30 +202,30 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case CommandType_T.findprivatestore: this.items.findPrivateStore(tokens[1] || ""); break;
             case CommandType_T.sit: case CommandType_T.stand: this.session.game.changeWaitType(type === CommandType_T.stand); break;
             case CommandType_T.walk: case CommandType_T.run: this.session.game.changeMoveType(type === CommandType_T.run); break;
-            case CommandType_T.attack: case CommandType_T.attackforce: case CommandType_T.attackstand: this.useAction(2, type === CommandType_T.attackforce, type === CommandType_T.attackstand); break;
-            case CommandType_T.trade: this.useAction(3); break;
-            case CommandType_T.targetnext: this.useAction(4, false, isShift); break;
-            case CommandType_T.pickup: this.useAction(5, false, isShift); break;
-            case CommandType_T.assist: this.useAction(6, false, isShift); break;
+            case CommandType_T.attack: case CommandType_T.attackforce: case CommandType_T.attackstand: this.useAction(ActionType_T.attack, type === CommandType_T.attackforce, type === CommandType_T.attackstand); break;
+            case CommandType_T.trade: this.useAction(ActionType_T.trade); break;
+            case CommandType_T.targetnext: this.useAction(ActionType_T.targetnext, false, isShift); break;
+            case CommandType_T.pickup: this.useAction(ActionType_T.Pickup, false, isShift); break;
+            case CommandType_T.assist: this.useAction(ActionType_T.assist, false, isShift); break;
             case CommandType_T.allyinvite: {
                 const target = this.community.getSelectedPlayer();
 
                 if (target && target.actor) {
-                    this.ui.addSystemMessage(strings.systemMessages[510], 0xffb09b79);
+                    this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.InvitedToAlliance], 0xffb09b79);
                     this.community.requestJoinAlly(target.objectId);
-                } else this.ui.addSystemMessage(strings.systemMessages[511], 0xffb09b79);
+                } else this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.SelectUserToInvite], 0xffb09b79);
                 break;
             }
-            case CommandType_T.allyleave: this.ui.showConfirm(512, strings.systemMessages[512], isOk => { if (isOk) this.community.leaveAlly(); }); break;
+            case CommandType_T.allyleave: this.ui.showConfirm(SystemMessage_T.ConfirmWithdrawAlliance, strings.systemMessages[SystemMessage_T.ConfirmWithdrawAlliance], isOk => { if (isOk) this.community.leaveAlly(); }); break;
             case CommandType_T.allyoust: this.ui.showAllyDismiss(); break;
-            case CommandType_T.allydismiss: this.ui.showConfirm(514, strings.systemMessages[514], isOk => { if (isOk) this.community.dissolveAlly(); }); break;
+            case CommandType_T.allydismiss: this.ui.showConfirm(SystemMessage_T.ConfirmDissolveAlliance, strings.systemMessages[SystemMessage_T.ConfirmDissolveAlliance], isOk => { if (isOk) this.community.dissolveAlly(); }); break;
             case CommandType_T.allyinfo: this.community.requestAllyInfo(); break;
             case CommandType_T.allycrest: this.ui.clanAction("setAllyCrest", null); break;
             case CommandType_T.clanwarstart: case CommandType_T.clanwarstop: this.ui.clanAction(type === CommandType_T.clanwarstart ? "declareWar" : "endWar", null); break;
             case CommandType_T.deletealliancecrest: this.community.setAllyCrest(new Uint8Array(0)); break;
             case CommandType_T.target: {
                 if (tokens.length < 2) {
-                    this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]);
+                    this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.WriteNameAfterCommand], strings.systemMessageColors[SystemMessage_T.WriteNameAfterCommand]);
                     break;
                 }
 
@@ -272,7 +274,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 if (tokens[1]) this.community.inviteToCommandChannel(tokens[1]);
                 else if (target && target.kind !== "npc") this.community.inviteToCommandChannel(target.name);
-                else this.ui.addSystemMessage(strings.systemMessages[1530], 0xffb09b79);
+                else this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.SelectTargetOrEnterName], 0xffb09b79);
                 break;
             }
             case CommandType_T.banchannel: {
@@ -280,14 +282,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 if (tokens.length > 1) this.community.oustFromCommandChannel(tokens.slice(1).join(" "));
                 else if (target && target.kind !== "npc") this.community.oustFromCommandChannel(target.name);
-                else this.ui.addSystemMessage(strings.systemMessages[1530], 0xffb09b79);
+                else this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.SelectTargetOrEnterName], 0xffb09b79);
                 break;
             }
             case CommandType_T.friendinvite: case CommandType_T.frienddel: case CommandType_T.block: case CommandType_T.unblock: {
                 const target = type === CommandType_T.block ? this.community.getSelectedPlayer() : null;
                 const name = tokens.length > 1 ? tokens.slice(1).join(" ") : target ? target.name : null;
 
-                if (name === null) this.ui.addSystemMessage(strings.systemMessages[1256], 0xffb09b79);
+                if (name === null) this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.WriteNameAfterCommand], 0xffb09b79);
                 else if (type === CommandType_T.friendinvite) this.session.game.requestFriendInvite(name);
                 else if (type === CommandType_T.frienddel) this.community.deleteFriend(name);
                 else this.community.block(type === CommandType_T.block ? GamePackets.BlockType_T.BLOCK : GamePackets.BlockType_T.UNBLOCK, name);
@@ -305,15 +307,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case CommandType_T.socialwaitinga:
             case CommandType_T.sociallaugh: this.session.game.requestSocialAction(type - 41); break;
             case CommandType_T.socialapplause: case CommandType_T.socialdance: case CommandType_T.socialsad: this.session.game.requestSocialAction(type - 43); break;
-            case CommandType_T.sitstand: this.useAction(0); break;
+            case CommandType_T.sitstand: this.useAction(ActionType_T.sitstand); break;
             case CommandType_T.walkrun: this.useAction(ActionType_T.walkrun); break;
             case CommandType_T.mountdismount: this.useAction(ActionType_T.mountdismount); break;
             case CommandType_T.start_videorecording: this.session.startReplayRecording(); break;
             case CommandType_T.end_videorecording: this.session.stopReplayRecording(); break;
-            case CommandType_T.startend_videorecording: this.useAction(55); break;
+            case CommandType_T.startend_videorecording: this.useAction(ActionType_T.recstartstop); break;
             case CommandType_T.useskill: case CommandType_T.useskillforce: case CommandType_T.useskillstand: {
                 if (tokens.length < 2) {
-                    this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]);
+                    this.ui.addSystemMessage(strings.systemMessages[SystemMessage_T.WriteNameAfterCommand], strings.systemMessageColors[SystemMessage_T.WriteNameAfterCommand]);
                     break;
                 }
 
@@ -786,9 +788,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 this.session.lobby.showCreate();
                 break;
             case GamePackets.GameServerPacket_T.CharCreateOk: this.session.onCharCreateOk(packet); break;
-            case GamePackets.GameServerPacket_T.CharCreateFail: this.ui.showMessage(this.ui.getSystemMessage([128, 77, 79, 80, 204][packet.d()])); break; // NWindow 0x100658f0
+            case GamePackets.GameServerPacket_T.CharCreateFail: this.ui.showMessage(this.ui.getSystemMessage([SystemMessage_T.CharacterCreationFailed, SystemMessage_T.CharacterLimitReached, SystemMessage_T.NameAlreadyExists, SystemMessage_T.InvalidCharacterNameLength, SystemMessage_T.InvalidName][packet.d()])); break; // NWindow 0x100658f0
             case GamePackets.GameServerPacket_T.CharDeleteOk: this.session.onCharDeleteOk(packet); break;
-            case GamePackets.GameServerPacket_T.CharDeleteFail: this.ui.showMessage(this.ui.getSystemMessage([undefined, 306, 541, 540][packet.d()])); break; // NWindow 0x10065b40
+            case GamePackets.GameServerPacket_T.CharDeleteFail: this.ui.showMessage(this.ui.getSystemMessage([undefined, SystemMessage_T.CharacterDeletionFailed, SystemMessage_T.CannotDeleteClanMember, SystemMessage_T.CannotDeleteClanLeader][packet.d()])); break; // NWindow 0x10065b40
             case GamePackets.GameServerPacket_T.ActionFailed: this.combat.onActionFailed(); break;
             case GamePackets.GameServerPacket_T.CharSelected: this.session.onCharSelected(packet); break;
             case GamePackets.GameServerPacket_T.UserInfo: this.actors.onUserInfo(packet); break;
@@ -1189,7 +1191,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public useSkill(id: number, ctrl: boolean = false, shift: boolean = false) { return this.combat.useSkill(id, ctrl, shift); }
 
-    public useAction(id: number, ctrl: boolean = false, shift: boolean = false) {
+    public useAction(id: ActionType_T, ctrl: boolean = false, shift: boolean = false) {
         if (!this.actors.inWorld) return;
 
         switch (id) {
@@ -1272,7 +1274,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 const target = this.actors.objects.get(this.getTargetId());
 
                 if (target && target.kind !== "npc") this.community.changePartyLeader(target.name);
-                else this.ui.addSystemMessage(this.ui.getStrings().systemMessages[1400], 0xffb09b79);
+                else this.ui.addSystemMessage(this.ui.getStrings().systemMessages[SystemMessage_T.SelectPartyLeaderTarget], 0xffb09b79);
                 break;
             }
             case ActionType_T.recstartstop:
@@ -1284,8 +1286,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 if (target && target.kind !== "npc") this.community.inviteToCommandChannel(target.name);
                 else {
-                    this.ui.addSystemMessage(this.ui.getStrings().systemMessages[50], 0xffb09b79);
-                    this.community.playSystemMessageSound(50);
+                    this.ui.addSystemMessage(this.ui.getStrings().systemMessages[SystemMessage_T.TargetNotFound], 0xffb09b79);
+                    this.community.playSystemMessageSound(SystemMessage_T.TargetNotFound);
                 }
                 break;
             }
@@ -1398,7 +1400,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public setManorSeeds(manorId: number, items: GamePackets.SeedSettingRequest_T[]) { return this.items.setManorSeeds(manorId, items); }
     public setManorCrops(manorId: number, items: GamePackets.CropSettingRequest_T[]) { return this.items.setManorCrops(manorId, items); }
 
-    public playSystemMessageSound(id: number) { return this.community.playSystemMessageSound(id); }
+    public playSystemMessageSound(id: SystemMessage_T) { return this.community.playSystemMessageSound(id); }
     public getHeroCrest(crestId: number, isAlly: boolean): HTMLCanvasElement { return this.community.getHeroCrest(crestId, isAlly); }
     public getPledgePower() { return this.community.getPledgePower(); }
     public getClanInfo() { return this.community.getClanInfo(); }
@@ -1478,7 +1480,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public deleteFriend(name: string) { return this.community.deleteFriend(name); }
     public sendFriendMessage(receiver: string, message: string) { return this.community.sendFriendMessage(receiver, message); }
     public block(type: GamePackets.BlockType_T, name: string = null) { return this.community.block(type, name); }
-    public userCommand(id: number) { return this.community.userCommand(id); }
+    public userCommand(id: CommandType_T) { return this.community.userCommand(id); }
     public evaluate(objectId: number) { return this.community.evaluate(objectId); }
     public showBoard() { return this.community.showBoard(); }
     public writeBoard(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { return this.community.writeBoard(url, arg1, arg2, arg3, arg4, arg5); }

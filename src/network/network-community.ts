@@ -5,6 +5,8 @@ import * as GamePackets from "./game-packets";
 import PacketReader from "./packet-reader";
 import Radar, { type RadarState_T } from "../rendering/radar";
 import type { NetObject_T } from "./network-actors";
+import { CommandType_T } from "./command-parser";
+import SystemMessage_T from "../nwindow/system-message";
 
 type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number, crest: HTMLCanvasElement, allyCrest: HTMLCanvasElement };
 
@@ -612,7 +614,7 @@ export class NetworkCommunity {
         this.network.ui.showConfirm(message.id, message.text, isOk => this.network.session.game.dlgAnswer(message.id, isOk));
     }
 
-    public playSystemMessageSound(id: number) {
+    public playSystemMessageSound(id: SystemMessage_T) {
         this.network.ui.playSystemMessageSound(id);
     }
 
@@ -1016,7 +1018,7 @@ export class NetworkCommunity {
 
     public block(type: GamePackets.BlockType_T, name: string = null) { if (this.network.actors.inWorld) this.network.session.game.requestBlock(type, name); }
 
-    public userCommand(id: number) { if (this.network.actors.inWorld) this.network.session.game.requestUserCommand(id); }
+    public userCommand(id: CommandType_T) { if (this.network.actors.inWorld) this.network.session.game.requestUserCommand(id); }
 
     public evaluate(objectId: number) { if (this.network.actors.inWorld) this.network.session.game.requestEvaluate(objectId); }
 

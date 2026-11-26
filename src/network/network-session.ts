@@ -14,6 +14,7 @@ import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import { setVector } from "./network-location";
 import { setLoadingProgress, loadingTexts } from "../loading-progress";
+import SystemMessage_T from "../nwindow/system-message";
 
 export enum GMTransferPhase_T { Idle, Queued, Restart, Reconnect, Login, SelectServer, SelectCharacter, Complete }
 
@@ -189,7 +190,7 @@ export class NetworkSession {
         const character = this.characters[slot];
 
         if (slot < 0 || slot >= 7 || !character || character.deleteSeconds > 0 || character.isDeletionMarked) return;
-        if (character.name && !this.network.ui.getScreenCanvas().hasGlyphs(character.name)) { this.network.ui.showMessage(this.network.ui.getSystemMessage(205)); return; }
+        if (character.name && !this.network.ui.getScreenCanvas().hasGlyphs(character.name)) { this.network.ui.showMessage(this.network.ui.getSystemMessage(SystemMessage_T.IncorrectCharacterName)); return; }
 
         this.selectedSlot = slot;
         this.network.ui.showLoading();
@@ -412,7 +413,7 @@ export class NetworkSession {
         file.arrUserIds = [...this.network.actors.objects.keys()];
         this.game.startRecording(file);
         this.network.ui.setReplayRecording(true);
-        this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(1652), this.network.ui.getStrings().systemMessageColors[1652]);
+        this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(SystemMessage_T.ReplayRecordingStarted), this.network.ui.getStrings().systemMessageColors[SystemMessage_T.ReplayRecordingStarted]);
     }
 
     public async stopReplayRecording(): Promise<void> {
@@ -420,7 +421,7 @@ export class NetworkSession {
         const file = this.game.stopRecording(), bytes = file.toBytes();
         this.network.ui.setReplayRecording(false);
         const name = await saveReplayFile(bytes);
-        this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(1653).replace("$s1", name), this.network.ui.getStrings().systemMessageColors[1653]);
+        this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(SystemMessage_T.ReplayFileStored).replace("$s1", name), this.network.ui.getStrings().systemMessageColors[SystemMessage_T.ReplayFileStored]);
     }
 
     public getReplayRecordingTime() { return this.game ? this.game.getRecordingTime() : null; }

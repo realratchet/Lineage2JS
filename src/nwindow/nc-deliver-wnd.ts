@@ -33,7 +33,7 @@ export class NCDeliverWnd extends NCShopWnd {
         this.element.focus();
         await pending;
     }
-    protected getLabelIds() { return [138, 560, 561]; }
+    protected getLabelIds() { return [SysString_T.Inventory, SysString_T.SendingList, SysString_T.SendingFee]; }
     protected drawTotal() { this.drawAmount(this.total, String(this.items[1].length * 1000), 331); }
 }
 

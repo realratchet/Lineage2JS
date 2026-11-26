@@ -2,6 +2,7 @@ import * as GamePackets from "./game-packets";
 import getCommandTokens, { CommandType_T, getSkillCommandId } from "./command-parser";
 import type NetworkManager from "./network-manager";
 import type { NetObject_T } from "./network-actors";
+import SystemMessage_T from "../nwindow/system-message";
 
 const CHAT_CHARACTER_DELAY = Math.fround(0.2);
 const TARGET_COMMAND_DELAY = Math.fround(0.001);
@@ -119,8 +120,8 @@ export class MacroExecutor {
 
     protected cancelRecursiveMacro() {
         for (const execution of this.executions.values()) execution.active = false;
-        this.ui.showNotice(1339); // NWindow 0x10075990, dialog kind 31.
-        this.network.playSystemMessageSound(1339);
+        this.ui.showNotice(SystemMessage_T.MacroAssignedToShortcut); // NWindow 0x10075990, dialog kind 31.
+        this.network.playSystemMessageSound(SystemMessage_T.MacroAssignedToShortcut);
     }
 
     protected getActiveMacroRow(): MacroRow_T {

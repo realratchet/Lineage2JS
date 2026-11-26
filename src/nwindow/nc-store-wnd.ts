@@ -50,7 +50,7 @@ export class NCStoreWnd extends NCShopWnd {
         await this.show(isWithdraw, list.adena, list.items.map(item => ({ ...item, price: 0 })));
     }
 
-    protected getLabelIds() { return this.isSell ? [132, 138, 135] : [138, 132, 135]; }
+    protected getLabelIds() { return this.isSell ? [SysString_T.StoredItems, SysString_T.Inventory, SysString_T.WarehouseFee] : [SysString_T.Inventory, SysString_T.StoredItems, SysString_T.WarehouseFee]; }
     public getLogicalSide(side: number) { return this.isSell ? 1 - side : side; }
     protected getDestinationItems(side: number) {
         const [wnd, targetSide] = this.arrDestinations[this.getLogicalSide(side)];

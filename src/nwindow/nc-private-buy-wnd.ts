@@ -1,5 +1,6 @@
 import NCPrivateShopWnd from "./nc-private-shop-wnd";
 import type { ShopItem_T, PrivateStoreBuyList_T, PrivateStoreManageBuy_T, PrivateStoreBuyItem_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 type PrivateBuyItem_T = ShopItem_T & { ownedCount: number, maxCount: number, referencePrice: number };
 const TEX_ZERO = "NWindow.ChatBack";
@@ -88,7 +89,7 @@ export class NCPrivateBuyWnd extends NCPrivateShopWnd {
 
         return { ...item, ownedCount: item.count, type1: item.type2, customType2: info.weight, enchantLevel: info.templateClass === "weapon" ? info.soulshots : item.enchantLevel, type2: info.templateClass === "armor" ? info.mpBonus : item.type2, maxCount: isListed ? item.maxCount : -1 };
     }
-    protected getLabelIds() { return this.isOwn ? [138, 502, 142] : [503, 137, 143]; }
+    protected getLabelIds() { return this.isOwn ? [SysString_T.Inventory, SysString_T.WishList, SysString_T.BuyListPrice] : [SysString_T.ForSale, SysString_T.ItemsOnSale, SysString_T.SellListPrice]; }
     protected getTooltipContext(side: number) { return this.isOwn ? side ? 0x808 : 0 : side ? 0 : 0x808; }
     public async paintItems(scrollSide = -1) {
         const generation = this.generation + 1;
