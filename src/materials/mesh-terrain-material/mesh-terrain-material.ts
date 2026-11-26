@@ -7,7 +7,7 @@ import type { IDecodedParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 
 const SAMPLERS_PER_LAYER = 2;
-const SAMPLERS_RESERVED = 1;
+const SAMPLERS_RESERVED = 2; // uvsMap, fogInfoMap
 
 let maxTextureUnits = 16;
 

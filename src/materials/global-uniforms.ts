@@ -26,6 +26,10 @@ export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
         shadowMatrix: new Uniform(new Matrix4()),
         shadowDarkness: new Uniform(1),
         shadowActive: new Uniform(0),
+        fogInfoMap: new Uniform(null),
+        fogInfoTexel: new Uniform(new Vector3()),
+        fogInfoRange: new Uniform(1),
+        fogInfoOpacity: new Uniform(0),
     }
 ]) as UniformMap_T);
 

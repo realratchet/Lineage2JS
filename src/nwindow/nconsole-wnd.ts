@@ -296,7 +296,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render");
 
         this.manNetwork = network;
-        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, forceAttackKey: "ctrl", windowKeyBindings: getDefaultWindowKeyBindings(), titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game, invertMouseWheel: false, fogInfoVolumes: false, forceAttackKey: "ctrl", windowKeyBindings: getDefaultWindowKeyBindings(), titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
@@ -2742,6 +2742,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "oldChatting":
                 case "enterChatting":
                 case "invertMouseWheel":
+                case "fogInfoVolumes":
                 case "titleStatus":
                 case "titleStatusCp":
                 case "titleStatusHp":
@@ -2779,7 +2780,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         const asset = this.manNetwork.getParent().getComponent("asset");
 
-        this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, forceAttackKey: "ctrl", titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true, ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
+        this.options.game = { ...asset.userConfig.game, staticMeshLod: asset.userConfig.game.staticMeshLod ?? false, skillEffectLighting: "pawnOnly", invertMouseWheel: false, fogInfoVolumes: false, forceAttackKey: "ctrl", titleStatus: true, titleStatusCp: false, titleStatusHp: true, titleStatusMp: true, ...options, windowKeyBindings: options.windowKeyBindings === undefined ? getDefaultWindowKeyBindings() : validateWindowKeyBindings(options.windowKeyBindings) };
         this.nwindow.setWindowKeyBindings(this.options.game.windowKeyBindings);
         for (const wnd of [this.inventoryWnd, this.menuWnd, this.mainWnd, this.systemMenuWnd])
             if (wnd) wnd.updateKeyBindings();
@@ -2789,6 +2790,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
         this.manRender.setStaticMeshLod(this.options.game.staticMeshLod);
         this.manRender.setSortTransparent(this.options.game.sortTransparent);
+        this.manRender.setFogInfoVolumes(this.options.game.fogInfoVolumes);
         this.manRender.skillLightProbe.mode = this.options.game.skillEffectLighting;
         this.manRender.setRenderDeco(this.options.game.renderDeco);
         this.manRender.setUseTrilinear(this.options.game.useTrilinear);

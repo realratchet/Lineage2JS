@@ -108,6 +108,7 @@ void main() {
     #include <colorspace_fragment>
     #include <fog_fragment>
     if (vRangeAlpha <= ditherNoise) gl_FragColor.rgb = fogColor; // stays opaque so it still occludes bIgnoredRange meshes
+    #include <fog_info_fragment>
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
 }

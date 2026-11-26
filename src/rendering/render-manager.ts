@@ -72,6 +72,7 @@ import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDec
 import Radar from "./radar";
 import OverHeadAlarm from "./over-head-alarm";
 import WideScreenBars from "./wide-screen-bars";
+import FogInfoVolumes from "./fog-info-volumes";
 import QuestArrow from "./quest-arrow";
 import ViewportWindow from "./viewport-window";
 import type PawnFishingComponent from "../objects/components/pawn-fishing-component";
@@ -162,6 +163,7 @@ type PawnLightingState_T = {
 };
 type Disposable_T = { dispose(): void };
 const SWITCH_SKILL_LIGHTS = 1;
+const SWITCH_FOG_INFO = 2;
 
 type SwitchedMaterial_T = THREE.ShaderMaterial & { shaderSwitches?: number, isStaticMeshMaterial?: boolean, isTerrainMaterial?: boolean };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean }, shadowPrograms?: { isReady(): boolean }[] };
@@ -341,6 +343,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly overHeadAlarm = new OverHeadAlarm();
     protected readonly wideScreenBars = new WideScreenBars();
     protected readonly fogBlend = new FogBlendState();
+    protected readonly fogInfoVolumes = new FogInfoVolumes();
     protected shaderSwitches = 0;
     protected fogSource: L2Environment | ZoneObject | FogInfoObject | null = null;
     protected readonly skyColors: ColorByte[] = [];
@@ -497,7 +500,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.pawnCrowd = new PawnCrowd(this.renderer);
         this.renderer.render = (scene, camera) => {
             setReversedDepth(this.renderer, camera.reversedDepth);
-            this.shaderSwitches = this.skillLightProbe.mode === "all" ? SWITCH_SKILL_LIGHTS : 0;
+            this.shaderSwitches = (this.fogInfoVolumes.enabled ? SWITCH_FOG_INFO : 0)
+                | (this.skillLightProbe.mode === "all" ? SWITCH_SKILL_LIGHTS : 0);
             if (scene !== this.scene) {
                 render.call(this.renderer, scene, camera);
                 return;
@@ -1854,6 +1858,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
+    public setFogInfoVolumes(enabled: boolean) {
+        this.fogInfoVolumes.enabled = enabled;
+        this.needsUpdate = true;
+    }
+
     protected applyShaderSwitches(material: THREE.Material | THREE.Material[]) {
         if (Array.isArray(material)) {
             for (const value of material) this.applyShaderSwitches(value);
@@ -1866,8 +1875,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         switched.shaderSwitches = this.shaderSwitches; // alpha core and fringe share one defines object, so the defines alone cannot tell who is stale
         if (!defines) return;
 
-        const hasSkillLights = (switched.isStaticMeshMaterial || switched.isTerrainMaterial) && defines.USE_ACTOR_LIGHTS === undefined;
-        if (!hasSkillLights && defines.USE_WORLD_SKILL_LIGHTS === undefined) return;
+        const hasFog = switched.fog || defines.USE_FOG !== undefined, hasSkillLights = (switched.isStaticMeshMaterial || switched.isTerrainMaterial) && defines.USE_ACTOR_LIGHTS === undefined;
+        if (!hasFog && !hasSkillLights) return;
+        if (hasFog && this.shaderSwitches & SWITCH_FOG_INFO) defines.USE_FOG_INFO = "";
+        else delete defines.USE_FOG_INFO;
         if (hasSkillLights && this.shaderSwitches & SWITCH_SKILL_LIGHTS) defines.USE_WORLD_SKILL_LIGHTS = "";
         else delete defines.USE_WORLD_SKILL_LIGHTS;
         material.needsUpdate = true;
@@ -2592,6 +2603,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (camera === this.camera) {
             if (updateAudio) {
+                this.fogInfoVolumes.fade(fogSource === env, !this.fogSource || this.isCameraCut ? 1 : this.viewShakeDelta / this.fogBlend.totalTime);
                 if (!this.fogSource || this.isCameraCut) {
                     this.fogBlend.snapToTarget(targetFogColor, targetFogStart, targetFogEnd);
                     this.skyColors.length = this.prevSkyColors.length = 0;
@@ -3008,6 +3020,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         GLOBAL_UNIFORMS.shadowActive.value = 0;
         this.skyRenderer.render(this.renderer);
         GLOBAL_UNIFORMS.shadowActive.value = shadowActive;
+        if (!this.getWaterEffects().underWaterEffect.visible) this.fogInfoVolumes.draw(this.renderer, this.camera, this.arrSceneSectors, this.environment.getTimeOfDay(), this.manUI.fogPreset);
 
         this.renderer.clearDepth();
 
@@ -3130,6 +3143,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // Render World
         updateEmitterRenderState(this.scene, this.getPhysicsManager().getParticleEmitters());
         this.drawWorld();
+        GLOBAL_UNIFORMS.fogInfoOpacity.value = 0;
         this.questArrow.draw();
 
         this.getWaterEffects().underWaterEffect.renderCellophane(this.renderer);
