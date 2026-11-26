@@ -2257,8 +2257,8 @@ export class DecodeEngine {
             systemMessages: Object.fromEntries(messages.datarows.map((row: any) => [row.id, row.message])),
             systemMessageGroups: Object.fromEntries(messages.datarows.map((row: any) => [row.id, row.group])),
             systemMessageColors: Object.fromEntries(messages.datarows.map((row: any) => [row.id, ((row.alpha & 0xff) << 24 | row.rgb[2] << 16 | row.rgb[1] << 8 | row.rgb[0]) >>> 0])), // NWindow 0x1005c274 uses the record's rgb + alpha bytes verbatim as an 0xAARRGGBB dword.
-            systemMessageSounds: Object.fromEntries(messages.datarows.filter((row: any) => row.item_sound && row.item_sound !== "None").map((row: any) => [row.id, row.item_sound])),
-            systemMessageVoices: Object.fromEntries(messages.datarows.filter((row: any) => row.sys_msg_ref && row.sys_msg_ref !== "None").map((row: any) => [row.id, row.sys_msg_ref])),
+            systemMessageSounds: Object.fromEntries(messages.datarows.filter((row: any) => row.sound && row.sound !== "None").map((row: any) => [row.id, row.sound])),
+            systemMessageVoices: Object.fromEntries(messages.datarows.filter((row: any) => row.voice && row.voice !== "None").map((row: any) => [row.id, row.voice])),
             sysStrings: Object.fromEntries(sysStrings.datarows.map((row: any) => [row.id, row.name])),
             serverNames: Object.fromEntries(servers.datarows.map((row: any) => [row.server_id + 1, row.server_name])), // servername-e.dat ids are 0-based; login server ids start at 1 (server 1 = Bartz in the L2.4_20 capture).
             skillIcons,
