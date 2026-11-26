@@ -2266,6 +2266,7 @@ export class DecodeEngine {
             skillRecords,
             skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
             npcPassiveSkills: Object.fromEntries(npcGroups.datarows.map((row: any) => [row.tag, row.dtab])),
+            npcHpShowable: Object.fromEntries(npcGroups.datarows.map((row: any) => [row.tag, row.hpshowable !== 0])),
             npcNames: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, row.name])),
             staticObjectNames: Object.fromEntries(staticObjectNames.datarows.map((row: any) => [row.id, row.name])),
             npcTitles: Object.fromEntries(npcNames.datarows.filter((row: any) => row.description).map((row: any) => [row.id, row.description])),

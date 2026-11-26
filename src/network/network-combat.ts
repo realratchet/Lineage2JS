@@ -655,7 +655,10 @@ export class NetworkCombat {
             return;
         }
 
-        this.network.ui.setTarget(object ? { npcId: object.npcId, name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp: object.isSummon ? object.objectId === this.network.actors.petInfo.objectId : object.maxHp > 0, showMp: object.kind !== "npc" && object.maxMp > 0, levelDifference: object.levelDifference } : null); // NCTargetStatusWnd paint 0x10113600: summons show HP + level colour only to their owner.
+        const isNpc = object.kind === "npc";
+        const showHp = isNpc && !object.isSummon && object.isAttackable || object.kind === "user" || object.isSummon && object.objectId === this.network.actors.petInfo.objectId || isNpc && this.network.ui.getStrings().npcHpShowable[object.npcId]; // NCTargetStatusWnd paint 0x10113600; npcgrp hpshowable 0x1009d850.
+
+        this.network.ui.setTarget({ npcId: object.npcId, name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp, showMp: !isNpc || object.isSummon || !object.isAttackable, levelDifference: object.levelDifference }); // 0x101137a3: no MP bar for attackable npcs.
     }
 
     public onFishingStart(packet: PacketReader) {

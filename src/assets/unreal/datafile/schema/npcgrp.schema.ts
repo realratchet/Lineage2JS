@@ -23,8 +23,8 @@ export const SCHEMA_NPCGRP_DAT: ISchemaValue[] = [
     { type: "float", name: "soundRadius" },
     { type: "float", name: "soundVolume" },
     { type: "float", name: "soundRandom" },
-    { type: "uint32", name: "quest" },
-    { type: "uint32", name: "classLim" }
+    { type: "uint32", name: "social" },
+    { type: "uint32", name: "hpshowable" } // Engine.dll NpcDataLoad 0x73238a, serialize 0x718e60: last two dwords are social, hpshowable.
 ];
 
 export default SCHEMA_NPCGRP_DAT;
