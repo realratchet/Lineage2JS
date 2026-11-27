@@ -757,7 +757,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             armor.legs,
             armor.gloves,
             armor.boots,
-            equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel],
+            equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.back, equipment.enchantLevel],
             this.loadSettings.rgbaTextures !== false
         ]);
 

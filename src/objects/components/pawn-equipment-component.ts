@@ -1,5 +1,5 @@
-import { Material, Texture } from "three";
-import { GameObject, ObjectComponent } from "../../game/components";
+import { Material, NormalBlending, Texture } from "three";
+import { COMPONENT_EVENT_NOT_HANDLED, GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type { DecodeLibrary } from "@l2js/engine";
 import ActorMeshComponent from "../../rendering/components/actor-mesh-component";
@@ -8,8 +8,11 @@ import type { IEmitterActorDecodeInfo, IEmitterDecodeInfo } from "@l2js/engine/c
 import type RenderManager from "../../rendering/render-manager";
 import { AnimationComponent, ExtraMeshAnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import type { IWeaponEnchantEffect, IWeaponEnchantMesh } from "@l2js/engine/contracts/pawn";
 import { EQUIPMENT_MESHES_CHANGED_EVENT } from "../../rendering/components/pawn-renderable-component";
+import { PAWN_TELEPORTED_EVENT } from "../../physics/components/pawn-movement-component";
+import CloakSimulation from "../cloak-simulation";
 
 const basePawnSize = Math.fround(Math.sqrt(207));
 
@@ -25,7 +28,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnEquipment";
     protected library: DecodeLibrary;
     protected readonly renderManager: RenderManager;
-    protected readonly items: { object: GameObject; bone: string | number; mesh?: LitSkinnedMesh; animation?: ExtraMeshAnimationComponent }[] = [];
+    protected readonly items: { object: GameObject; bone: string | number; mesh?: LitSkinnedMesh; animation?: ExtraMeshAnimationComponent; cloak?: CloakSimulation }[] = [];
     protected hiddenAnimation: string = null;
     protected weaponScale: number = null;
 
@@ -75,7 +78,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
     protected attachItem(mesh: string, skins: string[], bone: string | number, extraMesh = false): EquippedItem {
         const parent = this.getParent();
-        const boneName = typeof bone === "number" ? bone : parent.getUnrealScriptProperty(bone) as string;
+        const boneName = typeof bone === "number" || bone === "cape_bone" ? bone : parent.getUnrealScriptProperty(bone) as string;
 
         // USubSkeletalMeshInstance::AttachedMeshRender 0x95ee0a..0x95ee1d skips absent direct-slot bones.
         if (!extraMesh && ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"].includes(bone as string)) {
@@ -94,14 +97,30 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         item.scriptProperties.set("ScaleGlow", parent.getUnrealScriptProperty("ScaleGlow"));
         const meshComponent = item.addComponent(new EquipmentMeshComponent(this.library, this.renderManager));
         meshComponent.onUpdate();
-        const animation = extraMesh ? item.addComponent(new ExtraMeshAnimationComponent(this.renderManager, meshComponent.getMesh())) : null;
+        const equipmentMesh = meshComponent.getMesh();
+        if (bone === "cape_bone") {
+            const materials = Array.isArray(equipmentMesh.material) ? equipmentMesh.material : [equipmentMesh.material];
+            for (const material of materials as MeshStaticMaterial[]) {
+                if (!material.isStaticMeshMaterial || material.blending !== NormalBlending || material.depthWrite) continue;
 
-        if (!parent.attachObjectToBone(item, boneName, false)) {
+                material.depthWrite = true;
+                if ("USE_ALPHATEST" in material.defines && material.uniforms.alphaTest.value === 0)
+                    material.uniforms.alphaTest.value = 1e-6;
+            }
+        }
+        const animation = extraMesh ? item.addComponent(new ExtraMeshAnimationComponent(this.renderManager, equipmentMesh)) : null;
+        let cloak: CloakSimulation = null;
+
+        try {
+            if (bone === "cape_bone") cloak = CloakSimulation.create(equipmentMesh);
+            if (!parent.attachObjectToBone(item, boneName, false))
+                throw new Error(`Pawn '${parent.scriptClassId}' cannot attach '${mesh}' to ${bone}.`);
+        } catch (error) {
             item.detachComponents();
-            throw new Error(`Pawn '${parent.scriptClassId}' cannot attach '${mesh}' to ${bone}.`);
+            throw error;
         }
 
-        this.items.push({ object: item, bone, mesh: meshComponent.getMesh(), animation });
+        this.items.push({ object: item, bone, mesh: equipmentMesh, animation, cloak });
         return item;
     }
 
@@ -192,11 +211,20 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
             if (item.animation) item.animation.playOwnerAnimation(name, tween, rate, loop, restart);
     }
 
+    public onEvent(type: string) {
+        if (type !== PAWN_TELEPORTED_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
+
+        for (const item of this.items)
+            if (item.cloak) item.cloak.reset();
+    }
+
     public onUpdate(_currentTime: number, deltaTime: number): void {
         this.updateWeaponScale();
-        const action = this.getParent().getAnimationAction();
-        for (const item of this.items)
+        const parent = this.getParent(), action = parent.getAnimationAction();
+        for (const item of this.items) {
             if (item.animation) item.animation.copyOwnerAnimation(action, deltaTime);
+            if (item.cloak && parent.visible) item.cloak.update(parent, deltaTime);
+        }
 
         if (!this.hiddenAnimation || this.getParent().isPlayingOneShotAnimation(this.hiddenAnimation)) return;
 

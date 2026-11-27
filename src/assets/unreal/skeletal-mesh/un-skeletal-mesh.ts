@@ -440,7 +440,7 @@ export abstract class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true, decodeAnimationNotifies: boolean = decodeAnimations): SkeletalMeshDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true, decodeAnimationNotifies: boolean = decodeAnimations, useBaseMesh: boolean = false): SkeletalMeshDecodeResult_T {
         const section = this;
 
         if (section.points.length > 0) section.points.getElem(0);
@@ -449,7 +449,7 @@ export abstract class USkeletalMesh extends ULodMesh {
         if (section.vertexInfluences.length > 0) section.vertexInfluences.getElem(0);
 
         const maxBoneInfluences = builder.isLoadingExtendedBoneInfluences() ? MAX_EXTENDED_INFLUENCES : MAX_BONES;
-        const lod = section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
+        const lod = !useBaseMesh && section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
         const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton, maxBoneInfluences) : null;
         const { positions, uvs, bones, weights, bones2, weights2, numInfs } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length, maxBoneInfluences);
         const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
@@ -470,7 +470,7 @@ export abstract class USkeletalMesh extends ULodMesh {
             bounds: this.decodeBoundsInfo()
         };
 
-        (geometryInfo as any).assetName = `${this.name}:${maxBoneInfluences}`;
+        (geometryInfo as any).assetName = `${this.name}:${maxBoneInfluences}${useBaseMesh ? ":base" : ""}`;
 
         if (bones2) geometryInfo.attributes.skinIndex2 = bones2;
         if (weights2) geometryInfo.attributes.skinWeight2 = weights2;

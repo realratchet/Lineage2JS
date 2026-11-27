@@ -1242,7 +1242,7 @@ export class DecodeEngine {
         await this.pullScriptAssets(library, builder, cls.name, info.scriptProperties);
     }
 
-    protected async pullScriptAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false): Promise<void> {
+    protected async pullScriptAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false, useBaseMesh = false): Promise<void> {
         const meshes = new Set<string>();
         const materials = new Set<string>();
         const sounds = new Set<string>();
@@ -1276,7 +1276,7 @@ export class DecodeEngine {
             if (!library.scriptMeshes[path.toLowerCase()]) {
                 const mesh = await this.fetchSkeletalMesh(path, builder);
 
-                library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(mesh, animations);
+                library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(mesh, animations, true, animations, useBaseMesh);
                 library.scriptObjects[path.toLowerCase()] = dumpObjectClass(mesh);
             }
         for (const path of materials)
@@ -3268,16 +3268,17 @@ export class DecodeEngine {
         const parts = [
             { rightHand: equipment.rightHand, enchantLevel: equipment.enchantLevel },
             { leftHand: equipment.leftHand !== equipment.rightHand ? equipment.leftHand : 0 },
-            { head: equipment.hair ? 0 : equipment.head, hair: equipment.hair }
+            { head: equipment.hair ? 0 : equipment.head, hair: equipment.hair },
+            { back: equipment.back }
         ];
         const info: IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
 
-            if (!part.rightHand && !part.leftHand && !part.head && !part.hair) continue;
+            if (!part.rightHand && !part.leftHand && !part.head && !part.hair && !part.back) continue;
 
-            const key = `${i === 0 && weapon && weapon.is_hero > -1 ? "hero:" : ""}${JSON.stringify([part, i === 2 ? row.face_mesh[0] : null, part.hair ? hairVariant : null])}`;
+            const key = `${i === 0 && weapon && weapon.is_hero > -1 ? "hero:" : ""}${JSON.stringify([part, i >= 2 ? row.face_mesh[0] : null, part.hair ? hairVariant : null])}`;
             const assets = await this.getStoredAssets("character_equipment", key, builder.getSettings(), async () => {
                 const assets = new DecodeLibrary();
 
@@ -3372,7 +3373,18 @@ export class DecodeEngine {
             for (const [mesh, texture] of getCharacterArmorPaths(row, head)) info.items.push({ mesh, skins: [texture], bone: "HeadBone" });
         }
 
-        for (const item of info.items) await this.pullScriptAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh);
+        if (equipment.back) {
+            const back = (await this.decodeArmorGrp()).find(row => row.id === equipment.back);
+
+            if (!back || back.body_part !== SchemasC4.CHARACTER_BACK_SLOT)
+                throw new Error(`Armor '${equipment.back}' does not fit 'back'.`);
+
+            // NCCloakSimul::SetUserForce 0x77e04e resolves cape_bone on the pawn.
+            for (const [mesh, texture] of getCharacterArmorPaths(row, back)) info.items.push({ mesh, skins: [texture], bone: "cape_bone" });
+        }
+
+        // The cloak's rigid LOD omits the cloth weights stored in its base mesh.
+        for (const item of info.items) await this.pullScriptAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh, item.bone === "cape_bone");
 
         if (equipment.hair) {
             let locations = this.cacheCharacterHairTables.get("hairaccessorylocgrp");

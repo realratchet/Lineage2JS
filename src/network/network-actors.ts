@@ -216,7 +216,7 @@ export class NetworkActors {
     public getAppearanceKey(appearance: GamePackets.Appearance_T) {
         const paperdoll = appearance.paperdoll;
 
-        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
+        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_BACK]].join(":");
     }
 
     public loadAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor): Promise<void> {
@@ -257,7 +257,7 @@ export class NetworkActors {
         const hairStyle = group.hairStyles.includes(appearance.hairStyle) ? appearance.hairStyle : group.hairStyles[0];
         const colours = group.hairColours[hairStyle];
 
-        const equipment = { enchantLevel: appearance.enchantLevel, rightHand: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND] || appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], leftHand: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], head: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], hair: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR] };
+        const equipment = { enchantLevel: appearance.enchantLevel, rightHand: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND] || paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], leftHand: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], head: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], hair: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR], back: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_BACK] };
 
         if (isEquipmentOnly) await asset.loadCharacterEquipment(this.network.getParent().getComponent("render"), actor, index, hairStyle, equipment);
         else {

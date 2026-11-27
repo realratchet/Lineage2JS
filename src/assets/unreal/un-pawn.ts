@@ -170,6 +170,7 @@ export type ICharacterEquipment = {
     leftHand: number;
     head?: number;
     hair?: number;
+    back?: number;
     enchantLevel?: number;
 };
 
