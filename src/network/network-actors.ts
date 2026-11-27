@@ -22,6 +22,7 @@ import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import type { CollisionQuery_T } from "../physics/collision-world";
 import type PawnMovementComponent from "../physics/components/pawn-movement-component";
+import { enableCloaks } from "../build-settings";
 
 const MIN_ACTOR_DELTA = Math.fround(0.0005);
 const MAX_ACTOR_DELTA = Math.fround(0.4);
@@ -210,13 +211,13 @@ export class NetworkActors {
     }
 
     protected getArmor(paperdoll: number[]): ICharacterArmorSelection {
-        return { chest: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], legs: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], gloves: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], boots: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] };
+        return { underwear: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], chest: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], legs: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], gloves: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], boots: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] };
     }
 
     public getAppearanceKey(appearance: GamePackets.Appearance_T) {
         const paperdoll = appearance.paperdoll;
 
-        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
+        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR], enableCloaks ? paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_BACK] : 0].join(":");
     }
 
     public loadAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor): Promise<void> {
@@ -240,7 +241,7 @@ export class NetworkActors {
     protected async applyAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor) {
         const asset = this.network.getParent().getComponent("asset");
         const paperdoll = appearance.paperdoll;
-        const bodyKey = [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
+        const bodyKey = [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
         const isEquipmentOnly = this.bodyKeys.get(actor) === bodyKey;
         const request = (this.appearanceRequests.get(actor) || 0) + 1;
 
@@ -257,7 +258,7 @@ export class NetworkActors {
         const hairStyle = group.hairStyles.includes(appearance.hairStyle) ? appearance.hairStyle : group.hairStyles[0];
         const colours = group.hairColours[hairStyle];
 
-        const equipment = { enchantLevel: appearance.enchantLevel, rightHand: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND] || appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], leftHand: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], head: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], hair: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR] };
+        const equipment = { enchantLevel: appearance.enchantLevel, rightHand: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND] || paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], leftHand: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], head: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], hair: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR], back: enableCloaks ? paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_BACK] : 0 };
 
         if (isEquipmentOnly) await asset.loadCharacterEquipment(this.network.getParent().getComponent("render"), actor, index, hairStyle, equipment);
         else {

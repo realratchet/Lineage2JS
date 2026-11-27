@@ -357,16 +357,18 @@ export class DecodeLibraryBuilder {
         return soundEntry;
     }
 
-    public pullSkeletalMesh(mesh: USkeletalMesh, animations: boolean = true, materials: boolean = true, animationNotifies: boolean = animations): ISkinnedMeshObjectDecodeInfo {
+    public pullSkeletalMesh(mesh: USkeletalMesh, animations: boolean = true, materials: boolean = true, animationNotifies: boolean = animations, useBaseMesh: boolean = false): ISkinnedMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
+        const key = useBaseMesh ? `${mesh.uuid}:base` : mesh.uuid;
 
-        if (this.skeletalMeshes.has(mesh.uuid)) return this.skeletalMeshes.get(mesh.uuid);
+        if (this.skeletalMeshes.has(key)) return this.skeletalMeshes.get(key);
 
-        const result = mesh.getDecodeInfo(this, animations, materials, animationNotifies);
+        const result = mesh.getDecodeInfo(this, animations, materials, animationNotifies, useBaseMesh);
+        result.object.geometry = key;
 
-        this.library.geometries[mesh.uuid] = result.geometry;
+        this.library.geometries[key] = result.geometry;
         this.library.materials[mesh.uuid] = result.material;
-        this.skeletalMeshes.set(mesh.uuid, result.object);
+        this.skeletalMeshes.set(key, result.object);
 
         return result.object;
     }

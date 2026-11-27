@@ -48,6 +48,7 @@ import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh"
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
 import fetchAsset from "../asset-source";
 import { isFirefox } from "../../browser";
+import { enableCloaks } from "../../build-settings";
 
 const minPickupCollisionHeight = Math.fround(0.2);
 
@@ -335,6 +336,20 @@ function getCharacterArmorPaths(row: Record<string, any>, armor: Record<string, 
     return [...meshes.map((mesh, i) => [mesh, textures[i]] as CharacterPartPaths_T), ...additionalMeshes.map((mesh, i) => [mesh, additionalTextures[i]] as CharacterPartPaths_T)].filter(part => part[0] && part[1]);
 }
 
+function getCharacterUnderwearPaths(row: Record<string, any>, armor: Record<string, any>): CharacterPartPaths_T[] {
+    const group = getCharacterArmorGroup(row);
+    const meshes = armor[`${group}_mesh`] as string[];
+    const textures = armor[`${group}_texture`] as string[];
+
+    if (!meshes.some(Boolean)) return []; // Stock Cotton has textures without meshes for m_orc_mystic.
+    if (meshes.length !== textures.length)
+        throw new Error(`Underwear '${armor.id}' has ${meshes.length} meshes and ${textures.length} textures for '${group}'.`);
+    if (meshes.length > row.body_mesh.length)
+        throw new Error(`Underwear '${armor.id}' has too many body parts for '${group}'.`);
+
+    return meshes.map((mesh, i) => [mesh, textures[i]]);
+}
+
 function getCharacterArmorLabel(armor: Record<string, any>, itemNames: Map<number, Record<string, any>>): string {
     const item = itemNames.get(armor.id);
 
@@ -354,6 +369,18 @@ function resolveCharacterPartPaths(row: Record<string, any>, headParts: Characte
     const chest = armorRows.find(row => row.id === armor.chest);
     const isAllDress = chest?.body_part === SchemasC4.CHARACTER_ALLDRESS_SLOT;
     const isFullArmor = isAllDress || chest?.body_part === SchemasC4.CHARACTER_FULL_ARMOR_SLOT;
+
+    if (armor.underwear) {
+        const underwear = armorRows.find(row => row.id === armor.underwear);
+
+        if (!underwear || underwear.body_part !== SchemasC4.CHARACTER_UNDERWEAR_SLOT)
+            throw new Error(`Armor '${armor.underwear}' does not fit 'underwear'.`);
+
+        // Underwear pairs use the chargrp body order: upper, lower, hands, feet.
+        getCharacterUnderwearPaths(row, underwear).forEach((part, i) => {
+            if (part[0] && part[1]) bodyParts[i] = [part];
+        });
+    }
 
     if (isFullArmor) bodyParts[bodyIndices.l] = []; // User::GetPcMeshName 0x738293: full armor supplies the lower mesh, including an empty entry.
     if (isAllDress) {
@@ -1216,7 +1243,7 @@ export class DecodeEngine {
         await this.pullScriptAssets(library, builder, cls.name, info.scriptProperties);
     }
 
-    protected async pullScriptAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false): Promise<void> {
+    protected async pullScriptAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false, useBaseMesh = false): Promise<void> {
         const meshes = new Set<string>();
         const materials = new Set<string>();
         const sounds = new Set<string>();
@@ -1250,7 +1277,7 @@ export class DecodeEngine {
             if (!library.scriptMeshes[path.toLowerCase()]) {
                 const mesh = await this.fetchSkeletalMesh(path, builder);
 
-                library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(mesh, animations);
+                library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(mesh, animations, true, animations, useBaseMesh);
                 library.scriptObjects[path.toLowerCase()] = dumpObjectClass(mesh);
             }
         for (const path of materials)
@@ -2848,9 +2875,12 @@ export class DecodeEngine {
         const armorSlots = Object.values(SchemasC4.CHARACTER_ARMOR_SLOTS).flat();
 
         for (const armorRow of await this.decodeArmorGrp()) {
-            if (!armorSlots.includes(armorRow.body_part)) continue;
+            const isUnderwear = armorRow.body_part === SchemasC4.CHARACTER_UNDERWEAR_SLOT;
 
-            for (const [mesh, texture] of getCharacterArmorPaths(row, armorRow)) {
+            if (!isUnderwear && !armorSlots.includes(armorRow.body_part)) continue;
+
+            for (const [mesh, texture] of isUnderwear ? getCharacterUnderwearPaths(row, armorRow) : getCharacterArmorPaths(row, armorRow)) {
+                if (!mesh || !texture) continue;
                 meshPaths.add(mesh);
                 texturePaths.add(texture);
             }
@@ -3239,16 +3269,17 @@ export class DecodeEngine {
         const parts = [
             { rightHand: equipment.rightHand, enchantLevel: equipment.enchantLevel },
             { leftHand: equipment.leftHand !== equipment.rightHand ? equipment.leftHand : 0 },
-            { head: equipment.hair ? 0 : equipment.head, hair: equipment.hair }
+            { head: equipment.hair ? 0 : equipment.head, hair: equipment.hair },
+            { back: enableCloaks ? equipment.back : 0 }
         ];
         const info: IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
 
-            if (!part.rightHand && !part.leftHand && !part.head && !part.hair) continue;
+            if (!part.rightHand && !part.leftHand && !part.head && !part.hair && !part.back) continue;
 
-            const key = `${i === 0 && weapon && weapon.is_hero > -1 ? "hero:" : ""}${JSON.stringify([part, i === 2 ? row.face_mesh[0] : null, part.hair ? hairVariant : null])}`;
+            const key = `${i === 0 && weapon && weapon.is_hero > -1 ? "hero:" : ""}${JSON.stringify([part, i >= 2 ? row.face_mesh[0] : null, part.hair ? hairVariant : null])}`;
             const assets = await this.getStoredAssets("character_equipment", key, builder.getSettings(), async () => {
                 const assets = new DecodeLibrary();
 
@@ -3343,7 +3374,18 @@ export class DecodeEngine {
             for (const [mesh, texture] of getCharacterArmorPaths(row, head)) info.items.push({ mesh, skins: [texture], bone: "HeadBone" });
         }
 
-        for (const item of info.items) await this.pullScriptAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh);
+        if (equipment.back) {
+            const back = (await this.decodeArmorGrp()).find(row => row.id === equipment.back);
+
+            if (!back || back.body_part !== SchemasC4.CHARACTER_BACK_SLOT)
+                throw new Error(`Armor '${equipment.back}' does not fit 'back'.`);
+
+            // NCCloakSimul::SetUserForce 0x77e04e resolves cape_bone on the pawn.
+            for (const [mesh, texture] of getCharacterArmorPaths(row, back)) info.items.push({ mesh, skins: [texture], bone: "cape_bone" });
+        }
+
+        // The cloak's rigid LOD omits the cloth weights stored in its base mesh.
+        for (const item of info.items) await this.pullScriptAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh, item.bone === "cape_bone");
 
         if (equipment.hair) {
             let locations = this.cacheCharacterHairTables.get("hairaccessorylocgrp");

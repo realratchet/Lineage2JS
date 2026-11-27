@@ -2,6 +2,8 @@ import type { ISchemaValue } from "./dat-schema";
 import { UTF16ContainerType } from "./dat-container";
 
 export const CHARACTER_ARMOR_GROUPS: Record<string, string> = { mfighter: "m_human_fighter", ffighter: "f_human_fighter", mdarkelf: "m_dark_elf", fdarkelf: "f_dark_elf", mdwarf: "m_dwarf", fdwarf: "f_dwarf", melf: "m_elf", felf: "f_elf", mmagic: "m_human_mystic", fmagic: "f_human_mystic", morc: "m_orc_fighter", forc: "f_orc_fighter", mshaman: "m_orc_mystic", fshaman: "f_orc_mystic" };
+export const CHARACTER_UNDERWEAR_SLOT = 0;
+export const CHARACTER_BACK_SLOT = 13;
 export const CHARACTER_FULL_ARMOR_SLOT = 15;
 export const CHARACTER_ALLDRESS_SLOT = 17;
 export const CHARACTER_HEAD_ARMOR_SLOTS = [6, 16];

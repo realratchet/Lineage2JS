@@ -140,6 +140,7 @@ export type ICharacterArmorOptions = {
 };
 
 export type ICharacterArmorSelection = {
+    underwear?: number,
     chest: number,
     legs: number,
     gloves: number,
@@ -169,6 +170,7 @@ export type ICharacterEquipment = {
     leftHand: number;
     head?: number;
     hair?: number;
+    back?: number;
     enchantLevel?: number;
 };
 

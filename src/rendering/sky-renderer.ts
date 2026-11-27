@@ -418,7 +418,7 @@ export default class SkyRenderer {
             actor.mesh.position.copy(camera.position).add(offset);
             const scale = this.calculateCelestialScale("moon", actor.data.celestialScale ?? 1.0, actor.data.drawScale ?? 1.0, env);
             actor.mesh.scale.setScalar(scale);
-            actor.mesh.lookAt(camera.position);
+            actor.mesh.quaternion.copy(camera.quaternion);
         });
     }
 
