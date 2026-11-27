@@ -335,6 +335,20 @@ function getCharacterArmorPaths(row: Record<string, any>, armor: Record<string, 
     return [...meshes.map((mesh, i) => [mesh, textures[i]] as CharacterPartPaths_T), ...additionalMeshes.map((mesh, i) => [mesh, additionalTextures[i]] as CharacterPartPaths_T)].filter(part => part[0] && part[1]);
 }
 
+function getCharacterUnderwearPaths(row: Record<string, any>, armor: Record<string, any>): CharacterPartPaths_T[] {
+    const group = getCharacterArmorGroup(row);
+    const meshes = armor[`${group}_mesh`] as string[];
+    const textures = armor[`${group}_texture`] as string[];
+
+    if (!meshes.some(Boolean)) return []; // Stock Cotton has textures without meshes for m_orc_mystic.
+    if (meshes.length !== textures.length)
+        throw new Error(`Underwear '${armor.id}' has ${meshes.length} meshes and ${textures.length} textures for '${group}'.`);
+    if (meshes.length > row.body_mesh.length)
+        throw new Error(`Underwear '${armor.id}' has too many body parts for '${group}'.`);
+
+    return meshes.map((mesh, i) => [mesh, textures[i]]);
+}
+
 function getCharacterArmorLabel(armor: Record<string, any>, itemNames: Map<number, Record<string, any>>): string {
     const item = itemNames.get(armor.id);
 
@@ -354,6 +368,18 @@ function resolveCharacterPartPaths(row: Record<string, any>, headParts: Characte
     const chest = armorRows.find(row => row.id === armor.chest);
     const isAllDress = chest?.body_part === SchemasC4.CHARACTER_ALLDRESS_SLOT;
     const isFullArmor = isAllDress || chest?.body_part === SchemasC4.CHARACTER_FULL_ARMOR_SLOT;
+
+    if (armor.underwear) {
+        const underwear = armorRows.find(row => row.id === armor.underwear);
+
+        if (!underwear || underwear.body_part !== SchemasC4.CHARACTER_UNDERWEAR_SLOT)
+            throw new Error(`Armor '${armor.underwear}' does not fit 'underwear'.`);
+
+        // Underwear pairs use the chargrp body order: upper, lower, hands, feet.
+        getCharacterUnderwearPaths(row, underwear).forEach((part, i) => {
+            if (part[0] && part[1]) bodyParts[i] = [part];
+        });
+    }
 
     if (isFullArmor) bodyParts[bodyIndices.l] = []; // User::GetPcMeshName 0x738293: full armor supplies the lower mesh, including an empty entry.
     if (isAllDress) {
@@ -2848,9 +2874,12 @@ export class DecodeEngine {
         const armorSlots = Object.values(SchemasC4.CHARACTER_ARMOR_SLOTS).flat();
 
         for (const armorRow of await this.decodeArmorGrp()) {
-            if (!armorSlots.includes(armorRow.body_part)) continue;
+            const isUnderwear = armorRow.body_part === SchemasC4.CHARACTER_UNDERWEAR_SLOT;
 
-            for (const [mesh, texture] of getCharacterArmorPaths(row, armorRow)) {
+            if (!isUnderwear && !armorSlots.includes(armorRow.body_part)) continue;
+
+            for (const [mesh, texture] of isUnderwear ? getCharacterUnderwearPaths(row, armorRow) : getCharacterArmorPaths(row, armorRow)) {
+                if (!mesh || !texture) continue;
                 meshPaths.add(mesh);
                 texturePaths.add(texture);
             }

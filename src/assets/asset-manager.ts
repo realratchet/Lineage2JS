@@ -752,6 +752,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             faceVariant,
             hairVariant,
             hairColour,
+            armor.underwear,
             armor.chest,
             armor.legs,
             armor.gloves,

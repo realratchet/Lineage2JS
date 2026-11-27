@@ -140,6 +140,7 @@ export type ICharacterArmorOptions = {
 };
 
 export type ICharacterArmorSelection = {
+    underwear?: number,
     chest: number,
     legs: number,
     gloves: number,

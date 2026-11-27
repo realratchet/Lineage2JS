@@ -210,13 +210,13 @@ export class NetworkActors {
     }
 
     protected getArmor(paperdoll: number[]): ICharacterArmorSelection {
-        return { chest: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], legs: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], gloves: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], boots: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] };
+        return { underwear: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], chest: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], legs: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], gloves: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], boots: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] };
     }
 
     public getAppearanceKey(appearance: GamePackets.Appearance_T) {
         const paperdoll = appearance.paperdoll;
 
-        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
+        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
     }
 
     public loadAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor): Promise<void> {
@@ -240,7 +240,7 @@ export class NetworkActors {
     protected async applyAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor) {
         const asset = this.network.getParent().getComponent("asset");
         const paperdoll = appearance.paperdoll;
-        const bodyKey = [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
+        const bodyKey = [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
         const isEquipmentOnly = this.bodyKeys.get(actor) === bodyKey;
         const request = (this.appearanceRequests.get(actor) || 0) + 1;
 
