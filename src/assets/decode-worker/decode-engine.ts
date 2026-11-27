@@ -48,6 +48,7 @@ import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh"
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
 import fetchAsset from "../asset-source";
 import { isFirefox } from "../../browser";
+import { enableCloaks } from "../../build-settings";
 
 const minPickupCollisionHeight = Math.fround(0.2);
 
@@ -3269,7 +3270,7 @@ export class DecodeEngine {
             { rightHand: equipment.rightHand, enchantLevel: equipment.enchantLevel },
             { leftHand: equipment.leftHand !== equipment.rightHand ? equipment.leftHand : 0 },
             { head: equipment.hair ? 0 : equipment.head, hair: equipment.hair },
-            { back: equipment.back }
+            { back: enableCloaks ? equipment.back : 0 }
         ];
         const info: IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
 

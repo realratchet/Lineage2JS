@@ -38,6 +38,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         const dirAssets = path.resolve(__dirname, "../assets-c4") + path.sep;
         const plugins = [new webpack.DefinePlugin({
             BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"),
+            ENABLE_CLOAKS: JSON.stringify(process.env.ENABLE_CLOAKS === "1"),
             DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""),
             PRELOAD_SECTORS: JSON.stringify(preloadSectors),
             CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces),
