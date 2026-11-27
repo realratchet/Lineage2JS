@@ -911,15 +911,21 @@ export class DecodeWorkerClient {
         });
     }
 
-    public async getCharGroups(settings: LoadSettings_T = {}): Promise<ICharacterGroup[]> {
-        if (this.characterGroups) return this.characterGroups;
-        if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups(settings);
+    public async getCharGroups(settings: LoadSettings_T = {}, names: string[] = null): Promise<ICharacterGroup[]> {
+        if (this.characterGroups) {
+            const groups = await this.characterGroups;
+
+            return names ? groups.filter(group => names.includes(group.name)) : groups;
+        }
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups(settings, names);
 
         const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
-        return this.characterGroups = this.dispatch(workerIndex, { type: "charGroups", settings });
+        const request: Promise<ICharacterGroup[]> = this.dispatch(workerIndex, { type: "charGroups", settings, names });
+        if (!names) this.characterGroups = request;
+        return request;
     }
 
     public getMusicInfo(): Promise<Record<number, string[]>> {

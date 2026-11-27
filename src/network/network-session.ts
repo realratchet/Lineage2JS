@@ -11,7 +11,6 @@ import { saveReplayFile } from "./replay-files";
 import * as GamePackets from "./game-packets";
 import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
-import type { ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import { setVector } from "./network-location";
 import { setLoadingProgress, loadingTexts } from "../loading-progress";
 import SystemMessage_T from "../nwindow/system-message";
@@ -36,7 +35,6 @@ export class NetworkSession {
     public sessionKey: SessionKey_T = null;
     public characters: GamePackets.CharSelectEntry_T[] = [];
     public templates: GamePackets.CharTemplate_T[] = [];
-    public charGroups: ICharacterGroup[] = null;
     public selectedSlot = -1;
     public replayLoading = false;
     public replayStopAt = -1;

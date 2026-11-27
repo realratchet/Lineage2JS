@@ -48,7 +48,7 @@ import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh"
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
 import fetchAsset from "../asset-source";
 import { isFirefox } from "../../browser";
-import { enableCloaks } from "../../build-settings";
+import { allCharacterCreationRacesEnabled, enableCloaks } from "../../build-settings";
 
 const minPickupCollisionHeight = Math.fround(0.2);
 
@@ -996,8 +996,25 @@ export class DecodeEngine {
 
     protected async fetchScriptClass(path: string): Promise<[APackage, UClass]> {
         const [packageName, objectName] = splitObjectPath(path);
-        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Script"));
         const lowerName = objectName.toLowerCase();
+        const pkg = this.assetLoader.getPackage(packageName, "Script");
+
+        if (!allCharacterCreationRacesEnabled && packageName.toLowerCase() === "lineagewarrior") {
+            const rows = await this.decodeCharGrp();
+            const row = rows.find(row => row.face_mesh.length && splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "").toLowerCase() === lowerName);
+
+            if (row) {
+                const [meshPackage] = splitObjectPath(row.face_mesh[0]);
+
+                // LineageWarrior imports every race's default skeletal meshes.
+                await Promise.all([
+                    this.assetLoader.preparePackages(pkg, 4, null, false),
+                    this.usingDecodePackage(this.assetLoader.getPackage(meshPackage, "SkeletalMesh"))
+                ]);
+            }
+        }
+
+        await this.usingDecodePackage(pkg);
         const actualName = (pkg.exports.find(entry => (entry.objectName as string).toLowerCase() === lowerName)?.objectName as string) || objectName;
         const cls = pkg.fetchObjectByType<UClass>("Class", actualName);
 
@@ -3151,25 +3168,27 @@ export class DecodeEngine {
         }
     }
 
-    public async decodeCharGroups(settings: LoadSettings_T = {}): Promise<ICharacterGroup[]> {
+    public async decodeCharGroups(settings: LoadSettings_T = {}, names: string[] = null): Promise<ICharacterGroup[]> {
         this.setLoadSettings(settings);
-        if (this.cacheCharGroups) return this.cacheCharGroups;
+        if (this.cacheCharGroups) return names ? this.cacheCharGroups.filter(group => names.includes(group.name)) : this.cacheCharGroups;
 
         const cacheSettings = { cache: settings.cache };
         const cached = await DecodeCache.loadCachedLibrary("character_groups", cacheSettings);
 
         if (cached) {
             for (const [index, pieces] of cached.hairPieces) this.cacheCharacterHairPieces.set(index, pieces);
-            return this.cacheCharGroups = cached.groups;
+            this.cacheCharGroups = cached.groups;
+            return names ? this.cacheCharGroups.filter(group => names.includes(group.name)) : this.cacheCharGroups;
         }
 
-        const groups = await this.buildCharGroups();
+        const groups = await this.buildCharGroups(names);
+        if (names) return groups;
 
         await DecodeCache.storeCachedLibraryDurable("character_groups", cacheSettings, { groups, hairPieces: this.cacheCharacterHairPieces });
         return this.cacheCharGroups = groups;
     }
 
-    protected async buildCharGroups(): Promise<ICharacterGroup[]> {
+    protected async buildCharGroups(names: string[]): Promise<ICharacterGroup[]> {
         const rows = await this.decodeCharGrp();
         const armorRows = await this.decodeArmorGrp();
         const itemNames = new Map((await this.decodeItemNames()).map(item => [item.id as number, item]));
@@ -3182,6 +3201,9 @@ export class DecodeEngine {
                 if (index !== SchemasC4.CHARGRP_RECORD_COUNT - 1) throw new Error(`Character group '${index}' is unexpectedly empty.`);
                 continue;
             }
+
+            const name = splitObjectPath(row.face_mesh[0] as string)[1].replace(/_m\d+_f$/, "");
+            if (names && !names.includes(name)) continue;
 
             const pieces = await this.characterHairPieces(index);
             const armor = { chest: [], legs: [], gloves: [], boots: [] } as ICharacterArmorOptions;
@@ -3201,7 +3223,7 @@ export class DecodeEngine {
 
             groups.push({
                 index,
-                name: splitObjectPath(row.face_mesh[0] as string)[1].replace(/_m\d+_f$/, ""),
+                name,
                 faceVariants: (row.face_tex as string[]).length,
                 hairStyles: [...pieces.keys()].sort((a, b) => a - b),
                 hairColours: Object.fromEntries([...pieces].map(([style, colours]) => [style, [...colours.keys()].sort((a, b) => a - b)])),

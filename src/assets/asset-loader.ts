@@ -232,7 +232,7 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
         return this.load(pkg);
     }
 
-    public async preparePackages(pkg: APackage, concurrency: number, ready: (packages: APackage[]) => Promise<void>): Promise<void> {
+    public async preparePackages(pkg: APackage, concurrency: number, ready: (packages: APackage[]) => Promise<void>, includeRootMeshImports = true): Promise<void> {
         const queue = [pkg], discovered = new Set([pkg]), pending = new Map<APackage, Promise<void>>(), waiting = new Set<APackage>();
         const loader = this, nativePath = this.getNativePackage().path;
 
@@ -241,6 +241,8 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
             if (!loader.pkgDependencies.has(entry.path)) {
                 const dependencies: string[] = [];
                 for (const imp of entry.imports.filter(imp => imp.className !== "Package")) {
+                    if (entry === pkg && !includeRootMeshImports && imp.className === "SkeletalMesh") continue;
+
                     let root = entry.getImportEntry(imp.idPackage);
                     while (root.idPackage !== 0) root = entry.getImportEntry(root.idPackage);
                     if (!loader.hasPackage(root.objectName, imp.className)) {
@@ -259,7 +261,7 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
                 discovered.add(dependency);
                 queue.push(dependency);
             }
-            waiting.add(entry);
+            if (ready) waiting.add(entry);
         }
 
         function isReady(entry: APackage): boolean {

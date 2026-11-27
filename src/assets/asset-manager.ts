@@ -28,6 +28,7 @@ import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM, { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import ConfigCache from "../ue-script/config-cache";
 import { getAssetSourceId } from "./asset-source";
+import { allCharacterCreationRacesEnabled, characterCreationRaces } from "../build-settings";
 import PlayerController from "../objects/player-controller";
 import { IEngineComponent } from "../game/components";
 import type { GameManager } from "../game/game-manager"
@@ -40,12 +41,20 @@ import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import PawnAttackComponent from "../objects/components/pawn-attack-component";
 import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
-import { WeaponType, type NpcSkillAttack_T } from "./unreal/un-pawn";
+import { PawnMeshType_T, WeaponType, type NpcSkillAttack_T } from "./unreal/un-pawn";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import WaterHitEffectComponent from "../physics/components/water-hit-effect-component";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import { ScriptComponent } from "../game/script-component";
 import type LocalSpaceSkeleton from "../objects/local-space-skeleton";
+
+const characterMeshTypesByRace = [
+    [PawnMeshType_T.MFighter, PawnMeshType_T.FFighter, PawnMeshType_T.MMagic, PawnMeshType_T.FMagic],
+    [PawnMeshType_T.MElf, PawnMeshType_T.FElf],
+    [PawnMeshType_T.MDarkElf, PawnMeshType_T.FDarkElf],
+    [PawnMeshType_T.MOrc, PawnMeshType_T.FOrc, PawnMeshType_T.MShaman, PawnMeshType_T.FShaman],
+    [PawnMeshType_T.MDwarf, PawnMeshType_T.FDwarf]
+];
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
@@ -252,6 +261,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public playerController: PlayerController = null;
     protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
     protected charGroups: ICharacterGroup[] = null;
+    protected readonly pendingCharGroups = new Map<string, Promise<ICharacterGroup[]>>();
     protected characterPrecache: Promise<void> = null;
     protected startupLevelLibrary: DecodeLibrary = null;
     protected effectLibrary: DecodeLibrary = null;
@@ -414,7 +424,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         updateProgress();
         const startup = Promise.all([
             loadStartup(0, clientConfigLoad),
-            loadStartup(1, this.decodeWorker.getCharGroups(this.loadSettings)),
+            loadStartup(1, this.decodeWorker.getCharGroups(this.loadSettings, isLogin && !allCharacterCreationRacesEnabled
+                ? characterCreationRaces.flatMap(race => characterMeshTypesByRace[race].map(type => PawnMeshType_T[type]))
+                : null)),
             loadStartup(2, this.decodeWorker.decodeEnv(this.loadSettings)),
             loadStartup(3, this.decodeWorker.getMusicInfo()),
             isLogin ? null : loadStartup(4, this.decodeWorker.decodeCharacter(this.loadSettings)),
@@ -1154,6 +1166,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public precacheNpcBundle(packageName: string): Promise<void> { return this.decodeWorker.precacheNpcBundle(this.loadSettings, packageName); }
 
     public precacheCharacters(): Promise<void> {
+        if (loginServer && !allCharacterCreationRacesEnabled) return Promise.resolve();
         if (!this.characterPrecache) this.characterPrecache = this.precacheCharacterAssets();
 
         return this.characterPrecache;
@@ -1176,6 +1189,27 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public async getCharGroups(): Promise<ICharacterGroup[]> { return this.charGroups; }
+
+    public async getCharGroup(name: string): Promise<ICharacterGroup> {
+        const group = this.charGroups.find(group => group.name === name);
+
+        if (group) return group;
+
+        const pending = this.pendingCharGroups.get(name);
+        const request = pending ?? this.decodeWorker.getCharGroups(this.loadSettings, [name]);
+        if (!pending) this.pendingCharGroups.set(name, request);
+
+        try {
+            const [group] = await request;
+
+            if (!group) throw new Error(`No character group named '${name}'.`);
+
+            if (!pending) this.charGroups.push(group);
+            return group;
+        } finally {
+            if (!pending) this.pendingCharGroups.delete(name);
+        }
+    }
 
     public async prefetchCharacterScripts(): Promise<void> {
         const groups = this.charGroups || await this.decodeWorker.getCharGroups(this.loadSettings);

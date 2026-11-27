@@ -201,15 +201,6 @@ export class NetworkActors {
         }
     }
 
-    protected getCharacterIndex(meshType: PawnMeshType_T): number {
-        const name = PawnMeshType_T[meshType];
-        const group = this.network.session.charGroups.find(group => group.name === name);
-
-        if (!group) throw new Error(`No character group named '${name}'.`);
-
-        return group.index;
-    }
-
     protected getArmor(paperdoll: number[]): ICharacterArmorSelection {
         return { underwear: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_UNDER], chest: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], legs: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], gloves: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], boots: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] };
     }
@@ -248,11 +239,10 @@ export class NetworkActors {
         this.appearanceRequests.set(actor, request);
 
         if (!isEquipmentOnly) this.bodyKeys.delete(actor);
-        if (!this.network.session.charGroups) this.network.session.charGroups = await asset.getCharGroups();
-
         const meshType = this.getMeshType(appearance);
-        const index = this.getCharacterIndex(meshType);
-        const group = this.network.session.charGroups.find(group => group.index === index);
+        const group = await asset.getCharGroup(PawnMeshType_T[meshType]), index = group.index;
+
+        if (this.appearanceRequests.get(actor) !== request || actor.isPendingKill()) return;
 
         actor.charClassId = meshType;
         const hairStyle = group.hairStyles.includes(appearance.hairStyle) ? appearance.hairStyle : group.hairStyles[0];

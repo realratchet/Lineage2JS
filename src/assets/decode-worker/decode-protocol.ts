@@ -83,7 +83,7 @@ export type DecodeEffectTemplatesMessage_T = {
     requiredSounds: boolean;
 };
 
-export type CharGroupsMessage_T = { type: "charGroups"; requestId: number; settings: LoadSettings_T; };
+export type CharGroupsMessage_T = { type: "charGroups"; requestId: number; settings: LoadSettings_T; names?: string[]; };
 export type ResolveNpcMessage_T = { type: "resolveNpc"; requestId: number; selector: string | number; settings: LoadSettings_T; };
 export type ListNpcsMessage_T = { type: "listNpcs"; requestId: number; settings: LoadSettings_T; };
 export type ListPlayerSkillsMessage_T = { type: "listPlayerSkills"; requestId: number; includeAssetVariants?: boolean; };

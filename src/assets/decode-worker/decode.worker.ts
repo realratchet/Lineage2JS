@@ -185,7 +185,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "charGroups": {
             try {
-                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups(msg.settings) });
+                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups(msg.settings, msg.names) });
             } catch (e) {
                 console.error("[decode-worker] failed to decode character groups:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
