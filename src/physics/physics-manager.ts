@@ -145,22 +145,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return true;
     }
 
-    public releaseSectorVolumeReferences(sector: SectorObject): void {
-        const owner = sector.levelInfoActor;
-        if (!owner) return;
-
-        for (const movement of this.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
-            const pawn = movement.getParent();
-            if (!pawn.scriptProperties) continue;
-
-            for (const name of ["PhysicsVolume", "HeadVolume", "FootVolume"]) {
-                const volume = pawn.getUnrealScriptProperty(name) as unknown as PhysicsVolume;
-                if (volume && volume.getUnrealScriptProperty("Level") === owner)
-                    pawn.setUnrealScriptProperty(name, null);
-            }
-        }
-    }
-
     public async simulatePawns(count: number = 100): Promise<void> {
         await this.manGame.getComponent("network").pawnSimulation.spawn(count, this.manGame.getComponent("input").getOrbitTarget());
     }

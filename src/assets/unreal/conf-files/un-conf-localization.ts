@@ -14,12 +14,14 @@ export class UConfigLocalization extends BaseConfigFile {
         const lines = this.decodeConfig().split(/\r?\n/);
         let properties: LocalizationProperty_T[] = null;
 
+        this.sections.clear();
         for (const line of lines) {
             const header = /^\s*\[([^\]]+)\]\s*$/.exec(line);
 
             if (header) {
-                properties = [];
-                this.sections.set(header[1].trim().toLowerCase(), properties);
+                const section = header[1].trim().toLowerCase();
+                properties = this.sections.get(section);
+                if (!properties) this.sections.set(section, properties = []);
                 continue;
             }
 

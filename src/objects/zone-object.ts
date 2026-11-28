@@ -1001,11 +1001,12 @@ export class SectorObject extends GameObject {
 
     public moveLevelActors(level: SectorObject): ScriptHost_T[] {
         const actors: ScriptHost_T[] = [];
+        const defaultVolume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume");
 
         for (let i = 0; i < this.arrLevelActors.length; i++) {
             const actor = this.arrLevelActors[i];
 
-            if (!actor || this.arrLevelActorRecords[i]) continue;
+            if (!actor || this.arrLevelActorRecords[i] || actor === defaultVolume) continue;
 
             setProperty(actor, "Level", level.levelInfoActor as any);
             updateLevelActor(actor);
