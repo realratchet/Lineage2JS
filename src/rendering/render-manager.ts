@@ -59,7 +59,7 @@ import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
-import { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
+import { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
 import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
 import { setScriptObjectProperty } from "../objects/actor-properties";
 import type PawnAttackComponent from "../objects/components/pawn-attack-component";
@@ -1149,7 +1149,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
                     if (typeof tag !== "string" || tag.toLowerCase() !== name) return;
 
-                    sector.scriptVM.initializeHost(actor);
+                    sector.scriptVM.initializeHost(actor, sector.decodeLibrary);
                     this.arrL2EventActors.push({ actor, sector });
                 });
             }
@@ -3587,7 +3587,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public disposeSector(sector: SectorObject) {
-        this.getPhysicsManager().releaseSectorVolumeReferences(sector);
+        if (sector.levelInfoActor) {
+            const volumes = new Set<ScriptValue_T>(sector.physicsVolumeActors);
+            const defaultVolume = sector.levelInfoActor.getUnrealScriptProperty("PhysicsVolume");
+
+            if (defaultVolume) volumes.add(defaultVolume);
+            for (const component of this.pawnRenderables) {
+                const pawn = component.getParent();
+
+                for (const name of ["PhysicsVolume", "HeadVolume", "FootVolume"])
+                    if (volumes.has(pawn.getUnrealScriptProperty(name))) pawn.setUnrealScriptProperty(name, null);
+            }
+        }
         sector.releasePhysicsVolumeActors();
         sector.releaseMusicVolumeActors();
         sector.releaseZoneInfoActors();

@@ -215,4 +215,19 @@ export class DecodeLibrary {
 
 }
 
+export function hasScriptStateCode(cls: IScriptClassDecodeInfo): boolean { return cls.stateIds.length > 0 || cls.program.virtualSize > 0; }
+
+export function mergeLibraryScripts(target: DecodeLibrary, source: DecodeLibrary): void {
+    for (const id in source.scriptClasses) {
+        const previous = target.scriptClasses[id], cls = source.scriptClasses[id];
+        if (!previous || !hasScriptStateCode(previous) && hasScriptStateCode(cls)) target.scriptClasses[id] = cls;
+    }
+    for (const id in source.scriptObjects) {
+        const previous = target.scriptObjects[id], info = source.scriptObjects[id];
+        if (!previous || previous.path === info.path && previous.classId === info.classId && !previous.properties && info.properties) target.scriptObjects[id] = info;
+    }
+    for (const id in source.scriptFunctions) if (!(id in target.scriptFunctions)) target.scriptFunctions[id] = source.scriptFunctions[id];
+    for (const id in source.scriptStates) if (!(id in target.scriptStates)) target.scriptStates[id] = source.scriptStates[id];
+}
+
 export default DecodeLibrary;

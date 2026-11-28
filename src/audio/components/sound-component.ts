@@ -190,7 +190,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
 
                     sounds = isWalking ? info.waterWalkSounds : info.waterRunSounds;
                 } else if (foot && foot.getUnrealScriptProperty("bL2StepVolume")) {
-                    const stepLibrary = foot.getComponent<ScriptComponent>("script").getVM().getLibrary();
+                    const stepLibrary = foot.getComponent<ScriptComponent>("script").getVM().getHostLibrary(foot);
                     const stepSounds = stepLibrary.stepSounds[foot.getUnrealScriptProperty("StepSoundID") as number];
 
                     if (stepSounds?.length) {
@@ -265,7 +265,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (!this.library) throw new Error(`UnrealScript ${call.name} has no decode library.`);
 
         const script = (call.self as any).findComponent?.("script") as ScriptComponent;
-        const source = script ? script.getVM().getLibrary() : this.library;
+        const source = script ? script.getVM().getHostLibrary(call.self) : this.library;
         const library = source.sounds[soundRef] ? source : this.library;
         let soundName = library.sounds[soundRef] || soundRef;
 

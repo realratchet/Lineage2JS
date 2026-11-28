@@ -13,7 +13,8 @@ function isAssetCatalog(sectorName: string): boolean {
 
 function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
     let suffix = "";
-    if (isAssetCatalog(sectorName)) suffix = sectorName === "character_sounds" || sectorName === "character_parts" ? ".a1" : ".a2";
+    if (sectorName === "npc_runtime") suffix = ".a3";
+    else if (isAssetCatalog(sectorName)) suffix = sectorName === "character_sounds" || sectorName === "character_parts" ? ".a1" : ".a2";
     else if (/^\d+_\d+$/.test(sectorName) || sectorName === "lobby") suffix = ".p2";
     return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${suffix}.bin`;
 }

@@ -1,9 +1,10 @@
+import { NativeFunctionIndex_T } from "../../ue-script/native-function-index";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "../../audio/components/sound-component";
 import { Matrix4, Quaternion, Vector3, type Object3D } from "three";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
-import UnScriptVM, { getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
+import { getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import Rotator, { getPawnRotation } from "../../utils/rotator";
 import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
@@ -27,7 +28,6 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "effects";
     protected readonly renderManager: RenderManager;
     protected library: DecodeLibrary;
-    protected vm: UnScriptVM;
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -37,7 +37,10 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
 
     public setLibrary(library: DecodeLibrary): void {
         this.library = library;
-        this.vm = null;
+    }
+
+    protected createEffect(classId: string): any {
+        return this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, classId);
     }
 
     public createDamageEffect(): Object3D {
@@ -46,12 +49,10 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
 
         if (classId === null) return null;
         if (typeof classId !== "string") throw new Error(`Pawn '${parent.name}' has invalid DamageEffect '${classId}'.`);
-        if (!this.vm) this.vm = new UnScriptVM(this.library);
 
-        const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, classId, this.vm);
+        const effect = this.createEffect(classId);
 
         if (!effect.isObject3D) throw new Error(`DamageEffect '${classId}' is not an actor.`);
-        this.vm.initializeHost(effect);
         return effect;
     }
 
@@ -82,11 +83,9 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
 
         // Engine.dll UAnimNotify_Effect::Notify 0x94cb30 / 0x94ccc8: null class and unrendered pawns do not spawn.
         if (!info.effectClass || !info.trailCamera && !parent.visible) return;
-        if (!this.vm) this.vm = new UnScriptVM(this.library);
 
-        const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, info.effectClass, this.vm);
+        const effect = this.createEffect(info.effectClass);
 
-        this.vm.initializeHost(effect);
         if (info.trailCamera) { // 0x94cb6a..0x94cc62: spawned at the origin, owned by and based on the player controller
             const controller = this.renderManager.getParent().getComponent("asset").playerController;
 
@@ -186,14 +185,14 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             return undefined;
         }
 
-        if (call.index === 278 || name === "spawn") {
+        if (call.index === NativeFunctionIndex_T.Spawn || name === "spawn") {
             const instigator = getProperty(call.context, "Instigator");
             const script = this.getComponent<ScriptComponent<BaseActor>>("script");
             const vm = script.getVM(), defaults = vm.getDefaultObject(call.args[0] as string);
 
             // ULevel::SpawnActor 0x105889ac..0x10588acc; gameplay admission precedes allocation.
             if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract ||
-                !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
+                !vm.invokeNative(call.self, call.context, NativeFunctionIndex_T.ClassIsChildOf, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
             if (getProperty(defaults, "bStatic") || getProperty(defaults, "bNoDelete")) return null;
             if (getProperty(defaults, "bHighDetail")) {
                 const level = getProperty(call.context, "Level") as ScriptHost_T;

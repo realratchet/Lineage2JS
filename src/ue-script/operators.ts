@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "./native-function-index";
 import { MathUtils } from "three";
 import FVector from "@l2js/engine/un-vector";
 import { getRotatorQuaternionElements, sinRotator } from "@l2js/engine/utils/rotator";
@@ -466,14 +467,14 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(131, op_xor_bool_bool);
     native(132, op_or_bool_bool);
 
-    native(133, op_mul_byte_byte);
-    native(134, op_div_byte_byte);
-    native(135, op_add_byte_byte);
-    native(136, op_sub_byte_byte);
-    native(137, op_inc_byte);
-    native(138, op_dec_byte);
-    native(139, op_inc_byte);
-    native(140, op_dec_byte);
+    native(NativeFunctionIndex_T.MultiplyEqual_ByteByte, op_mul_byte_byte);
+    native(NativeFunctionIndex_T.DivideEqual_ByteByte, op_div_byte_byte);
+    native(NativeFunctionIndex_T.AddEqual_ByteByte, op_add_byte_byte);
+    native(NativeFunctionIndex_T.SubtractEqual_ByteByte, op_sub_byte_byte);
+    native(NativeFunctionIndex_T.AddAdd_PreByte, op_inc_byte);
+    native(NativeFunctionIndex_T.SubtractSubtract_PreByte, op_dec_byte);
+    native(NativeFunctionIndex_T.AddAdd_Byte, op_inc_byte);
+    native(NativeFunctionIndex_T.SubtractSubtract_Byte, op_dec_byte);
     native(141, op_inv_num);
 
     native(143, pre_op_sub_int);
@@ -493,14 +494,14 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(156, op_and_bit_num_num);
     native(157, op_xor_bit_num_num);
     native(158, op_or_bit_num_num);
-    native(159, op_mul_assign_int_float);
-    native(160, op_div_assign_int_float);
-    native(161, op_add_int_int);
-    native(162, op_sub_int_int);
-    native(163, op_inc_int);
-    native(164, op_dec_int);
-    native(165, op_inc_int);
-    native(166, op_dec_int);
+    native(NativeFunctionIndex_T.MultiplyEqual_IntFloat, op_mul_assign_int_float);
+    native(NativeFunctionIndex_T.DivideEqual_IntFloat, op_div_assign_int_float);
+    native(NativeFunctionIndex_T.AddEqual_IntInt, op_add_int_int);
+    native(NativeFunctionIndex_T.SubtractEqual_IntInt, op_sub_int_int);
+    native(NativeFunctionIndex_T.AddAdd_PreInt, op_inc_int);
+    native(NativeFunctionIndex_T.SubtractSubtract_PreInt, op_dec_int);
+    native(NativeFunctionIndex_T.AddAdd_Int, op_inc_int);
+    native(NativeFunctionIndex_T.SubtractSubtract_Int, op_dec_int);
 
     native(167, rand_int);
     native(249, min_num);
@@ -521,10 +522,10 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(180, op_eq_num_num);
     native(210, op_eq_approx_num_num);
     native(181, op_neq_num_num);
-    native(182, op_mul_num_num);
-    native(183, op_div_num_num);
-    native(184, op_add_num_num);
-    native(185, op_sub_num_num);
+    native(NativeFunctionIndex_T.MultiplyEqual_FloatFloat, op_mul_num_num);
+    native(NativeFunctionIndex_T.DivideEqual_FloatFloat, op_div_num_num);
+    native(NativeFunctionIndex_T.AddEqual_FloatFloat, op_add_num_num);
+    native(NativeFunctionIndex_T.SubtractEqual_FloatFloat, op_sub_num_num);
 
     native(186, Abs);
     native(187, Sin);
@@ -557,15 +558,15 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(218, op_neq_vector_vector);
     native(219, op_dot_vector_vector);
     native(220, op_cross_vector_vector);
-    native(221, op_mul_vector_float);
-    native(297, op_mul_vector_vector);
-    native(222, op_div_vector_float);
-    native(223, op_add_vector_vector);
-    native(224, op_sub_vector_vector);
+    native(NativeFunctionIndex_T.MultiplyEqual_VectorFloat, op_mul_vector_float);
+    native(NativeFunctionIndex_T.MultiplyEqual_VectorVector, op_mul_vector_vector);
+    native(NativeFunctionIndex_T.DivideEqual_VectorFloat, op_div_vector_float);
+    native(NativeFunctionIndex_T.AddEqual_VectorVector, op_add_vector_vector);
+    native(NativeFunctionIndex_T.SubtractEqual_VectorVector, op_sub_vector_vector);
 
     native(225, VSize);
     native(226, Normal);
-    native(227, vec_Invert);
+    native(NativeFunctionIndex_T.Invert, vec_Invert);
     native(252, VRand);
     native(300, vec_MirrorByNormal);
 
@@ -574,14 +575,14 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(287, op_mul_rotator_float); // static final operator(16) rotator *   ( rotator A, float    B );
     native(288, op_mul_float_rotator); // static final operator(16) rotator *   ( float    A, rotator B );
     native(289, op_div_rotator_float); // static final operator(16) rotator /   ( rotator A, float    B );
-    native(290, op_mul_rotator_float); // static final operator(34) rotator *=  ( out rotator A, float B  );
-    native(291, op_div_assign_rotator_float); // static final operator(34) rotator /=  ( out rotator A, float B  );
+    native(NativeFunctionIndex_T.MultiplyEqual_RotatorFloat, op_mul_rotator_float); // static final operator(34) rotator *=  ( out rotator A, float B  );
+    native(NativeFunctionIndex_T.DivideEqual_RotatorFloat, op_div_assign_rotator_float); // static final operator(34) rotator /=  ( out rotator A, float B  );
     native(316, op_add_rotator_rotator); // static final operator(20) rotator +   ( rotator A, rotator B );
     native(317, op_sub_rotator_rotator); // static final operator(20) rotator -   ( rotator A, rotator B );
-    native(318, op_add_rotator_rotator); // static final operator(34) rotator +=  ( out rotator A, rotator B );
-    native(319, op_sub_rotator_rotator); // static final operator(34) rotator -=  ( out rotator A, rotator B );
-    native(229, GetAxes); // static final function GetAxes         ( rotator A, out vector X, out vector Y, out vector Z );
-    native(230, GetUnAxes); // static final function GetUnAxes       ( rotator A, out vector X, out vector Y, out vector Z );
+    native(NativeFunctionIndex_T.AddEqual_RotatorRotator, op_add_rotator_rotator); // static final operator(34) rotator +=  ( out rotator A, rotator B );
+    native(NativeFunctionIndex_T.SubtractEqual_RotatorRotator, op_sub_rotator_rotator); // static final operator(34) rotator -=  ( out rotator A, rotator B );
+    native(NativeFunctionIndex_T.GetAxes, GetAxes); // static final function GetAxes         ( rotator A, out vector X, out vector Y, out vector Z );
+    native(NativeFunctionIndex_T.GetUnAxes, GetUnAxes); // static final function GetUnAxes       ( rotator A, out vector X, out vector Y, out vector Z );
     native(320, RotRand); // static final function rotator RotRand ( optional bool bRoll );
     native("OrthoRotation", rot_OrthoRotation); //      static final function rotator OrthoRotation( vector X, vector Y, vector Z );
     native("Normalize", rot_Normalize); //      static final function rotator Normalize( rotator Rot );
@@ -629,15 +630,15 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(232, Warn); // final static function Warn(coerce string S);
     native("Localize", function Localize() { fn_not_implemented() }); // static function string Localize(string SectionName, string KeyName, string PackageName);
 
-    native(113, fn_not_implemented); // final function GotoState(optional name NewState, optional name Label);
-    native(281, fn_not_implemented); // final function bool IsInState(name TestState);
-    native(284, fn_not_implemented); // final function name GetStateName();
+    native(NativeFunctionIndex_T.GotoState, fn_not_implemented); // final function GotoState(optional name NewState, optional name Label);
+    native(NativeFunctionIndex_T.IsInState, fn_not_implemented); // final function bool IsInState(name TestState);
+    native(NativeFunctionIndex_T.GetStateName, fn_not_implemented); // final function name GetStateName();
 
-    native(258, fn_not_implemented); // static final function bool ClassIsChildOf(class TestClass, class ParentClass );
-    native(303, fn_not_implemented); // final function bool IsA(name ClassName);
+    native(NativeFunctionIndex_T.ClassIsChildOf, fn_not_implemented); // static final function bool ClassIsChildOf(class TestClass, class ParentClass );
+    native(NativeFunctionIndex_T.IsA, fn_not_implemented); // final function bool IsA(name ClassName);
 
-    native(117, fn_not_implemented); // final function Enable(name ProbeFunc);
-    native(118, fn_not_implemented); // final function Disable(name ProbeFunc);
+    native(NativeFunctionIndex_T.Enable, fn_not_implemented); // final function Enable(name ProbeFunc);
+    native(NativeFunctionIndex_T.Disable, fn_not_implemented); // final function Disable(name ProbeFunc);
 
     native("GetPropertyText", function GetPropertyText() { fn_not_implemented() }); //    final function string GetPropertyText( string PropName );
     native("SetPropertyText", function SetPropertyText() { fn_not_implemented() }); // final function SetPropertyText( string PropName, string PropValue );
@@ -645,7 +646,7 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native("DynamicLoadObject", function DynamicLoadObject(objectName: string) { return objectName; }); // static final function object DynamicLoadObject( string ObjectName, class ObjectClass, optional bool MayFail );
     native("FindObject", function FindObject() { fn_not_implemented() }); // static final function object FindObject( string ObjectName, class ObjectClass );
 
-    native(536, fn_not_implemented);    // final function SaveConfig();
+    native(NativeFunctionIndex_T.SaveConfig, fn_not_implemented);    // final function SaveConfig();
     native("StaticSaveConfig", function StaticSaveConfig() { fn_not_implemented() });   // static final function StaticSaveConfig();
     native("ResetConfig", function ResetConfig() { fn_not_implemented() });    // static final function ResetConfig();
 

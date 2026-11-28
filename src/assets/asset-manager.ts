@@ -1,4 +1,4 @@
-import DecodeLibrary from "@l2js/engine/decode-library";
+import DecodeLibrary, { mergeLibraryScripts } from "@l2js/engine/decode-library";
 import loginServer from "../network/login-server";
 import { setLoadingProgress, loadingTexts } from "../loading-progress";
 import { printLoadingProfile } from "../loading-profile";
@@ -138,11 +138,12 @@ function parseLocalizedValue(field: IScriptFieldDecodeInfo, value: string): Scri
     }
 }
 
-function applyScriptLocalization(library: DecodeLibrary, classId: string, properties: LocalizationProperty_T[]): void {
-    const cls = library.scriptClasses[classId];
+function applyScriptLocalization(library: DecodeLibrary, classId: string, properties: LocalizationProperty_T[]): Set<string> {
+    const cls = library.scriptClasses[classId], names = new Set<string>();
 
     if (!cls) throw new Error(`UnrealScript class '${classId}' is not in '${library.name}'.`);
 
+    cls.defaults = { ...cls.defaults };
     for (const property of properties) {
         const field = findScriptField(library, classId, property.name);
 
@@ -150,6 +151,7 @@ function applyScriptLocalization(library: DecodeLibrary, classId: string, proper
         if (!field || !(field.flags & PropertyFlags_T.CPF_Localized)) continue;
 
         if (property.index < 0) {
+            names.add(field.name);
             cls.defaults[field.name] = parseLocalizedValue(field, property.value);
             continue;
         }
@@ -163,7 +165,9 @@ function applyScriptLocalization(library: DecodeLibrary, classId: string, proper
 
         values[property.index] = parseLocalizedValue(field, property.value);
         cls.defaults[field.name] = values;
+        names.add(field.name);
     }
+    return names;
 }
 
 function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary, actor: BaseActor): void {
@@ -183,9 +187,13 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
 }
 
 function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
-    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
-        for (const [id, value] of Object.entries(source[key]))
-            if (!(id in target[key])) (target[key] as any)[id] = value;
+    mergeLibraryScripts(target, source);
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+        for (const [id, value] of Object.entries(source[key])) {
+            if (id in target[key]) continue;
+
+            (target[key] as any)[id] = value;
+        }
 
     for (const [name, sound] of source.soundBlobCache) {
         if (!target.soundBlobCache.has(name)) target.soundBlobCache.set(name, sound);
@@ -267,7 +275,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected characterPrecache: Promise<void> = null;
     protected startupLevelLibrary: DecodeLibrary = null;
     protected effectLibrary: DecodeLibrary = null;
-    protected effectVM: UnScriptVM = null;
     protected arrCursors: string[] = [];
     protected cursorLoad: Promise<void> = null;
     protected bigHeadScales: Promise<Record<string, number>> = null;
@@ -278,7 +285,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly pawnSkillRequests = new WeakMap<BaseActor, number>();
     protected readonly cacheSkillVisuals = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcLibraries = new Map<string, CachedLibrary_T>();
-    protected readonly cacheNpcVMs = new WeakMap<DecodeLibrary, Promise<UnScriptVM>>();
+    protected readonly localizedClasses = new Set<string>();
     protected pawnBuildTick: Promise<void> = null;
     protected readonly pendingBuildSteps: BuildSteps_T[] = [];
     protected readonly cacheCharacterLibraries = new Map<string, CachedLibrary_T>();
@@ -396,11 +403,13 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             UnScriptVM.setConfig(scriptConfig);
             this.getParent().getComponent("input").initBindings(scriptConfig);
-            const controller = new PlayerController(library);
+            const controller = new PlayerController(library, this.gameManager.getComponent("script"));
             const inputClass = controller.scriptProperties.get("InputClass") as string;
 
             if (!inputClass) throw new Error(`Player controller has no InputClass.`);
-            mergePawnLibrary(library, await this.decodeWorker.decodeScriptClass(this.loadSettings, inputClass));
+            const input = await this.decodeWorker.decodeScriptClass(this.loadSettings, inputClass);
+            mergePawnLibrary(library, input);
+            this.gameManager.getComponent("script").registerLibrary(input);
             controller.initInputSystem();
             return controller;
         })();
@@ -479,7 +488,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (effectLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         this.effectLibrary = effectLibrary;
-        this.effectVM = new UnScriptVM(effectLibrary);
+        this.gameManager.getComponent("script").registerLibrary(effectLibrary);
 
         if (characterLibrary) await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
@@ -493,7 +502,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         manRender.audioManager.setUnderwaterLoopSound(underwaterSound.uri);
 
         manRender.setEnv(decodeEnv(envInfo));
-        manRender.setSky(decodePackage(skyLibrary));
+        manRender.setSky(decodePackage(skyLibrary, this.gameManager.getComponent("script")));
         manRender.audioManager.setMusicInfo(musicInfo);
 
         return this;
@@ -632,7 +641,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (!info) throw new Error(`Effect template '${classPath}' is missing.`);
 
-        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath, this.effectVM);
+        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath);
     }
 
     protected async applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX, request: number = null) {
@@ -649,7 +658,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
             return;
         }
 
-        applyScriptLocalization(characterLibrary, classId, localization);
+        const vm = this.gameManager.getComponent("script").registerLibrary(characterLibrary);
+        this.localizePawnClass(vm, classId, localization);
         characterLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (characterLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
@@ -688,9 +698,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
             player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
             player.setMeshes(bodyparts);
         }
-        const vm = new UnScriptVM(characterLibrary);
+        vm.setHostLibrary(player, characterLibrary);
 
-        player.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, characterLibrary, effectClassId, vm));
+        player.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, characterLibrary, effectClassId));
         if (renderManager.getLevel()) player.setUnrealScriptProperty("Level", renderManager.getLevel().levelInfoActor as any);
         player.setUnrealScriptProperty("bActorShadows", false);
 
@@ -741,7 +751,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
 
         mergePawnLibrary(pawnLibrary, library);
-        actor.getComponent<ScriptComponent>("script").getVM().loadFunctions();
+        this.gameManager.getComponent("script").registerLibrary(library);
         pawnLibrary.pawnEquipment = library.pawnEquipment;
         pawnLibrary.npcBow = library.npcBow;
         applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])), false);
@@ -908,15 +918,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
         this.pawnBuildTick = network.waitNextTick();
     }
 
-    protected async loadNpcVM(source: DecodeLibrary): Promise<UnScriptVM> {
-        await this.waitPawnBuild();
-
-        if (!this.isStreaming || this.gameManager.getCurrentTime() <= 0) return new UnScriptVM(source);
-
-        const vm = new UnScriptVM(source, true);
-
-        await this.runBuildSteps(vm.loadSteps()); // 12 ms in one frame otherwise, the first time an npc type shows up
-        return vm;
+    protected localizePawnClass(vm: UnScriptVM, classId: string, localization: LocalizationProperty_T[]): void {
+        if (!localization.length || this.localizedClasses.has(classId)) return;
+        const names = applyScriptLocalization(vm.getLibrary(), classId, localization);
+        vm.refreshClassDefaults(classId, names);
+        this.localizedClasses.add(classId);
     }
 
     public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: INpcEquipment | null = null, preloadSkills: boolean = true) {
@@ -937,9 +943,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const animations = (meshes.length ? (meshes[0] as any).meshAnimations : {}) as Record<string, THREE.AnimationClip>;
         const source = npcId === null ? library : library.sourceLibrary;
 
-        if (scriptClassPath && !this.cacheNpcVMs.has(source)) this.cacheNpcVMs.set(source, this.loadNpcVM(source));
-
-        const vm = scriptClassPath ? await this.cacheNpcVMs.get(source) : null;
+        const vm = this.gameManager.getComponent("script");
+        if (scriptClassPath && !vm.hasLibrary(source)) {
+            if (this.isStreaming && this.gameManager.getCurrentTime() > 0) await this.runBuildSteps(vm.registerLibrarySteps(source));
+            else vm.registerLibrary(source);
+        }
 
         await this.waitPawnBuild();
 
@@ -972,9 +980,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             if (!classId) throw new Error(`'${library.name}' has no transferred script class.`);
 
-            applyScriptLocalization(library, classId, localization);
+            this.localizePawnClass(vm, classId, localization);
+            vm.setHostLibrary(actor, library);
 
-            actor.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, library, effectClassId, vm));
+            actor.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, library, effectClassId));
             if (renderManager.getLevel()) actor.setUnrealScriptProperty("Level", renderManager.getLevel().levelInfoActor as any);
             actor.setUnrealScriptProperty("bActorShadows", false); // RenderManager owns the shared pawn projector pass.
 
@@ -1038,7 +1047,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return actor;
     }
 
-    public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string, vm: UnScriptVM = new UnScriptVM(library)): any {
+    public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string): any {
+        const vm = this.gameManager.getComponent("script").registerLibrary(library);
         const info = library.effectTemplates[classId] || library.effectTemplates[classId.toLowerCase()];
 
         if (!info) {
@@ -1068,7 +1078,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
                 object.setSwimmingAnimation(idle);
                 object.setSwimmingIdleAnimation(idle);
                 object.setMeshes([mesh]);
-                object.setScriptRuntime(vm, actorInfo.scriptClassId, classId => this.createScriptObject(renderManager, library, classId, vm));
+                vm.setHostLibrary(object, library);
+                object.setScriptRuntime(vm, actorInfo.scriptClassId, classId => this.createScriptObject(renderManager, library, classId));
                 object.setUnrealScriptProperty("bActorShadows", false);
                 object.setUnrealScriptProperty("Physics", findScriptDefault(library, actorInfo.scriptClassId, "Physics") as number);
                 if (renderManager.getLevel()) object.setUnrealScriptProperty("Level", renderManager.getLevel().levelInfoActor as any);
@@ -1079,12 +1090,14 @@ export class AssetManager implements IEngineComponent<GameManager> {
             const object = decodeObject3D(library, actorInfo) as any;
 
             object.scriptClassId = actorInfo.scriptClassId;
+            vm.initializeHost(object, library);
             return object;
         }
 
         const effect = decodeObject3D(library, info) as any;
 
-        effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId, vm), info.scriptClassId));
+        vm.setHostLibrary(effect, library);
+        effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId), info.scriptClassId));
         if ((info as any).drawType === "mesh") effect.addComponent(new ActorMeshComponent(library, renderManager));
 
         effect.children.forEach((emitter: any) => {
@@ -1257,7 +1270,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             if (gridIndex) decodeLibrary.sector = gridIndex;
 
-            const sector = decodePackage(decodeLibrary);
+            const sector = decodePackage(decodeLibrary, this.gameManager.getComponent("script"));
             this.setSectorScriptRuntime(renderManager, decodeLibrary, sector);
 
             sector.neverUnload = true;
@@ -1280,7 +1293,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const objects: any[] = [];
 
         sector.physicsManager = renderManager.getPhysicsManager();
-        sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
+        sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId));
         sector.traverse(object => { objects.push(object); });
         for (const object of objects) {
             if (object.isBSPCollider && !object.isVolume) object.levelInfoActor = sector.levelInfoActor;
@@ -1290,7 +1303,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             if (!object.isVolume && !object.isStaticMeshActor) continue;
 
-            object.setScriptRuntime(sector.scriptVM, (classId: string) => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
+            sector.scriptVM.setHostLibrary(object, library);
+            object.setScriptRuntime(sector.scriptVM, (classId: string) => this.createScriptObject(renderManager, library, classId));
             if (object.isMovableObject && !object.findComponent("sound")) object.addComponent(new SoundComponent(renderManager.audioManager).setLibrary(library));
             if (object.isStaticMeshActor && object.scriptClassId && !object.getUnrealScriptProperty("bStatic") && object.getUnrealScriptProperty("bMovable") && !object.findComponent("transform"))
                 object.addComponent(new TransformComponent(renderManager, object.getBasedActors()));
@@ -1374,7 +1388,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
             (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-            const sector = await this.runBuildSteps(decodeSectorCoreSteps(decodeLibrary));
+            const sector = await this.runBuildSteps(decodeSectorCoreSteps(decodeLibrary, this.gameManager.getComponent("script")));
 
             await this.runBuildSteps(this.stepSectorScriptRuntime(renderManager, decodeLibrary, sector));
             await this.runBuildSteps(renderManager.prepareSector(sector, sector));

@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
@@ -142,22 +143,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         this.unregisterSimulationObjects(pawn);
 
         return true;
-    }
-
-    public releaseSectorVolumeReferences(sector: SectorObject): void {
-        const owner = sector.levelInfoActor;
-        if (!owner) return;
-
-        for (const movement of this.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
-            const pawn = movement.getParent();
-            if (!pawn.scriptProperties) continue;
-
-            for (const name of ["PhysicsVolume", "HeadVolume", "FootVolume"]) {
-                const volume = pawn.getUnrealScriptProperty(name) as unknown as PhysicsVolume;
-                if (volume && volume.getUnrealScriptProperty("Level") === owner)
-                    pawn.setUnrealScriptProperty(name, null);
-            }
-        }
     }
 
     public async simulatePawns(count: number = 100): Promise<void> {
@@ -378,7 +363,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         for (const volume of candidates) {
             if (!volume) continue;
             const script = volume.getComponent("script") as any;
-            if (!script.getVM().invokeNative(volume, volume, 303, "IsA", arrPhysicsVolumeClass)) continue;
+            if (!script.getVM().invokeNative(volume, volume, NativeFunctionIndex_T.IsA, "IsA", arrPhysicsVolumeClass)) continue;
             if ((volume.getUnrealScriptProperty("Priority") as number) <= (selected.getUnrealScriptProperty("Priority") as number)) continue;
             if (useTouching && !volume.encompasses(location)) continue;
             selected = volume;
@@ -388,7 +373,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     }
     protected isTouchingPhysicsVolume(actor: BaseActor | CollidingMesh): boolean {
         for (const volume of actor.getUnrealScriptProperty("Touching") as unknown as PhysicsVolume[])
-            if (volume && volume.getComponent<ScriptComponent>("script").getVM().invokeNative(volume, volume, 303, "IsA", arrPhysicsVolumeClass)) return true;
+            if (volume && volume.getComponent<ScriptComponent>("script").getVM().invokeNative(volume, volume, NativeFunctionIndex_T.IsA, "IsA", arrPhysicsVolumeClass)) return true;
 
         return false;
     }
@@ -441,7 +426,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (!level) throw new Error(`Actor '${actor.name}' has no registered level for SetZone.`);
         const vm = actor.getComponent<ScriptComponent>("script").getVM();
 
-        if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"])) {
+        if (vm.invokeNative(actor, actor, NativeFunctionIndex_T.IsA, "IsA", ["LevelInfo"])) {
             actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
             return;
         }
@@ -459,7 +444,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         actor.setUnrealScriptProperty("Region", region as any);
         if (!test && changedZone) callZoneEvent(actor, region.Zone, "ActorEntered", [actor]);
 
-        if (vm.invokeNative(actor, actor, 303, "IsA", ["PhysicsVolume"])) {
+        if (vm.invokeNative(actor, actor, NativeFunctionIndex_T.IsA, "IsA", ["PhysicsVolume"])) {
             actor.setUnrealScriptProperty("PhysicsVolume", actor);
             return;
         }
@@ -482,7 +467,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public setActorVolumes(actor: Actor | BaseActor | CollidingMesh, volumes: (PhysicsVolume | MusicVolume | Volume)[]): void {
         const vm = actor.getComponent<ScriptComponent>("script").getVM();
 
-        if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"]) || vm.invokeNative(actor, actor, 303, "IsA", ["Volume"])) return;
+        if (vm.invokeNative(actor, actor, NativeFunctionIndex_T.IsA, "IsA", ["LevelInfo"]) || vm.invokeNative(actor, actor, NativeFunctionIndex_T.IsA, "IsA", ["Volume"])) return;
 
         tmpVolumeLocation.fromArray(actor.getUnrealScriptProperty("Location") as number[]);
         for (const volume of volumes) {
@@ -492,7 +477,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 (volume.getUnrealScriptProperty("Touching") as ScriptValue_T[]).push(actor);
                 (actor.getUnrealScriptProperty("Touching") as ScriptValue_T[]).push(volume);
             }
-            if (!vm.invokeNative(volume, volume, 303, "IsA", ["PhysicsVolume"])) continue;
+            if (!vm.invokeNative(volume, volume, NativeFunctionIndex_T.IsA, "IsA", ["PhysicsVolume"])) continue;
 
             const previous = actor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
             if ((volume.getUnrealScriptProperty("Priority") as number) > (previous.getUnrealScriptProperty("Priority") as number))

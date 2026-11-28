@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../../ue-script/native-function-index";
 import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Box3, Euler, LoopOnce, Object3D, Quaternion, Vector3 } from "three";
@@ -891,7 +892,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         const parent = this.getParent(), script = this.getComponent<ScriptComponent>("script"), vm = script.getVM();
         const target = getScriptActor(actor);
-        if (target.scriptClassId && vm.invokeNative(parent, target, 303, "IsA", ["Pawn"])) return;
+        if (target.scriptClassId && vm.invokeNative(parent, target, NativeFunctionIndex_T.IsA, "IsA", ["Pawn"])) return;
 
         let controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
         const hitNormal = normal.toArray() as Vector3Arr;
@@ -939,7 +940,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                     const tryCrouch = this.physicsMode === "walking" &&
                         parent.getUnrealScriptProperty("bCanCrouch") &&
                         !parent.getUnrealScriptProperty("bIsCrouched") &&
-                        !(controller && vm.invokeNative(parent, controller, 303, "IsA", ["PlayerController"]));
+                        !(controller && vm.invokeNative(parent, controller, NativeFunctionIndex_T.IsA, "IsA", ["PlayerController"]));
                     if (tryCrouch) {
                         tmpCrouchStart.fromArray(parent.getUnrealScriptProperty("Location") as Vector3Arr);
                         tmpCrouchEnd.set(tmpCrouchStart.x + this.collisionRadius * x, tmpCrouchStart.y + this.collisionRadius * y, tmpCrouchStart.z + this.collisionRadius * z);
@@ -954,7 +955,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                     }
 
                     controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
-                    if (controller && vm.invokeNative(parent, controller, 303, "IsA", ["AIController"])) {
+                    if (controller && vm.invokeNative(parent, controller, NativeFunctionIndex_T.IsA, "IsA", ["AIController"])) {
                         debugger;
                         throw new Error(`AI controller wall adjustment is not implemented for '${parent.name}'.`);
                     }

@@ -1,4 +1,5 @@
-import { isCacheEnabled } from "./cache-storage";
+import { getCacheVersion, hashSettings, isCacheEnabled } from "./cache-storage";
+import requestWebLock from "../web-lock";
 import { refreshSoundBlobUris } from "../sound-uris";
 import { DDSConstants } from "../unreal/dds/dds-constants";
 import type { APackage, UClass } from "@l2js/core";
@@ -16,8 +17,8 @@ import prepareLibraryForTransfer, { collectTransferables } from "./collect-trans
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, serializeLibraryBlob, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectClass, dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T, ClientConfig_T, ConfirmSharedScriptMessage_T } from "./decode-protocol";
-import DecodeLibrary from "@l2js/engine/decode-library";
+import { getSharedScriptKey, type GameStrings_T, type SkillInfo_T, type ItemInfo_T, type MatineeScene_T, type MatineeAction_T, type UITexture_T, type PlayerSkillInfo_T, type PrecacheResult_T, type WorkerMemoryStats_T, type ClientConfig_T, type ConfirmSharedScriptMessage_T } from "./decode-protocol";
+import DecodeLibrary, { mergeLibraryScripts } from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
@@ -46,7 +47,7 @@ import type { USound } from "@l2js/engine/un-sound";
 import type { UStaticMesh } from "@l2js/engine/static-mesh/un-static-mesh";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
-import fetchAsset from "../asset-source";
+import fetchAsset, { getAssetSourceId } from "../asset-source";
 import { isFirefox } from "../../browser";
 import { allCharacterCreationRacesEnabled, enableCloaks } from "../../build-settings";
 
@@ -103,7 +104,8 @@ async function hydrateLibraryAssets(seekable: SeekableLibrary_T, library: Decode
 }
 
 function copyLibraryAssets(target: DecodeLibrary, source: DecodeLibrary): void {
-    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+    mergeLibraryScripts(target, source);
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         for (const [id, value] of Object.entries(source[key])) {
             if (id in target[key]) continue;
 
@@ -509,6 +511,7 @@ export class DecodeEngine {
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheCharacterHairTables = new Map<string, Record<string, any>[]>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
+    protected readonly cachePawnCombatEffects = new Map<string, Promise<DecodeLibrary>>();
     protected readonly sentScriptIds = { scriptClasses: new Set<string>(), scriptFunctions: new Set<string>(), scriptStates: new Set<string>(), scriptObjects: new Set<string>() };
     protected readonly sentSoundIds = new Set<string>();
     protected readonly cacheTextureBuffers = new Map<string, ArrayBuffer>();
@@ -709,7 +712,7 @@ export class DecodeEngine {
     }
 
     protected prepareCachedPackageAsset(value: any, name: string, uuid: string): any {
-        if (SCRIPT_KEYS.includes(name as any) && this.sentScriptIds[name as typeof SCRIPT_KEYS[number]].has(uuid)) return null;
+        if ((name === "scriptFunctions" || name === "scriptStates") && this.sentScriptIds[name].has(uuid)) return null;
         if (name === "soundBlobCache" && value.assetName && this.sentSoundIds.has(value.assetName.toLowerCase())) value.data = null;
         if (name !== "materials") return value;
         if (value.materialType === "sprite") value.sprites = value.sprites.map((texture: ITextureDecodeInfo) => ({ ...texture }));
@@ -734,7 +737,7 @@ export class DecodeEngine {
     protected async hydrateSectorTransfer(cached: SeekableLibrary_T): Promise<DecodeLibrary> {
         const library = cached.library;
 
-        for (const key of SCRIPT_KEYS)
+        for (const key of ["scriptFunctions", "scriptStates"] as const)
             for (const id of Object.keys(library[key]))
                 if (this.sentScriptIds[key].has(id)) library[key][id] = null;
 
@@ -1656,8 +1659,7 @@ export class DecodeEngine {
         // the bundle carries the pawn defaults so a spawn never has to load LineageMonster.u and the mesh packages it imports
         library.effectSpawnBoneIndex = entry.effectSpawnBoneIndex;
         library.damageEffect = entry.damageEffect;
-        if (entry.damageEffect) await this.pullEffectTemplate(library, builder, entry.damageEffect, true);
-        await this.pullAttackImpactEffects(library, builder);
+        await this.pullPawnCombatEffects(library, settings);
         await this.pullAnimationNotifyEffects(builder, sourceInfo.animationNotifies);
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
@@ -1822,10 +1824,11 @@ export class DecodeEngine {
             sharedScript[key] = [];
 
             for (const [id, value] of Object.entries(library[key])) {
-                if (!independent && sent.has(id)) sharedScript[key].push(id);
+                const cacheKey = getSharedScriptKey(key, id, value);
+                if (!independent && sent.has(cacheKey)) sharedScript[key].push(cacheKey);
                 else {
                     kept[id] = value;
-                    fresh.push([sent, id]);
+                    fresh.push([sent, cacheKey]);
                 }
             }
 
@@ -2000,6 +2003,7 @@ export class DecodeEngine {
         if (classPaths.some(path => path.toLowerCase() === "lineageeffect.e_u091_aura")) await this.pullHeroMesh(library, builder);
         for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path, requiredSounds);
         for (const path of scriptClassPaths) {
+            if (classPaths.includes(path)) continue;
             const [, cls] = await this.fetchScriptClass(path);
 
             builder.pullScriptClasses([cls]);
@@ -2657,6 +2661,7 @@ export class DecodeEngine {
         }
 
         this.cacheNpcBundles.clear();
+        this.cachePawnCombatEffects.clear();
         if (isFirefox) this.cacheCharacterBundles.clear();
     }
 
@@ -2857,9 +2862,48 @@ export class DecodeEngine {
 
         library.effectSpawnBoneIndex = index;
         library.damageEffect = damageEffect ? damageEffect.name : null;
-        if (damageEffect) await this.pullEffectTemplate(library, builder, damageEffect.name, true);
+        await this.pullPawnCombatEffects(library, builder.getSettings());
+    }
 
-        await this.pullAttackImpactEffects(library, builder);
+    protected async pullPawnCombatEffects(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
+        if (library.damageEffect) copyLibraryAssets(library, await this.getPawnCombatEffects(settings, library.damageEffect));
+        copyLibraryAssets(library, await this.getPawnCombatEffects(settings));
+    }
+
+    protected async getPawnCombatEffects(settings: LoadSettings_T, damageEffect: string = null): Promise<DecodeLibrary> {
+        const name = damageEffect ? `pawn_damage_${encodeURIComponent(damageEffect)}` : "pawn_attack_impacts";
+        const key = `${getAssetSourceId()}:${name}:${getCacheVersion(settings)}:${hashSettings(settings)}`;
+        let effects = this.cachePawnCombatEffects.get(key);
+
+        if (!effects) {
+            effects = isCacheEnabled(settings) ? requestWebLock(`build:${key}`, async () => {
+                const cached = await DecodeCache.loadCachedLibrary(name, settings);
+                if (cached) return cached;
+
+                const library = await this.decodePawnCombatEffects(settings, damageEffect);
+                await DecodeCache.storeCachedLibraryDurable(name, settings, library);
+                return library;
+            }) : this.decodePawnCombatEffects(settings, damageEffect);
+            this.cachePawnCombatEffects.set(key, effects);
+        }
+
+        try {
+            return await effects;
+        } catch (error) {
+            if (this.cachePawnCombatEffects.get(key) === effects) this.cachePawnCombatEffects.delete(key);
+            throw error;
+        }
+    }
+
+    protected async decodePawnCombatEffects(settings: LoadSettings_T, damageEffect: string): Promise<DecodeLibrary> {
+        const library = new DecodeLibrary();
+        const builder = this.createDecodeBuilder(library, settings);
+
+        if (damageEffect) await this.pullEffectTemplate(library, builder, damageEffect, true);
+        else await this.pullAttackImpactEffects(library, builder);
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
+        if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+        return library;
     }
 
     protected async pullAttackImpactEffects(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> { // SkillEffectPlacement.addAttackImpact spawns these from the attacker's own library

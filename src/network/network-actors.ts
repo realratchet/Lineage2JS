@@ -379,14 +379,21 @@ export class NetworkActors {
         this.worldLevel = level;
         this.network.getParent().getComponent("asset").playerController.scriptProperties.set("Level", level.levelInfoActor as any);
 
+        const pawns = new Set<BaseActor>();
         for (const host of previous.moveLevelActors(level)) {
             const actor = host as BaseActor;
 
-            if (!actor.findComponent || !actor.findComponent("pawnMovement")) continue;
-
-            physics.setPawnZone(actor, false, true);
-            physics.setPawnVolumes(actor);
+            if (actor.findComponent && actor.findComponent("pawnMovement")) pawns.add(actor);
         }
+
+        function refreshZone(pawn: BaseActor): void {
+            if (!pawns.delete(pawn)) return;
+            if (pawn.scriptBase) refreshZone(pawn.scriptBase);
+            physics.setPawnZone(pawn, false, true);
+            physics.setPawnVolumes(pawn);
+        }
+
+        for (const pawn of pawns) refreshZone(pawn);
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {

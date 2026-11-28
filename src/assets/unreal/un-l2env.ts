@@ -4,7 +4,7 @@ import hsvToRgb from "./utils/hsv-to-rgb";
 import { APackage, UExport, type ANativePackage, type EnginePackage_T, type FPrimitiveArray, type PropertyTag, type UStruct, FArray } from "@l2js/core";
 import UObject from "./un-object";
 import type { ColorArr } from "./library-types";
-import { findSection, consumeNextValue, consumeHSV, consumeRGB, consumeScale } from "./conf-files/conf-parser";
+import { parseConfigFile, consumeHSV, consumeRGB, consumeScale } from "./conf-files/conf-parser";
 
 export type INTimeColorDecodeInfo = [number, number, number, number];
 export type INTimeHSVDecodeInfo = [number, number, number, number];
@@ -44,6 +44,8 @@ export type IL2NEnvLightDecodeInfo = {
     }
 };
 
+
+type TimeEnvConfig_T = Map<string, Map<string, string>>;
 
 interface IEnvTime { time: number; }
 
@@ -145,12 +147,18 @@ export abstract class UL2NTimeLight extends UObject {
     public load(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this;
 
     public load(fileContents: any, pkgNative?: any, pkgEngine?: any): this {
-        if (typeof fileContents === "string")
-            return this.loadFromText(fileContents, pkgNative, pkgEngine);
-        else return super.load(fileContents, pkgNative);
+        if (typeof fileContents !== "string") return super.load(fileContents, pkgNative);
+
+        const config: TimeEnvConfig_T = new Map();
+        for (const [section, entries] of parseConfigFile(fileContents)) {
+            const values = new Map<string, string>();
+            for (const [key, value] of entries) values.set(key.toLowerCase(), value);
+            config.set(section, values);
+        }
+        return this.loadFromText(config, pkgNative, pkgEngine);
     }
 
-    protected loadFromText(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this {
+    protected loadFromText(fileContents: TimeEnvConfig_T, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this {
         this.lightActor = loadHSV(fileContents, "HSVActorLight", pkgNative, pkgEngine);
         this.lightStaticMesh = loadHSV(fileContents, "HSVStaticMeshLight", pkgNative, pkgEngine);
         this.lightTerrain = loadHSV(fileContents, "HSVTerrainLight", pkgNative, pkgEngine);
@@ -190,7 +198,7 @@ export abstract class UL2NEnvLight extends UL2NTimeLight {
 
     declare public envType: EEnvCycle;
 
-    protected loadFromText(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this {
+    protected loadFromText(fileContents: TimeEnvConfig_T, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this {
         super.loadFromText(fileContents, pkgNative, pkgEngine);
 
         this.envType = getEnvType(fileContents);
@@ -280,24 +288,19 @@ export abstract class UL2NEnvLight extends UL2NTimeLight {
     // return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
 // }
 
-function getEnvType(fileContents: string): EEnvCycle {
-    let readOffset = findSection(fileContents, "EnvType");
-    let [nameMax, nameVal, _] = consumeNextValue(fileContents, readOffset);
-
-    if (nameMax.toLowerCase() !== "envtype") throw new Error(`Invalid variable found '${nameMax}' expected 'NUM'`);
-
-    return parseInt(nameVal) as EEnvCycle;
+function getEnvType(fileContents: TimeEnvConfig_T): EEnvCycle {
+    return parseInt(getEnvValue(fileContents, "EnvType", "EnvType")) as EEnvCycle;
 }
 
-function loadHSV(fileContents: string, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeHSV> {
-    let readOffset = findSection(fileContents, sectionName);
-    let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
+function getEnvValue(fileContents: TimeEnvConfig_T, section: string, key: string): string {
+    const value = fileContents.get(section.toLowerCase())?.get(key.toLowerCase());
 
-    if (nameMax.toLowerCase() !== "num") throw new Error(`Invalid variable found '${nameMax}' expected 'NUM'`);
+    if (value === undefined) throw new Error(`Missing '${key}' in environment section '[${section}]'.`);
+    return value;
+}
 
-    readOffset = readOffset + readContent;
-
-    const numLights = parseInt(nameVal);
+function loadHSV(fileContents: TimeEnvConfig_T, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeHSV> {
+    const numLights = parseInt(getEnvValue(fileContents, sectionName, "NUM"));
 
     const uStruct = pkgEngine.fetchObjectByType<UStruct<FNTimeHSV>>("Struct", "NTimeHSV").loadSelf();
     const FNTimeHSV = uStruct.buildClass(pkgNative);
@@ -305,14 +308,7 @@ function loadHSV(fileContents: string, sectionName: string, pkgNative: ANativePa
     const array = new FArray(FNTimeHSV, numLights);
 
     for (let i = 1; i <= numLights; i++) {
-        const [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
-
-        if (nameMax.toLowerCase() !== `light${i}`)
-            throw new Error(`Invalid variable found '${nameMax}' expected 'Light${i}'`);
-
-        const [t, h, s, b] = consumeHSV(nameVal);
-
-        readOffset = readOffset + readContent;
+        const [t, h, s, b] = consumeHSV(getEnvValue(fileContents, sectionName, `Light${i}`));
 
         array[i - 1] = new FNTimeHSV(t, h, s, b);
     }
@@ -320,15 +316,8 @@ function loadHSV(fileContents: string, sectionName: string, pkgNative: ANativePa
     return array;
 }
 
-function loadScale(fileContents: string, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeScale> {
-    let readOffset = findSection(fileContents, sectionName);
-    let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
-
-    if (nameMax.toLowerCase() !== "num") throw new Error(`Invalid variable found '${nameMax}' expected 'NUM'`);
-
-    readOffset = readOffset + readContent;
-
-    const numScales = parseInt(nameVal);
+function loadScale(fileContents: TimeEnvConfig_T, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeScale> {
+    const numScales = parseInt(getEnvValue(fileContents, sectionName, "NUM"));
 
     const uStruct = pkgEngine.fetchObjectByType<UStruct<FNTimeScale>>("Struct", "NTimeScale").loadSelf();
     const FNTimeScale = uStruct.buildClass(pkgNative);
@@ -336,14 +325,7 @@ function loadScale(fileContents: string, sectionName: string, pkgNative: ANative
     const array = new FArray(FNTimeScale, numScales);
 
     for (let i = 1; i <= numScales; i++) {
-        const [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
-
-        if (nameMax.toLowerCase() !== `scale${i}`)
-            throw new Error(`Invalid variable found '${nameMax}' expected 'Light${i}'`);
-
-        const [t, s] = consumeScale(nameVal);
-
-        readOffset = readOffset + readContent;
+        const [t, s] = consumeScale(getEnvValue(fileContents, sectionName, `Scale${i}`));
 
         array[i - 1] = new FNTimeScale(t, s);
     }
@@ -351,15 +333,8 @@ function loadScale(fileContents: string, sectionName: string, pkgNative: ANative
     return array;
 }
 
-function loadRGB(fileContents: string, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeColor> {
-    let readOffset = findSection(fileContents, sectionName);
-    let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
-
-    if (nameMax.toLowerCase() !== "num") throw new Error(`Invalid variable found '${nameMax}' expected 'NUM'`);
-
-    readOffset = readOffset + readContent;
-
-    const numLights = parseInt(nameVal);
+function loadRGB(fileContents: TimeEnvConfig_T, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeColor> {
+    const numLights = parseInt(getEnvValue(fileContents, sectionName, "NUM"));
 
     const uStruct = pkgEngine.fetchObjectByType<UStruct<FNTimeColor>>("Struct", "NTimeColor").loadSelf();
     const FNTimeColor = uStruct.buildClass(pkgNative);
@@ -367,14 +342,7 @@ function loadRGB(fileContents: string, sectionName: string, pkgNative: ANativePa
     const array = new FArray(FNTimeColor, numLights);
 
     for (let i = 1; i <= numLights; i++) {
-        const [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
-
-        if (nameMax.toLowerCase() !== `color${i}`)
-            throw new Error(`Invalid variable found '${nameMax}' expected 'Light${i}'`);
-
-        const [t, r, g, b, a] = consumeRGB(nameVal);
-
-        readOffset = readOffset + readContent;
+        const [t, r, g, b, a] = consumeRGB(getEnvValue(fileContents, sectionName, `Color${i}`));
 
         array[i - 1] = new FNTimeColor(t, r, g, b, a);
     }

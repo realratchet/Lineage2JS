@@ -5,7 +5,6 @@ import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/scrip
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import ActorOwnershipComponent from "./components/actor-ownership-component";
 import AnimationComponent from "./components/animation-component";
-import UnScriptVM from "../ue-script/vm";
 import Rotator from "../utils/rotator";
 import { TagState_T } from "../assets/unreal/un-l2-float";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
@@ -62,9 +61,10 @@ export class FishingFloat extends GameObject {
         this.nativeRotation.toQuaternion(this.quaternion);
         this.position.copy(location);
         this.originalLocation.copy(location);
-        const vm = new UnScriptVM(library);
+        const vm = renderManager.getParent().getComponent("script").registerLibrary(library);
+        vm.setHostLibrary(this, library);
 
-        this.addComponent(new ScriptComponent(vm, classId => renderManager.getParent().getComponent("asset").createScriptObject(renderManager, library, classId, vm), this.scriptClassId));
+        this.addComponent(new ScriptComponent(vm, classId => renderManager.getParent().getComponent("asset").createScriptObject(renderManager, library, classId), this.scriptClassId));
 
         const rate = this.scriptProperties.get("RotationRate");
         if (!Array.isArray(rate) || rate.some(value => value !== 0)) throw new Error(`L2Float has unsupported RotationRate ${rate}`);

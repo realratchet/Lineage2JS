@@ -28,7 +28,7 @@ export class WaterHitEffect {
 
         const effect = decodeObject3D(library, info);
 
-        sector.scriptVM.initializeHost(effect as any);
+        sector.scriptVM.initializeHost(effect as any, library);
 
         effect.position.copy(position);
         const scale = Math.fround(this.owner.getCollisionRadius() * WaterHitEffect.SIZE_SCALE);

@@ -1,9 +1,13 @@
+import { NativeFunctionIndex_T } from "./native-function-index";
 import UNativeRegistry from "./native-registry";
 import ConfigCache from "./config-cache";
 import { CastToken_T, ExprToken_T, EStateFlags_T, ObjectFlags_T, PropertyFlags_T } from "@l2js/core";
 import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { ENetRole_T } from "../assets/unreal/un-aactor";
-import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
+import DecodeLibrary, { hasScriptStateCode } from "@l2js/engine/decode-library";
+import type GameManager from "../game/game-manager";
+import type { IEngineComponent } from "../game/components";
+import type { Vector3Arr } from "@l2js/engine";
 import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo, IScriptStateDecodeInfo } from "@l2js/engine/contracts/script";
 
 export type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | ScriptValue_T[] | { [key: string]: ScriptValue_T } | undefined;
@@ -56,11 +60,15 @@ const CPF_Parm = 0x00000080;
 const CPF_OutParm = 0x00000100;
 const CPF_ReturnParm = 0x00000400;
 const FUNC_Native = 0x00000400;
-const NATIVE_Trace = 277;
-const NATIVE_FinishRotation = 508;
 const NAME_SIZE = 64;
-const assignmentNatives = new Set([133, 134, 135, 136, 137, 138, 139, 140, 159, 160, 161, 162, 163, 164, 165, 166, 182, 183, 184, 185, 221, 222, 223, 224, 290, 291, 297, 318, 319]);
-const postAssignmentNatives = new Set([139, 140, 165, 166]);
+const assignmentNatives = new Set([
+    NativeFunctionIndex_T.MultiplyEqual_ByteByte, NativeFunctionIndex_T.DivideEqual_ByteByte, NativeFunctionIndex_T.AddEqual_ByteByte, NativeFunctionIndex_T.SubtractEqual_ByteByte, NativeFunctionIndex_T.AddAdd_PreByte, NativeFunctionIndex_T.SubtractSubtract_PreByte, NativeFunctionIndex_T.AddAdd_Byte, NativeFunctionIndex_T.SubtractSubtract_Byte,
+    NativeFunctionIndex_T.MultiplyEqual_IntFloat, NativeFunctionIndex_T.DivideEqual_IntFloat, NativeFunctionIndex_T.AddEqual_IntInt, NativeFunctionIndex_T.SubtractEqual_IntInt, NativeFunctionIndex_T.AddAdd_PreInt, NativeFunctionIndex_T.SubtractSubtract_PreInt, NativeFunctionIndex_T.AddAdd_Int, NativeFunctionIndex_T.SubtractSubtract_Int,
+    NativeFunctionIndex_T.MultiplyEqual_FloatFloat, NativeFunctionIndex_T.DivideEqual_FloatFloat, NativeFunctionIndex_T.AddEqual_FloatFloat, NativeFunctionIndex_T.SubtractEqual_FloatFloat,
+    NativeFunctionIndex_T.MultiplyEqual_VectorFloat, NativeFunctionIndex_T.DivideEqual_VectorFloat, NativeFunctionIndex_T.AddEqual_VectorVector, NativeFunctionIndex_T.SubtractEqual_VectorVector,
+    NativeFunctionIndex_T.MultiplyEqual_RotatorFloat, NativeFunctionIndex_T.DivideEqual_RotatorFloat, NativeFunctionIndex_T.MultiplyEqual_VectorVector, NativeFunctionIndex_T.AddEqual_RotatorRotator, NativeFunctionIndex_T.SubtractEqual_RotatorRotator
+]);
+const postAssignmentNatives = new Set([NativeFunctionIndex_T.AddAdd_Byte, NativeFunctionIndex_T.SubtractSubtract_Byte, NativeFunctionIndex_T.AddAdd_Int, NativeFunctionIndex_T.SubtractSubtract_Int]);
 
 enum EPollSlowFuncs {
     EPOLL_Sleep = 384,
@@ -68,7 +76,7 @@ enum EPollSlowFuncs {
     AI_PollFinishRotation = 509
 }
 
-type StateFrame_T = { node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
+type StateFrame_T = { initializedProperties?: ScriptProperties_T, node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
 type ObjectName_T = { names: Map<string, WeakRef<ScriptHost_T>>, name: string, object: WeakRef<ScriptHost_T> };
 type ScriptObjectClasses_T = { parents: Map<string, string | null>, aliases: Map<string, string>, vm?: WeakRef<UnScriptVM> };
 type ScriptResource_T = ScriptHost_T & { isScriptResource: true, scriptObjectPath: string };
@@ -173,7 +181,6 @@ const cacheInputProperties = new WeakMap<IScriptClassDecodeInfo, IScriptClassDec
 const cacheScriptResources = new Map<string, WeakRef<ScriptHost_T>>();
 const cacheScriptResourceAliases = new WeakMap<WeakRef<ScriptHost_T>, Set<string>>();
 const cacheResourceProperties = new WeakSet<ScriptHost_T>();
-const cacheLibraryScriptResources = new WeakMap<DecodeLibrary, Map<string, ScriptHost_T>>();
 const cacheClassParents = new WeakMap<Record<string, string | null>, [string, string | null][]>();
 let scriptLocalization: Map<string, Map<string, Map<string, string>>> = null;
 const scriptObjectFinalizer = new FinalizationRegistry<WeakRef<ScriptHost_T>>(reference => {
@@ -237,6 +244,8 @@ function loadClassParents(parents: Record<string, string | null>, cache: ClassPa
     }
     cache.records.set(parents, cache.revision);
 }
+
+function getResourceKey(info: DecodeLibrary["scriptObjects"][string]): string { return info.classId.toLowerCase() + "\0" + info.path.toLowerCase(); }
 
 export function getScriptResource(path: string): ScriptHost_T | null { return cacheScriptResources.get(path.toLowerCase())?.deref() || null; }
 export function getScriptVM(host: ScriptHost_T): UnScriptVM | null { return cacheStateFrames.get(host)?.vm || null; }
@@ -485,8 +494,8 @@ function isOffset(value: ScriptBytecodeValue_T): value is IScriptBytecodeOffsetD
     return value !== null && typeof value === "object" && !Array.isArray(value) && "entryIndex" in value;
 }
 
-function asHost(value: ScriptValue_T): ScriptHost_T {
-    if (typeof value === "string") value = getScriptResource(value);
+function asHost(value: ScriptValue_T, vm?: UnScriptVM, context?: ScriptHost_T): ScriptHost_T {
+    if (typeof value === "string") value = vm ? vm.getResource(value, context) : getScriptResource(value);
     if (value === null || value === undefined || typeof value !== "object" || !("scriptClassId" in value))
         throw new Error("UnrealScript context is not a script host");
 
@@ -587,7 +596,7 @@ class ScriptExecutor {
 
                 const previous = this.frame.context;
 
-                this.frame.context = opcode === ExprToken_T.ClassContext ? (cacheStateFrames.get(previous)?.vm || this.vm).getDefaultObject(contextValue as string) : asHost(contextValue);
+                this.frame.context = opcode === ExprToken_T.ClassContext ? (cacheStateFrames.get(previous)?.vm || this.vm).getDefaultObject(contextValue as string) : asHost(contextValue, this.vm, previous);
 
                 try {
                     return this.evalLValue();
@@ -681,7 +690,7 @@ class ScriptExecutor {
 
         const previous = this.frame.context;
 
-        this.frame.context = opcode === ExprToken_T.ClassContext ? (cacheStateFrames.get(previous)?.vm || this.vm).getDefaultObject(contextValue as string) : asHost(contextValue);
+        this.frame.context = opcode === ExprToken_T.ClassContext ? (cacheStateFrames.get(previous)?.vm || this.vm).getDefaultObject(contextValue as string) : asHost(contextValue, this.vm, previous);
 
         try {
             return this.evalToken();
@@ -703,7 +712,7 @@ class ScriptExecutor {
 
         let args: ScriptArgument_T[];
 
-        if (script || fn.nativeIndex === 278 || fn.nativeIndex === NATIVE_Trace) {
+        if (script || fn.nativeIndex === NativeFunctionIndex_T.Spawn || fn.nativeIndex === NativeFunctionIndex_T.Trace) {
             this.frame.context = this.frame.self;
 
             try {
@@ -734,7 +743,7 @@ class ScriptExecutor {
     protected evalNative(entry: IScriptBytecodeEntryDecodeInfo): ScriptValue_T {
         const index = entry.value as number;
 
-        if (index === 304 || index === 307 || index === 313) return this.evalActorIterator(index);
+        if (index === NativeFunctionIndex_T.AllActors || index === NativeFunctionIndex_T.TouchingActors || index === NativeFunctionIndex_T.DynamicActors) return this.evalActorIterator(index);
 
         if (assignmentNatives.has(index)) {
             const slot = this.evalLValue();
@@ -742,13 +751,13 @@ class ScriptExecutor {
             const previous = slot.get();
             const value = this.vm.invokeNative(this.frame.self, this.frame.context, index, entry.tokenName || `Native${index}`, [previous, ...args]);
 
-            if (index !== 134 || args[0] !== 0) slot.set(value);
+            if (index !== NativeFunctionIndex_T.DivideEqual_ByteByte || args[0] !== 0) slot.set(value);
             return postAssignmentNatives.has(index) ? previous : value;
         }
 
         let args: ScriptArgument_T[];
 
-        if (index === 278 || index === NATIVE_Trace) {
+        if (index === NativeFunctionIndex_T.Spawn || index === NativeFunctionIndex_T.Trace) {
             const context = this.frame.context;
 
             this.frame.context = this.frame.self;
@@ -769,7 +778,7 @@ class ScriptExecutor {
 
         try {
             const baseClass = this.evalToken() as string || "engine.Actor", slot = this.evalLValue();
-            const matchTag = nativeIndex !== 307 && this.entries[this.pc].value !== ExprToken_T.EndFunctionParms ? this.evalToken() as string : null, end = this.next();
+            const matchTag = nativeIndex !== NativeFunctionIndex_T.TouchingActors && this.entries[this.pc].value !== ExprToken_T.EndFunctionParms ? this.evalToken() as string : null, end = this.next();
 
             if (end.type !== "token" || end.value !== ExprToken_T.EndFunctionParms) throw new Error(`UnrealScript '${this.frame.fn.id}' expected actor iterator parameters to end`);
             if (this.entries[this.pc].value === ExprToken_T.DebugInfo) this.evalToken();
@@ -779,7 +788,7 @@ class ScriptExecutor {
             if (!pop || pop.type !== "token" || pop.value !== ExprToken_T.IteratorPop) throw new Error(`UnrealScript '${this.frame.fn.id}' has no IteratorPop at '${target.virtualOffset}'`);
             if (!this.vm.metaCast(baseClass, baseClass)) throw new Error(`UnrealScript iterator class '${baseClass}' is not in the decode library`);
 
-            let index = nativeIndex === 313 ? getLevelActors(context).getFirstDynamicActor() : 0;
+            let index = nativeIndex === NativeFunctionIndex_T.DynamicActors ? getLevelActors(context).getFirstDynamicActor() : 0;
 
             while (true) {
                 slot.set(null);
@@ -787,7 +796,7 @@ class ScriptExecutor {
                 while (true) {
                     let actor: ScriptHost_T;
 
-                    if (nativeIndex !== 307) {
+                    if (nativeIndex !== NativeFunctionIndex_T.TouchingActors) {
                         const level = getLevelActors(context);
 
                         if (index >= level.getLevelActorCount()) break;
@@ -835,7 +844,7 @@ class ScriptExecutor {
     protected readArguments(fn: IScriptFunctionDecodeInfo = null, context: ScriptHost_T = this.frame.context, nativeIndex: number = fn ? fn.nativeIndex : 0): ScriptArgument_T[] {
         const args = new Array<ScriptArgument_T>();
         const fields = fn ? fn.fields.filter(field => field.flags & CPF_Parm && !(field.flags & CPF_ReturnParm)) : null;
-        const isSpawn = nativeIndex === 278;
+        const isSpawn = nativeIndex === NativeFunctionIndex_T.Spawn;
         const isScript = fn && fn.nativeIndex === 0 && !(fn.flags & FUNC_Native);
 
         while (true) {
@@ -856,9 +865,9 @@ class ScriptExecutor {
 
             const isTransform = isSpawn && (args.length === 3 || args.length === 4);
             const fallback = isTransform ? cloneScriptValue(getProperty(context, args.length === 3 ? "Location" : "Rotation")) : undefined;
-            const isTraceOut = nativeIndex === NATIVE_Trace && (args.length < 2 || args.length === 6);
-            const isOut = field ? field.flags & CPF_OutParm : isTraceOut || nativeIndex === 227 || (nativeIndex === 229 || nativeIndex === 230) && args.length > 0;
-            const isEmpty = (isScript || nativeIndex === NATIVE_Trace) && entry.type === "token" && entry.value === ExprToken_T.Nothing;
+            const isTraceOut = nativeIndex === NativeFunctionIndex_T.Trace && (args.length < 2 || args.length === 6);
+            const isOut = field ? field.flags & CPF_OutParm : isTraceOut || nativeIndex === NativeFunctionIndex_T.Invert || (nativeIndex === NativeFunctionIndex_T.GetAxes || nativeIndex === NativeFunctionIndex_T.GetUnAxes) && args.length > 0;
+            const isEmpty = (isScript || nativeIndex === NativeFunctionIndex_T.Trace) && entry.type === "token" && entry.value === ExprToken_T.Nothing;
             let value: ScriptArgument_T = isOut && !isEmpty ? this.evalLValue() : this.evalToken();
 
             if (isScript) {
@@ -1047,7 +1056,10 @@ class ScriptExecutor {
             case ExprToken_T.New: {
                 const outer = this.evalToken(), name = this.evalToken(), flags = this.evalToken(), cls = this.evalToken();
 
-                return this.vm.constructObject(cls as string, outer === undefined ? this.frame.context : outer as ScriptHost_T, name === undefined ? "" : name as string, flags === undefined ? 0 : flags as number);
+                const object = this.vm.constructObject(cls as string, outer === undefined ? this.frame.context : outer as ScriptHost_T, name === undefined ? "" : name as string, flags === undefined ? 0 : flags as number);
+
+                if (!this.vm.getHostLibrary(object)) this.vm.setHostLibrary(object, this.vm.getHostLibrary(this.frame.self));
+                return object;
             }
             case ExprToken_T.MetaCast: {
                 const cls = this.next().value as string, value = this.evalToken();
@@ -1057,7 +1069,7 @@ class ScriptExecutor {
             case ExprToken_T.DynamicCast: {
                 const cls = this.next().value as string, value = this.evalToken();
 
-                return this.vm.dynamicCast(value, cls);
+                return this.vm.dynamicCast(value, cls, this.frame.context);
             }
             case ExprToken_T.EndFunctionParms: return undefined;
             case ExprToken_T.Self: return this.frame.self;
@@ -1165,14 +1177,19 @@ class ScriptExecutor {
     }
 }
 
-export class UnScriptVM {
+export class UnScriptVM implements IEngineComponent<GameManager> {
     protected static config: ConfigCache = null;
     protected static configRevision = 0;
     protected static readonly configChanges = new Map<string, number>();
+    protected gameManager: GameManager;
     protected readonly library: DecodeLibrary;
-    protected levelInfo: ScriptHost_T = null;
-    protected level: ScriptHost_T & ScriptLevelActors_T = null;
-    protected readonly levelPackage: ScriptHost_T = null;
+    protected readonly scriptResources = new Map<string, ScriptHost_T>();
+    protected readonly sourceLibrary: DecodeLibrary;
+    protected readonly hostLibraries = new WeakMap<ScriptHost_T, DecodeLibrary>();
+    protected readonly loadedLibraries = new WeakSet<DecodeLibrary>();
+    protected readonly levelPackages = new WeakMap<DecodeLibrary, ScriptHost_T>();
+    protected readonly levelInfos = new WeakMap<DecodeLibrary, ScriptHost_T>();
+    protected readonly levels = new WeakMap<DecodeLibrary, ScriptHost_T & ScriptLevelActors_T>();
     protected readonly constructingTemplates = new Set<ScriptHost_T>();
     protected readonly functionsById = new Map<string, IScriptFunctionDecodeInfo>();
     protected readonly functionsByClass = new Map<string, Map<string, IScriptFunctionDecodeInfo>>();
@@ -1186,48 +1203,61 @@ export class UnScriptVM {
     public static setLocalization(localization: Map<string, Map<string, Map<string, string>>>): void { scriptLocalization = localization; }
     public static setConfig(config: ConfigCache): void { this.config = config; }
 
-    public constructor(library: DecodeLibrary, isDeferred = false) {
-        this.library = library;
-        if (library.levelPackageName)
-            this.levelPackage = cacheScriptResources.get(library.levelPackageName.toLowerCase())?.deref() || {
-                scriptClassId: "core.Package", isLevelActor: false,
-                scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 }
-            };
+    public constructor(library: DecodeLibrary = null, isDeferred = false) {
+        this.sourceLibrary = library;
+        this.library = library || new DecodeLibrary();
         registerScriptObject(transientPackage, this.scriptObjectClasses);
         registerScriptResourceAlias("Transient", transientPackage);
-        if (this.levelPackage) {
-            registerScriptObject(this.levelPackage, this.scriptObjectClasses);
-            registerScriptResourceAlias(library.levelPackageName, this.levelPackage);
-        }
-        if (isDeferred) return;
-
-        const steps = this.loadSteps();
-
-        while (!steps.next().done);
-    }
-
-    public *loadSteps(): Generator<void, void> {
-        yield* this.loadFunctionSteps();
         const reference = new WeakRef(this);
 
         scriptVMs.add(reference);
         scriptVMFinalizer.register(this, reference);
+        if (library?.levelPackageName) this.getLevelPackage(library);
+        if (library && !isDeferred) this.registerLibrary(library);
     }
 
+    public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
+    public getParent(): GameManager { return this.gameManager; }
     public getLibrary(): DecodeLibrary { return this.library; }
-    public getLevelInfo(): ScriptHost_T { return this.levelInfo; }
-    public setLevelInfo(level: ScriptHost_T): void { this.levelInfo = level; }
-    public getLevel(): ScriptHost_T & ScriptLevelActors_T { return this.level; }
+    public getHostLibrary(host: ScriptHost_T): DecodeLibrary { return this.hostLibraries.get(host) || this.sourceLibrary; }
+    public setHostLibrary(host: ScriptHost_T, library: DecodeLibrary): void { this.hostLibraries.set(host, library); }
+    public getLevel(library = this.sourceLibrary) { return this.levels.get(library) || null; }
+    public getLevelInfo(library = this.sourceLibrary): ScriptHost_T { return this.levelInfos.get(library) || null; }
+    public setLevelInfo(info: ScriptHost_T, library = this.sourceLibrary): void {
+        if (info) this.levelInfos.set(library, info);
+        else this.levelInfos.delete(library);
+    }
 
-    public initializeLevel(level: ScriptHost_T & ScriptLevelActors_T): void {
-        if (this.level && this.level !== level) throw new Error(`UnrealScript world is already initialized.`);
-        if (!this.levelPackage || !this.library.levelObjectName) throw new Error(`Decode library '${this.library.name}' has no level identity.`);
-        if (this.library.levelObjectOuter !== this.library.levelPackageName) throw new Error(`Level Outer '${this.library.levelObjectOuter}' is unresolved.`);
+    public releaseLevel(library: DecodeLibrary): void {
+        deleteLevelActors(this.getLevelInfo(library));
+        this.levelInfos.delete(library);
+        this.levels.delete(library);
+    }
 
-        setProperty(level, "Name", this.library.levelObjectName);
+    protected getLevelPackage(library: DecodeLibrary): ScriptHost_T {
+        const previous = this.levelPackages.get(library);
+
+        if (previous) return previous;
+        const levelPackage: ScriptHost_T = cacheScriptResources.get(library.levelPackageName.toLowerCase())?.deref() || {
+            scriptClassId: "core.Package", isLevelActor: false,
+            scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 }
+        };
+        registerScriptObject(levelPackage, this.scriptObjectClasses);
+        registerScriptResourceAlias(library.levelPackageName, levelPackage);
+        this.levelPackages.set(library, levelPackage);
+        return levelPackage;
+    }
+
+    public initializeLevel(level: ScriptHost_T & ScriptLevelActors_T, library = this.sourceLibrary): void {
+        if (this.levels.has(library) && this.levels.get(library) !== level) throw new Error(`UnrealScript world is already initialized.`);
+        if (!library.levelPackageName || !library.levelObjectName) throw new Error(`Decode library '${library.name}' has no level identity.`);
+        if (library.levelObjectOuter !== library.levelPackageName) throw new Error(`Level Outer '${library.levelObjectOuter}' is unresolved.`);
+        const levelPackage = this.getLevelPackage(library);
+        setProperty(level, "Name", library.levelObjectName);
         setProperty(level, "Class", level.scriptClassId);
-        setProperty(level, "Outer", this.levelPackage);
-        this.level = level;
+        setProperty(level, "Outer", levelPackage);
+        this.setHostLibrary(level, library);
+        this.levels.set(library, level);
         registerScriptObject(level, this.scriptObjectClasses);
     }
 
@@ -1478,6 +1508,7 @@ export class UnScriptVM {
     protected initializeObject(object: ScriptHost_T, outer: ScriptHost_T, flags: number): void {
         const cls = this.library.scriptClasses[object.scriptClassId];
 
+        if (outer && this.getHostLibrary(outer)) this.setHostLibrary(object, this.getHostLibrary(outer));
         this.initializeHostDefaults(object);
         outer = outer || transientPackage;
         let names = cacheOuterObjects.get(outer), index = cacheObjectNames.get(cls) ?? 0;
@@ -1501,35 +1532,71 @@ export class UnScriptVM {
         registerScriptObject(object, this.scriptObjectClasses);
     }
 
+    public hasLibrary(library: DecodeLibrary): boolean { return this.loadedLibraries.has(library); }
+
+    public *loadSteps(): Generator<void, void> { yield* this.registerLibrarySteps(this.library); }
+    public *loadFunctionSteps(): Generator<void, void> { yield* this.registerLibrarySteps(this.library, true); }
+
     public loadFunctions(): void {
         const steps = this.loadFunctionSteps();
 
         while (!steps.next().done);
     }
 
-    public *loadFunctionSteps(): Generator<void, void> {
+    public registerLibrary(library: DecodeLibrary): this {
+        if (!this.loadedLibraries.has(library)) {
+            const steps = this.registerLibrarySteps(library);
+
+            while (!steps.next().done);
+        }
+        return this;
+    }
+
+    public *registerLibrarySteps(library: DecodeLibrary, reload = false): Generator<void, void> {
+        if (!reload && this.loadedLibraries.has(library)) return;
+        const shared = library !== this.library;
         const parents: ClassParentRecords_T = { parents: this.classParents, records: new Map(), revision: 0 };
+        const classes: IScriptClassDecodeInfo[] = [];
         let count = 0;
 
-        this.cacheIsA.clear();
+        for (const id in library.scriptStates)
+            if (!(id in this.library.scriptStates)) this.library.scriptStates[id] = library.scriptStates[id];
+        for (const id in library.scriptClasses) {
+            const cls = library.scriptClasses[id], previous = this.library.scriptClasses[id];
 
-        for (const cls of Object.values(this.library.scriptClasses)) {
+            if (shared && previous) {
+                if (hasScriptStateCode(previous) || !hasScriptStateCode(cls)) continue;
+                classes.push(cls);
+                continue;
+            }
+            this.cacheIsA.clear();
             for (const [id, names] of Object.entries(cls.enums || {})) this.enumsById.set(id.toLowerCase(), names);
             loadClassParents(cls.classParents || {}, parents);
             for (const [id, actual] of Object.entries(cls.classAliases || {})) this.classAliases.set(id.toLowerCase(), actual.toLowerCase());
             for (const [id, type] of Object.entries(cls.objectClasses || {})) this.objectClasses.set(id.toLowerCase(), type.toLowerCase());
+            classes.push(cls);
             if (++count % 64 === 0) yield;
         }
-        for (const [id, info] of Object.entries(this.library.scriptObjects || {})) {
-            this.objectClasses.set(id.toLowerCase(), info.classId.toLowerCase());
-            loadClassParents(info.classParents, parents);
-            if (++count % 64 === 0) yield;
+        if (!shared)
+            for (const id in library.scriptObjects) loadClassParents(library.scriptObjects[id].classParents, parents);
+        if (count) {
+            for (const id in this.library.scriptClasses) {
+                const cls = this.library.scriptClasses[id];
+                this.classParents.set(cls.id.toLowerCase(), cls.superClassId ? cls.superClassId.toLowerCase() : null);
+            }
+            if (shared) for (const cls of classes)
+                this.classParents.set(cls.id.toLowerCase(), cls.superClassId ? cls.superClassId.toLowerCase() : null);
+            this.cacheIsA.clear();
         }
-        for (const cls of Object.values(this.library.scriptClasses)) this.classParents.set(cls.id.toLowerCase(), cls.superClassId ? cls.superClassId.toLowerCase() : null);
+        parents.records.clear();
         if (this.classParents.has("__native__.class")) this.classAliases.set("core.class", "__native__.class");
-        yield* this.registerResources();
+        yield* this.registerResources(library, parents);
 
-        for (const fn of Object.values(this.library.scriptFunctions)) {
+        for (const id in library.scriptFunctions) {
+            if (shared && id in this.library.scriptFunctions) continue;
+            const fn = library.scriptFunctions[id];
+            this.library.scriptFunctions[id] = fn;
+
             this.functionsById.set(fn.id.toLowerCase(), fn);
 
             let functions = this.functionsByClass.get(fn.owner);
@@ -1539,23 +1606,28 @@ export class UnScriptVM {
             functions.set(fn.name.toLowerCase(), fn);
             if (++count % 64 === 0) yield;
         }
+        if (shared) for (const cls of classes) {
+            const previous = this.library.scriptClasses[cls.id];
+            if (!previous) this.library.scriptClasses[cls.id] = { ...cls };
+            else if (!hasScriptStateCode(previous) && hasScriptStateCode(cls)) {
+                previous.stateIds = cls.stateIds;
+                previous.program = cls.program;
+                previous.labelTableVirtualOffset = cls.labelTableVirtualOffset;
+            }
+        }
+        this.loadedLibraries.add(library);
     }
 
-    protected *registerResources(): Generator<void, void> {
-        let resources = cacheLibraryScriptResources.get(this.library);
-
-        if (!resources) cacheLibraryScriptResources.set(this.library, resources = new Map());
+    protected *registerResources(library: DecodeLibrary, parents: ClassParentRecords_T): Generator<void, void> {
+        const resources = this.scriptResources;
         const seen = new Set<DecodeLibrary["scriptObjects"][string]>();
-        const parents: ClassParentRecords_T = { parents: this.classParents, records: new Map(), revision: 0 };
         const active = new Set<DecodeLibrary["scriptObjects"][string]>(), objectClasses = this.objectClasses;
 
         function pull(info: DecodeLibrary["scriptObjects"][string], classes: ScriptObjectClasses_T): ScriptHost_T {
             if (!info.path) throw new Error(`Script resource has no canonical path.`);
             loadClassParents(info.classParents, parents);
-            const key = info.path.toLowerCase();
+            const key = getResourceKey(info);
             let object = resources.get(key) || cacheScriptResources.get(key)?.deref();
-
-            if (object && (object as ScriptResource_T).scriptObjectPath?.toLowerCase() !== key) object = null;
             if (seen.has(info)) {
                 if (!object) throw new Error(`Script resource '${info.path}' lost its registration.`);
                 return object;
@@ -1567,13 +1639,14 @@ export class UnScriptVM {
             if (!object) {
                 object = { scriptClassId: info.classId, isLevelActor: false, isScriptResource: true, scriptObjectPath: info.path, scriptProperties: { ...info.properties, Name: info.path.slice(info.path.lastIndexOf(".") + 1), Outer: outer, Class: info.classId, ObjectFlags: 0 } } as ScriptResource_T;
                 registerScriptObject(object, classes);
-            } else if (object.scriptClassId.toLowerCase() !== info.classId.toLowerCase()) throw new Error(`Script resource '${info.path}' changed class.`);
+            }
             if (info.properties && !cacheResourceProperties.has(object)) {
                 Object.assign(object.scriptProperties, info.properties);
                 cacheResourceProperties.add(object);
             }
             resources.set(key, object);
-            objectClasses.set(key, info.classId.toLowerCase());
+            objectClasses.set(info.path.toLowerCase(), info.classId.toLowerCase());
+            registerScriptResourceAlias(key, object);
             registerScriptResourceAlias(info.path, object);
             active.delete(info);
             seen.add(info);
@@ -1582,11 +1655,17 @@ export class UnScriptVM {
 
         let count = 0;
 
-        for (const [id, info] of Object.entries(this.library.scriptObjects || {})) {
+        for (const id in library.scriptObjects) {
+            const info = library.scriptObjects[id], existing = this.library.scriptObjects[id];
+
+            if (library !== this.library && existing && existing.path === info.path && existing.classId === info.classId && (existing.properties || !info.properties)) continue;
             const object = pull(info, this.scriptObjectClasses);
 
             this.objectClasses.set(info.path.toLowerCase(), info.classId.toLowerCase());
             registerScriptResourceAlias(id, object);
+            this.objectClasses.set(id.toLowerCase(), info.classId.toLowerCase());
+            this.library.scriptObjects[id] = info;
+            this.cacheIsA.clear();
             if (++count % 64 === 0) yield;
         }
     }
@@ -1597,6 +1676,25 @@ export class UnScriptVM {
         if (!fn) throw new Error(`UnrealScript function '${id}' is not in the decode library`);
 
         return fn;
+    }
+
+    public refreshClassDefaults(classId: string, names: Set<string>): void {
+        if (!names.size) return;
+        const source = this.library.scriptClasses[classId];
+
+        cacheClassDefaults.delete(source);
+        for (const cls of Object.values(this.library.scriptClasses)) {
+            if (!this.isClassChildOf(cls.id, classId)) continue;
+            cacheHostDefaults.delete(cls);
+            const object = cacheDefaultObjects.get(cls);
+
+            if (!object) continue;
+            for (const name of names) {
+                let owner = cls;
+                while (!(name in owner.defaults)) owner = this.library.scriptClasses[owner.superClassId];
+                setProperty(object, name, cloneScriptValue(owner.defaults[name]));
+            }
+        }
     }
 
     public getDefaultObject(classId: string): ScriptHost_T {
@@ -1629,10 +1727,20 @@ export class UnScriptVM {
         return object;
     }
 
-    public initializeHost(host: ScriptHost_T): void {
-        this.initExecution(host);
+    public initializeHost(host: ScriptHost_T, library?: DecodeLibrary): void {
+        if (library) this.setHostLibrary(host, library);
+        const frame = cacheStateFrames.get(host), properties = getProperties(host);
+
+        if (frame && frame.cls.id === host.scriptClassId && frame.initializedProperties === properties) {
+            if (frame.vm === this) return;
+            this.bindHost(host);
+            frame.initializedProperties = undefined;
+        } else this.initExecution(host);
+
         this.initializeHostDefaults(host);
-        if (this.levelPackage && getProperty(host, "Outer") === this.library.levelPackageName) setProperty(host, "Outer", this.levelPackage);
+        const source = this.getHostLibrary(host);
+        if (source?.levelPackageName && getProperty(host, "Outer") === source.levelPackageName) setProperty(host, "Outer", this.getLevelPackage(source));
+        cacheStateFrames.get(host).initializedProperties = properties;
     }
 
     public initExecution(host: ScriptHost_T): void {
@@ -1818,9 +1926,17 @@ export class UnScriptVM {
         return { context: receiver, vm, fn: vm.findFunction(receiver, value && value.object ? value.functionName : name) };
     }
 
+    public getResource(id: string, context?: ScriptHost_T): ScriptHost_T {
+        const key = id.toLowerCase(), info = this.getHostLibrary(context)?.scriptObjects?.[key] || this.library.scriptObjects?.[key];
+
+        if (!info) return getScriptResource(id);
+        const resourceKey = getResourceKey(info);
+        return this.scriptResources.get(resourceKey) || getScriptResource(resourceKey);
+    }
+
     public resolveObject(context: ScriptHost_T, id: string): ScriptValue_T {
         const resolver = (context as any).resolveUnrealObject;
-        const resource = cacheScriptResources.get(id.toLowerCase())?.deref();
+        const resource = this.getResource(id, context);
 
         if (resource) id = (resource as ScriptResource_T).isScriptResource ? (resource as ScriptResource_T).scriptObjectPath : id;
 
@@ -1881,9 +1997,9 @@ export class UnScriptVM {
         }
     }
 
-    public findObject(name: string, classId: string): ScriptValue_T {
+    public findObject(name: string, classId: string, context?: ScriptHost_T): ScriptValue_T {
         name = name.split("\0", 1)[0];
-        const resource = cacheScriptResources.get(name.toLowerCase())?.deref();
+        const resource = this.getResource(name, context);
 
         if (resource && (resource as ScriptResource_T).isScriptResource) name = (resource as ScriptResource_T).scriptObjectPath;
         const object = this.findRegisteredObject(name, classId);
@@ -2005,12 +2121,12 @@ export class UnScriptVM {
                         const array = getProperty(context, field.id);
 
                         if (!Array.isArray(array)) throw new Error(`Invalid configuration array '${field.id}'.`);
-                        for (const value of array) entries.push([field.name, vm.exportPropertyText(fields, fields[metadata.innerId], value, false)]);
+                        for (const value of array) entries.push([field.name, vm.exportPropertyText(fields, fields[metadata.innerId], value, false, 0, context)]);
                     }
                     continue;
                 }
                 for (let index = 0; index < field.arrayDimensions; index++)
-                    config.setString(section, field.arrayDimensions > 1 ? `${field.name}[${index}]` : field.name, vm.exportPropertyText(fields, metadata, getProperty(context, field.id), false, index), filename);
+                    config.setString(section, field.arrayDimensions > 1 ? `${field.name}[${index}]` : field.name, vm.exportPropertyText(fields, metadata, getProperty(context, field.id), false, index, context), filename);
             }
         }
         config.flush();
@@ -2126,7 +2242,7 @@ export class UnScriptVM {
         }
     }
 
-    protected exportPropertyText(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, isDelimited: boolean, index: number = 0): string {
+    protected exportPropertyText(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, isDelimited: boolean, index: number = 0, context?: ScriptHost_T): string {
         if (!field) throw new Error(`Missing property text metadata.`);
         if (field.arrayDimensions > 1) value = (value as ScriptValue_T[])[index];
 
@@ -2165,7 +2281,7 @@ export class UnScriptVM {
                 let classId: string, path: string;
 
                 if (typeof value === "string") {
-                    classId = this.library.scriptObjects[value.toLowerCase()]?.classId;
+                    classId = this.getResource(value, context)?.scriptClassId || this.library.scriptObjects[value.toLowerCase()]?.classId;
                     if (!classId)
                         for (const cls of Object.values(this.library.scriptClasses)) {
                             const entry = Object.entries(cls.objectClasses).find(([id]) => id.toLowerCase() === value.toLowerCase());
@@ -2183,7 +2299,7 @@ export class UnScriptVM {
             case "Array": {
                 if (!field.innerId || !Array.isArray(value)) throw new Error(`Invalid property text array '${field.id}'.`);
 
-                return `(${value.map(item => this.exportPropertyText(fields, fields[field.innerId], item, true)).join(",")})`;
+                return `(${value.map(item => this.exportPropertyText(fields, fields[field.innerId], item, true, 0, context)).join(",")})`;
             }
             case "Struct": {
                 if (!field.structFieldIds) throw new Error(`Missing property text struct metadata '${field.id}'.`);
@@ -2197,7 +2313,7 @@ export class UnScriptVM {
                     const member = (value as any)[getStructMemberKey(value, id)];
 
                     for (let i = 0; i < child.arrayDimensions; i++)
-                        entries.push(`${child.name}${child.arrayDimensions > 1 ? `[${i}]` : ""}=${this.exportPropertyText(fields, child, member, true, i)}`);
+                        entries.push(`${child.name}${child.arrayDimensions > 1 ? `[${i}]` : ""}=${this.exportPropertyText(fields, child, member, true, i, context)}`);
                 }
                 return entries.length ? `(${entries.join(",")})` : "";
             }
@@ -2217,7 +2333,7 @@ export class UnScriptVM {
             const field = getClassField(cls, name);
 
             // Core.dll 0x1014677a..0x10146796 exports only fixed-array element zero.
-            if (field) return field.isPublic ? vm.exportPropertyText(cls.propertyFields, cls.propertyFields[field.id], getProperty(context, field.id), false) : "";
+            if (field) return field.isPublic ? vm.exportPropertyText(cls.propertyFields, cls.propertyFields[field.id], getProperty(context, field.id), false, 0, context) : "";
             cls = cls.superClassId ? vm.library.scriptClasses[cls.superClassId] : null;
         }
         return "";
@@ -2546,14 +2662,14 @@ export class UnScriptVM {
         return this.isClassChildOf(cls, target) ? value : null;
     }
 
-    public dynamicCast(value: ScriptValue_T, target: string): ScriptValue_T {
+    public dynamicCast(value: ScriptValue_T, target: string, context?: ScriptHost_T): ScriptValue_T {
         if (value === null || value === undefined) return null;
         if (!target) return value;
         let vm: UnScriptVM = this, cls: string;
 
         if (typeof value === "string") {
             cls = this.objectClasses.get(value.toLowerCase());
-            const resource = cacheScriptResources.get(value.toLowerCase())?.deref();
+            const resource = this.getResource(value, context);
 
             if (resource) {
                 const classes = cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses;
@@ -2604,6 +2720,7 @@ export class UnScriptVM {
 
         if (!cls || !frame && requireFrame) throw new Error(`UnrealScript runtime replacement requires an initialized class '${context.scriptClassId}'`);
         if (!frame) { registerScriptObject(context, this.scriptObjectClasses); return; }
+        if (frame.vm === this && frame.cls === cls) return;
         const node = frame.node === frame.cls ? cls : this.library.scriptStates[frame.node.id] || this.library.scriptClasses[frame.node.id];
 
         if (!node) throw new Error(`UnrealScript state '${frame.node.id}' is not in the replacement decode library`);
@@ -2776,9 +2893,9 @@ export class UnScriptVM {
         if (context.handlesUnrealNative && context.handlesUnrealNative(index, name))
             return context.callUnrealNative!({ index, name, args, self, context });
 
-        if (index === 303 && name === "IsA") return this.isA(context, args[0] as string);
+        if (index === NativeFunctionIndex_T.IsA && name === "IsA") return this.isA(context, args[0] as string);
 
-        if (index === NATIVE_Trace) {
+        if (index === NativeFunctionIndex_T.Trace) {
             // AActor::execTrace 0x1066a0e0..0x1066a3d8.
             const level = getLevelActors(context) as ScriptLevel_T;
             const start = (args[3] === undefined ? getProperty(context, "Location") : args[3]) as Vector3Arr;
@@ -2806,9 +2923,9 @@ export class UnScriptVM {
 
         if (name.toLowerCase() === "getpropertytext") return this.getPropertyText(context, args[0] as string);
         if (name.toLowerCase() === "setpropertytext") return this.setPropertyText(context, args[0] as string, args[1] as string) as undefined;
-        if (name.toLowerCase() === "findobject") return this.findObject(args[0] as string, args[1] as string);
+        if (name.toLowerCase() === "findobject") return this.findObject(args[0] as string, args[1] as string, context);
         if (name.toLowerCase() === "localize") return this.localize(args[0] as string, args[1] as string, args[2] as string);
-        if (name.toLowerCase() === "saveconfig" || index === 536) return this.saveConfig(context) as undefined;
+        if (name.toLowerCase() === "saveconfig" || index === NativeFunctionIndex_T.SaveConfig) return this.saveConfig(context) as undefined;
         if (name.toLowerCase() === "resetconfig") return this.resetConfig(context) as undefined;
         if (name.toLowerCase() === "staticsaveconfig") {
             const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
@@ -2828,13 +2945,13 @@ export class UnScriptVM {
 
             if (!getProperty(context, "bCollideActors") || value === !!getProperty(context, "bOnlyAffectPawns")) return undefined;
 
-            this.invokeNative(self, context, 262, "SetCollision", [false, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
+            this.invokeNative(self, context, NativeFunctionIndex_T.SetCollision, "SetCollision", [false, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
             setProperty(context, "bOnlyAffectPawns", value);
-            this.invokeNative(self, context, 262, "SetCollision", [true, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
+            this.invokeNative(self, context, NativeFunctionIndex_T.SetCollision, "SetCollision", [true, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
             return undefined;
         }
 
-        if (index === 113) {
+        if (index === NativeFunctionIndex_T.GotoState) {
             const frame = cacheStateFrames.get(context);
             const previous = frame && frame.node !== frame.cls ? frame.node.name : "None";
             const requested = args[0] == null ? previous : args[0] as string;
@@ -2847,7 +2964,7 @@ export class UnScriptVM {
             return undefined;
         }
 
-        if (index === 256) {
+        if (index === NativeFunctionIndex_T.Sleep) {
             const frame = cacheStateFrames.get(context);
 
             if (!frame) throw new Error(`UnrealScript Sleep requires an initialized state frame for '${context.scriptClassId}'`);
@@ -2856,7 +2973,7 @@ export class UnScriptVM {
             return undefined;
         }
 
-        if (index === 301) {
+        if (index === NativeFunctionIndex_T.FinishInterpolation) {
             const frame = cacheStateFrames.get(context);
 
             if (!frame) throw new Error(`UnrealScript FinishInterpolation requires an initialized state frame for '${context.scriptClassId}'`);
@@ -2864,7 +2981,7 @@ export class UnScriptVM {
             return undefined;
         }
 
-        if (index === NATIVE_FinishRotation) {
+        if (index === NativeFunctionIndex_T.FinishRotation) {
             const frame = cacheStateFrames.get(context);
 
             if (!frame) throw new Error(`UnrealScript FinishRotation requires an initialized state frame for '${context.scriptClassId}'`);
@@ -2873,20 +2990,20 @@ export class UnScriptVM {
         }
 
         // Engine.dll execMakeNoise 0x105dcfe0 consumes its arguments without producing a noise event.
-        if (index === 512) return undefined;
+        if (index === NativeFunctionIndex_T.MakeNoise) return undefined;
 
-        if (index === 117 || index === 118) {
+        if (index === NativeFunctionIndex_T.Enable || index === NativeFunctionIndex_T.Disable) {
             const probe = args[0] as string, mask = typeof probe === "string" ? cacheProbeMasks.get(probe.toLowerCase()) : undefined;
             const frame = cacheStateFrames.get(context);
 
             if (mask === undefined || !frame) throw new Error(`UnrealScript '${name}' requires a probe function and an initialized state frame for '${context.scriptClassId}'.`);
 
-            if (index === 117) frame.probeMask |= (frame.node.probeMask | frame.cls.probeMask) & frame.node.ignoreMask & mask;
+            if (index === NativeFunctionIndex_T.Enable) frame.probeMask |= (frame.node.probeMask | frame.cls.probeMask) & frame.node.ignoreMask & mask;
             else frame.probeMask &= ~mask;
             return undefined;
         }
 
-        if (index === 281) {
+        if (index === NativeFunctionIndex_T.IsInState) {
             const frame = cacheStateFrames.get(context), name = (args[0] as string).toLowerCase();
             let node = frame ? frame.node : null;
 
@@ -2899,7 +3016,7 @@ export class UnScriptVM {
             return false;
         }
 
-        if (index === 284) {
+        if (index === NativeFunctionIndex_T.GetStateName) {
             const frame = cacheStateFrames.get(context);
 
             return frame && frame.node ? frame.node.name : "None";
@@ -2909,8 +3026,8 @@ export class UnScriptVM {
             const path = this.resolveConfigName(args[0] as string);
 
             if (path === null) return null;
-            const resource = cacheScriptResources.get(path.toLowerCase())?.deref() as ScriptResource_T;
-            let object: ScriptHost_T = resource && resource.isScriptResource && this.dynamicCast(resource.scriptObjectPath, args[1] as string) !== null ? resource : null;
+            const resource = this.getResource(path, context) as ScriptResource_T;
+            let object: ScriptHost_T = resource && resource.isScriptResource && this.dynamicCast(resource.scriptObjectPath, args[1] as string, context) !== null ? resource : null;
             const isSound = typeof args[1] === "string" && (this.classAliases.get(args[1].toLowerCase()) || args[1].toLowerCase()) === (this.classAliases.get("engine.sound") || "engine.sound");
 
             if (!object) object = this.findRegisteredObject(path, args[1] as string, null, false, false, true);
@@ -2920,16 +3037,19 @@ export class UnScriptVM {
                 if (!isSound) return value;
             } else if (this.findRegisteredObject(path, null, null, false, false, true)) return null;
             if (isSound) {
-                const key = path in this.library.sounds ? path : Object.keys(this.library.sounds).find(id => id.toLowerCase() === path.toLowerCase());
+                const library = this.getHostLibrary(context) || this.getHostLibrary(self);
+                if (!library) throw new Error(`Script sound '${path}' has no actor asset library.`);
+                const sounds = library.sounds;
+                const key = path in sounds ? path : Object.keys(sounds).find(id => id.toLowerCase() === path.toLowerCase());
 
                 if (key === undefined) throw new Error(`Script sound '${path}' has not been decoded.`);
-                return this.library.sounds[key];
+                return sounds[key];
             }
             args = args.slice();
             args[0] = path;
         }
 
-        if (index === 280) {
+        if (index === NativeFunctionIndex_T.SetTimer) {
             const rate = Math.fround(args[0] as number);
 
             if (!Number.isFinite(rate)) throw new Error(`Invalid timer rate for '${context.scriptClassId}'.`);
@@ -2940,11 +3060,11 @@ export class UnScriptVM {
             return undefined;
         }
 
-        if (index === 258) return this.isClassChildOf(args[0] as string, args[1] as string);
+        if (index === NativeFunctionIndex_T.ClassIsChildOf) return this.isClassChildOf(args[0] as string, args[1] as string);
 
-        if (index === 303) return this.isA(context, args[0] as string);
+        if (index === NativeFunctionIndex_T.IsA) return this.isA(context, args[0] as string);
 
-        if (index === 278) {
+        if (index === NativeFunctionIndex_T.Spawn) {
             if (args[0] === null || args[0] === undefined) return null;
             const location = args[3] === undefined ? getProperty(context, "Location") : args[3];
             const rotation = args[4] === undefined ? getProperty(context, "Rotation") : args[4];
@@ -2963,7 +3083,7 @@ export class UnScriptVM {
 
         const result = handler.call(handler === context.callUnrealNative ? context : self, { index, name, args, self, context });
 
-        if (index === 278 && result && typeof args[2] === "string" && args[2] && args[2].toLowerCase() !== "none") setProperty(asHost(result), "Tag", args[2]);
+        if (index === NativeFunctionIndex_T.Spawn && result && typeof args[2] === "string" && args[2] && args[2].toLowerCase() !== "none") setProperty(asHost(result), "Tag", args[2]);
         return result;
     }
 

@@ -1,3 +1,4 @@
+import UnScriptVM from "../ue-script/vm";
 import AssetManager, { AssetList_T } from "../assets/asset-manager";
 import AudioManager from "../audio/audio-manager";
 import { IEngineComponent } from "./components";
@@ -11,6 +12,7 @@ import Skin from "../nwindow/skin";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 export class GameManager implements IEngineComponent<GameManager> {
+    protected scriptVM: UnScriptVM;
     protected manAsset: AssetManager;
     protected manRender: RenderManager;
     protected manAudio: AudioManager;
@@ -49,6 +51,7 @@ export class GameManager implements IEngineComponent<GameManager> {
         game.manNetwork = new NetworkManager();
         game.manGUI = await game.createGUI();
 
+        game.scriptVM = game.attach(new UnScriptVM());
         game.attach(game.manPhysics);
         game.attach(game.manRender);
         game.attach(game.manInput);
@@ -95,6 +98,7 @@ export class GameManager implements IEngineComponent<GameManager> {
         return comp;
     }
 
+    public getComponent(component: "script"): UnScriptVM;
     public getComponent(component: "asset"): AssetManager;
     public getComponent(component: "render"): RenderManager;
     public getComponent(component: "audio"): AudioManager;
@@ -105,6 +109,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     public getComponent(component: "gui"): GameGUI_T;
     public getComponent(component: unknown): unknown {
         switch (component) {
+            case "script": return this.scriptVM;
             case "asset": return this.manAsset;
             case "render": return this.manRender;
             case "audio": return this.manAudio;

@@ -77,6 +77,8 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     }
 
     protected attachItem(mesh: string, skins: string[], bone: string | number, extraMesh = false): EquippedItem {
+        if (!mesh || mesh.toLowerCase() === "none") return null;
+
         const parent = this.getParent();
         const boneName = typeof bone === "number" || bone === "cape_bone" ? bone : parent.getUnrealScriptProperty(bone) as string;
 
