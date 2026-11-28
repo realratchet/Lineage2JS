@@ -68,7 +68,7 @@ enum EPollSlowFuncs {
     AI_PollFinishRotation = 509
 }
 
-type StateFrame_T = { node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
+type StateFrame_T = { initializedProperties?: ScriptProperties_T, node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
 type ObjectName_T = { names: Map<string, WeakRef<ScriptHost_T>>, name: string, object: WeakRef<ScriptHost_T> };
 type ScriptObjectClasses_T = { parents: Map<string, string | null>, aliases: Map<string, string>, vm?: WeakRef<UnScriptVM> };
 type ScriptResource_T = ScriptHost_T & { isScriptResource: true, scriptObjectPath: string };
@@ -1630,9 +1630,17 @@ export class UnScriptVM {
     }
 
     public initializeHost(host: ScriptHost_T): void {
-        this.initExecution(host);
+        const frame = cacheStateFrames.get(host), properties = getProperties(host);
+
+        if (frame && frame.cls.id === host.scriptClassId && frame.initializedProperties === properties) {
+            if (frame.vm === this) return;
+            this.bindHost(host);
+            frame.initializedProperties = undefined;
+        } else this.initExecution(host);
+
         this.initializeHostDefaults(host);
         if (this.levelPackage && getProperty(host, "Outer") === this.library.levelPackageName) setProperty(host, "Outer", this.levelPackage);
+        cacheStateFrames.get(host).initializedProperties = properties;
     }
 
     public initExecution(host: ScriptHost_T): void {

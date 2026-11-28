@@ -17,11 +17,10 @@ import type { DecodeLibrary } from "@l2js/engine";
 import type { NpcSkillSound_T, IPawnEquipmentDecodeInfo } from "@l2js/engine/contracts/pawn";
 import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
-import UnScriptVM, { type ScriptHost_T } from "../../ue-script/vm";
+import type { UnScriptVM, ScriptHost_T } from "../../ue-script/vm";
 import type RibbonEmitter from "../emitters/ribbon-emitter";
 import { EPhysics_T } from "@l2js/engine/un-aactor";
 
-const cacheSkillVMs = new WeakMap<DecodeLibrary, UnScriptVM>();
 const cacheEffectLibraries = new WeakMap<object, DecodeLibrary>();
 
 const tmpPosition = new Vector3();
@@ -51,15 +50,9 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public createEffect(caster: SkillActor_T, classId: string, assets: DecodeLibrary = null): SkillActor_T {
-        if (assets && !cacheSkillVMs.has(assets)) cacheSkillVMs.set(assets, new UnScriptVM(assets));
+        const effect = assets ? this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, assets, classId) : this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
 
-        const vm = assets ? cacheSkillVMs.get(assets) : null;
-        const effect = assets ? this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, assets, classId, vm) : this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
-
-        if (vm) {
-            vm.initializeHost(effect);
-            cacheEffectLibraries.set(effect, assets);
-        }
+        if (assets) cacheEffectLibraries.set(effect, assets);
 
         if (!effect.isObject3D) throw new Error(`Skill effect '${classId}' is not an actor.`);
         return effect;

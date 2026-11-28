@@ -182,15 +182,22 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
     if (!actor.findComponent("waterHitEffect")) actor.addComponent(new WaterHitEffectComponent());
 }
 
-function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
+function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): boolean {
+    let addedScripts = false;
+
     for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
-        for (const [id, value] of Object.entries(source[key]))
-            if (!(id in target[key])) (target[key] as any)[id] = value;
+        for (const [id, value] of Object.entries(source[key])) {
+            if (id in target[key]) continue;
+
+            (target[key] as any)[id] = value;
+            if (key === "scriptClasses" || key === "scriptFunctions" || key === "scriptObjects") addedScripts = true;
+        }
 
     for (const [name, sound] of source.soundBlobCache) {
         if (!target.soundBlobCache.has(name)) target.soundBlobCache.set(name, sound);
         else revokeSoundUri(sound);
     }
+    return addedScripts;
 }
 
 type CachedLibrary_T = Promise<DecodeLibrary> | WeakRef<DecodeLibrary>;
@@ -267,7 +274,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected characterPrecache: Promise<void> = null;
     protected startupLevelLibrary: DecodeLibrary = null;
     protected effectLibrary: DecodeLibrary = null;
-    protected effectVM: UnScriptVM = null;
+    protected readonly cacheEffectVMs = new WeakMap<DecodeLibrary, UnScriptVM>();
     protected arrCursors: string[] = [];
     protected cursorLoad: Promise<void> = null;
     protected bigHeadScales: Promise<Record<string, number>> = null;
@@ -479,7 +486,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (effectLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         this.effectLibrary = effectLibrary;
-        this.effectVM = new UnScriptVM(effectLibrary);
+        this.getEffectVM(effectLibrary);
 
         if (characterLibrary) await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
@@ -632,7 +639,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (!info) throw new Error(`Effect template '${classPath}' is missing.`);
 
-        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath, this.effectVM);
+        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath);
     }
 
     protected async applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX, request: number = null) {
@@ -740,8 +747,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             return;
         }
 
-        mergePawnLibrary(pawnLibrary, library);
-        actor.getComponent<ScriptComponent>("script").getVM().loadFunctions();
+        if (mergePawnLibrary(pawnLibrary, library)) actor.getComponent<ScriptComponent>("script").getVM().loadFunctions();
         pawnLibrary.pawnEquipment = library.pawnEquipment;
         pawnLibrary.npcBow = library.npcBow;
         applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])), false);
@@ -1038,7 +1044,14 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return actor;
     }
 
-    public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string, vm: UnScriptVM = new UnScriptVM(library)): any {
+    public getEffectVM(library: DecodeLibrary): UnScriptVM {
+        let vm = this.cacheEffectVMs.get(library);
+
+        if (!vm) this.cacheEffectVMs.set(library, vm = new UnScriptVM(library));
+        return vm;
+    }
+
+    public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string, vm: UnScriptVM = this.getEffectVM(library)): any {
         const info = library.effectTemplates[classId] || library.effectTemplates[classId.toLowerCase()];
 
         if (!info) {
@@ -1079,6 +1092,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             const object = decodeObject3D(library, actorInfo) as any;
 
             object.scriptClassId = actorInfo.scriptClassId;
+            vm.initializeHost(object);
             return object;
         }
 

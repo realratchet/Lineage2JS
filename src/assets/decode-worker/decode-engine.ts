@@ -2001,6 +2001,7 @@ export class DecodeEngine {
         if (classPaths.some(path => path.toLowerCase() === "lineageeffect.e_u091_aura")) await this.pullHeroMesh(library, builder);
         for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path, requiredSounds);
         for (const path of scriptClassPaths) {
+            if (classPaths.includes(path)) continue;
             const [, cls] = await this.fetchScriptClass(path);
 
             builder.pullScriptClasses([cls]);
