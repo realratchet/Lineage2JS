@@ -229,7 +229,7 @@ export class DecodeWorkerClient {
     protected characterPrecache: Promise<void> = null;
     protected precacheWorker: DecodeWorkerClient = null;
     protected precacheCount = 0;
-    protected characterGroups: Promise<ICharacterGroup[]> = null;
+    protected readonly characterGroups = new Map<string, Promise<ICharacterGroup[]>>();
     protected readonly cacheNpcPrebuilds = new Map<string, Promise<void>>();
     protected loadingWorker: DecodeWorkerClient = null;
     protected loadingSectorCount = 0;
@@ -884,27 +884,25 @@ export class DecodeWorkerClient {
         }
     }
 
-    public precacheCharacters(settings: LoadSettings_T): Promise<void> {
-        if (!this.characterPrecache) this.characterPrecache = this.precacheCharacterGroups(settings);
+    public precacheCharacters(settings: LoadSettings_T, names: string[] = null): Promise<void> {
+        if (!this.characterPrecache) this.characterPrecache = this.precacheCharacterGroups(settings, names);
 
         return this.characterPrecache;
     }
 
-    protected async precacheCharacterGroups(settings: LoadSettings_T): Promise<void> {
+    protected async precacheCharacterGroups(settings: LoadSettings_T, names: string[]): Promise<void> {
         if (!isCacheEnabled(settings)) return;
-        if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
+        if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings, await this.getCharGroups(settings, names));
 
         await this.precacheAssets(async worker => {
-            if (!this.characterGroups) this.characterGroups = worker.queueSector({ type: "charGroups", settings }, false);
-
-            const [groups] = await Promise.all([this.characterGroups, worker.preparePackageDependencies({ type: "packageDependencies", path: "system/LineageWarrior.u", settings }, settings)]);
+            const [groups] = await Promise.all([this.requestCharGroups(settings, names, worker), worker.preparePackageDependencies({ type: "packageDependencies", path: "system/LineageWarrior.u", settings, names }, settings)]);
             let cursor = 0;
 
             await Promise.all(worker.slots.map(async () => {
                 while (cursor < groups.length) {
                     const group = groups[cursor++];
 
-                    await worker.queueSector({ type: "precacheCharacters", settings, charIndex: group.index }, false);
+                    await worker.queueSector({ type: "precacheCharacters", settings, charIndex: group.index, name: group.name }, false);
                 }
             }));
             printLoadingProfile(true);
@@ -912,20 +910,33 @@ export class DecodeWorkerClient {
     }
 
     public async getCharGroups(settings: LoadSettings_T = {}, names: string[] = null): Promise<ICharacterGroup[]> {
-        if (this.characterGroups) {
-            const groups = await this.characterGroups;
+        const all = this.characterGroups.get("");
+        if (names && all) return (await all).filter(group => names.includes(group.name));
 
-            return names ? groups.filter(group => names.includes(group.name)) : groups;
+        return this.requestCharGroups(settings, names);
+    }
+
+    protected async requestCharGroups(settings: LoadSettings_T, names: string[], worker?: DecodeWorkerClient): Promise<ICharacterGroup[]> {
+        const key = names ? names.join("_") : "";
+        const cached = this.characterGroups.get(key);
+        if (cached) return cached;
+
+        let request: Promise<ICharacterGroup[]>;
+        if (worker) request = worker.queueSector({ type: "charGroups", settings, names }, false);
+        else if (this.mainThreadEngine) request = this.mainThreadEngine.decodeCharGroups(settings, names);
+        else {
+            const index = this.pickScriptWorker();
+            if (index < 0) throw new Error("Decode worker is dead");
+            request = this.dispatch(index, { type: "charGroups", settings, names });
         }
-        if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups(settings, names);
 
-        const workerIndex = this.pickScriptWorker();
-
-        if (workerIndex < 0) throw new Error("Decode worker is dead");
-
-        const request: Promise<ICharacterGroup[]> = this.dispatch(workerIndex, { type: "charGroups", settings, names });
-        if (!names) this.characterGroups = request;
-        return request;
+        this.characterGroups.set(key, request);
+        try {
+            return await request;
+        } catch (error) {
+            this.characterGroups.delete(key);
+            throw error;
+        }
     }
 
     public getMusicInfo(): Promise<Record<number, string[]>> {

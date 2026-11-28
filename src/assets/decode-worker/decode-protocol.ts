@@ -20,7 +20,7 @@ export type DecodeMessage_T = {
 };
 
 export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorName: string; settings: LoadSettings_T; };
-export type PackageDependenciesMessage_T = { type: "packageDependencies"; requestId: number; path: string; settings: LoadSettings_T; };
+export type PackageDependenciesMessage_T = { type: "packageDependencies"; requestId: number; path: string; names?: string[]; settings: LoadSettings_T; };
 export type SectorPackagesMessage_T = { type: "sectorPackages"; requestId: number; sectorName: string; settings: LoadSettings_T; };
 export type SectorPackagesReadyMessage_T = { type: "sectorPackagesReady"; ready: { requestId: number, packages: string[] }; };
 export type SectorPackagesListedMessage_T = { type: "sectorPackagesListed"; requestId: number; packages: string[]; };
@@ -90,7 +90,7 @@ export type ListPlayerSkillsMessage_T = { type: "listPlayerSkills"; requestId: n
 export type GameStringsMessage_T = { type: "gameStrings"; requestId: number; settings: LoadSettings_T; };
 export type MatineeScenesMessage_T = { type: "matineeScenes"; requestId: number; levelName: string; };
 export type DecodeUITexturesMessage_T = { type: "decodeUITextures"; requestId: number; settings: LoadSettings_T; paths: string[]; useIntrinsicAlpha?: boolean; };
-export type PrecacheCharactersMessage_T = { type: "precacheCharacters"; requestId: number; settings: LoadSettings_T; charIndex: number; };
+export type PrecacheCharactersMessage_T = { type: "precacheCharacters"; requestId: number; settings: LoadSettings_T; charIndex: number; name: string; };
 export type CharactersPrecachedMessage_T = { type: "charactersPrecached"; requestId: number; };
 export type PrecacheNpcBundleMessage_T = { type: "precacheNpcBundle"; requestId: number; settings: LoadSettings_T; packageName: string; };
 export type NpcBundlePrecachedMessage_T = { type: "npcBundlePrecached"; requestId: number; };

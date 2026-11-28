@@ -129,7 +129,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "packageDependencies": {
             try {
-                const packages = await engine.getPackageDependencies(msg.path, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } }));
+                const packages = await engine.getPackageDependencies(msg.path, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } }), msg.names);
                 post({ type: "sectorPackagesListed", requestId: msg.requestId, packages });
             } catch (error) {
                 post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
@@ -163,7 +163,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "precacheCharacters": {
             try {
-                await engine.precacheCharacters(msg.settings, msg.charIndex);
+                await engine.precacheCharacters(msg.settings, [{ index: msg.charIndex, name: msg.name }]);
                 await engine.flushStoredAssets();
                 post({ type: "charactersPrecached", requestId: msg.requestId });
             } catch (e) {

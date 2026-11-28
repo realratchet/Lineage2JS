@@ -853,10 +853,23 @@ export class DecodeEngine {
         return this.getPackageDependencies(this.assetLoader.getPackage(sectorName, "Level").path, settings, ready);
     }
 
-    public async getPackageDependencies(path: string, settings: LoadSettings_T, ready: (packages: string[]) => void = null): Promise<string[]> {
+    public async getPackageDependencies(path: string, settings: LoadSettings_T, ready: (packages: string[]) => void = null, characterNames: string[] = null): Promise<string[]> {
         this.setLoadSettings(settings);
         const pkg = this.assetLoader.getPackage(path), packages: string[] = [];
         const cache = new PackageCache(settings);
+
+        let meshPackages: APackage[] = null;
+        if (characterNames) {
+            meshPackages = [];
+            for (const row of await this.decodeCharGrp()) {
+                if (!row.face_mesh.length) continue;
+                const [name, mesh] = splitObjectPath(row.face_mesh[0]);
+                if (!characterNames.includes(mesh.replace(/_m\d+_f$/, ""))) continue;
+
+                const meshPackage = this.assetLoader.getPackage(name, "SkeletalMesh");
+                if (!meshPackages.includes(meshPackage)) meshPackages.push(meshPackage);
+            }
+        }
 
         await this.assetLoader.preparePackages(pkg, 4, async entries => {
             const convertible = entries.filter(entry => /\.(usx|utx|uax)$/i.test(entry.path));
@@ -865,7 +878,7 @@ export class DecodeEngine {
             const paths = convertible.filter(entry => !cache.isComplete(entry.path)).map(entry => entry.path);
             packages.push(...paths);
             if (ready && paths.length) ready(paths);
-        });
+        }, meshPackages);
         await this.usingDecodePackage(pkg);
         return packages;
     }
@@ -1008,7 +1021,7 @@ export class DecodeEngine {
 
                 // LineageWarrior imports every race's default skeletal meshes.
                 await Promise.all([
-                    this.assetLoader.preparePackages(pkg, 4, null, false),
+                    this.assetLoader.preparePackages(pkg, 4, null, []),
                     this.usingDecodePackage(this.assetLoader.getPackage(meshPackage, "SkeletalMesh"))
                 ]);
             }
@@ -3146,17 +3159,13 @@ export class DecodeEngine {
         return transfer;
     }
 
-    public async precacheCharacters(settings: LoadSettings_T, charIndex: number = null): Promise<void> {
+    public async precacheCharacters(settings: LoadSettings_T, groups: { index: number, name: string }[] = null): Promise<void> {
         this.setLoadSettings(settings);
         if (!isCacheEnabled(settings)) return;
 
         await this.sweepCache(settings);
 
-        const groups = await this.decodeCharGroups(settings);
-
-        for (const group of groups) {
-            if (charIndex !== null && group.index !== charIndex) continue;
-
+        for (const group of groups || await this.decodeCharGroups(settings)) {
             const name = characterBundleCacheName(group.index, group.name);
 
             if (!this.cacheCharacterBundles.has(group.index) && !await DecodeCache.hasCachedLibrary(name, settings))
@@ -3173,19 +3182,20 @@ export class DecodeEngine {
         if (this.cacheCharGroups) return names ? this.cacheCharGroups.filter(group => names.includes(group.name)) : this.cacheCharGroups;
 
         const cacheSettings = { cache: settings.cache };
-        const cached = await DecodeCache.loadCachedLibrary("character_groups", cacheSettings);
+        const key = names ? `character_groups_${names.join("_")}` : "character_groups";
+        let cached = await DecodeCache.loadCachedLibrary("character_groups", cacheSettings);
+        if (cached) this.cacheCharGroups = cached.groups;
+        else if (names) cached = await DecodeCache.loadCachedLibrary(key, cacheSettings);
 
         if (cached) {
             for (const [index, pieces] of cached.hairPieces) this.cacheCharacterHairPieces.set(index, pieces);
-            this.cacheCharGroups = cached.groups;
-            return names ? this.cacheCharGroups.filter(group => names.includes(group.name)) : this.cacheCharGroups;
+            return names ? cached.groups.filter(group => names.includes(group.name)) : cached.groups;
         }
 
         const groups = await this.buildCharGroups(names);
-        if (names) return groups;
-
-        await DecodeCache.storeCachedLibraryDurable("character_groups", cacheSettings, { groups, hairPieces: this.cacheCharacterHairPieces });
-        return this.cacheCharGroups = groups;
+        await DecodeCache.storeCachedLibraryDurable(key, cacheSettings, { groups, hairPieces: this.cacheCharacterHairPieces });
+        if (!names) this.cacheCharGroups = groups;
+        return groups;
     }
 
     protected async buildCharGroups(names: string[]): Promise<ICharacterGroup[]> {

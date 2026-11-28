@@ -232,8 +232,8 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
         return this.load(pkg);
     }
 
-    public async preparePackages(pkg: APackage, concurrency: number, ready: (packages: APackage[]) => Promise<void>, includeRootMeshImports = true): Promise<void> {
-        const queue = [pkg], discovered = new Set([pkg]), pending = new Map<APackage, Promise<void>>(), waiting = new Set<APackage>();
+    public async preparePackages(pkg: APackage, concurrency: number, ready: (packages: APackage[]) => Promise<void>, meshPackages: APackage[] = null): Promise<void> {
+        const queue = meshPackages ? [pkg, ...meshPackages] : [pkg], discovered = new Set(queue), pending = new Map<APackage, Promise<void>>(), waiting = new Set<APackage>();
         const loader = this, nativePath = this.getNativePackage().path;
 
         async function prepare(entry: APackage): Promise<void> {
@@ -241,7 +241,7 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
             if (!loader.pkgDependencies.has(entry.path)) {
                 const dependencies: string[] = [];
                 for (const imp of entry.imports.filter(imp => imp.className !== "Package")) {
-                    if (entry === pkg && !includeRootMeshImports && imp.className === "SkeletalMesh") continue;
+                    if (entry === pkg && meshPackages && imp.className === "SkeletalMesh") continue;
 
                     let root = entry.getImportEntry(imp.idPackage);
                     while (root.idPackage !== 0) root = entry.getImportEntry(root.idPackage);

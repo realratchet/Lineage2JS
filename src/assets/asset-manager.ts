@@ -56,6 +56,8 @@ const characterMeshTypesByRace = [
     [PawnMeshType_T.MDwarf, PawnMeshType_T.FDwarf]
 ];
 
+const startupCharacterNames = loginServer && !allCharacterCreationRacesEnabled ? characterCreationRaces.flatMap(race => characterMeshTypesByRace[race].map(type => PawnMeshType_T[type])) : null;
+
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
 const tmpNpcFloorStart = new Vector3();
@@ -368,7 +370,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected applyClientConfig(clientConfig: ClientConfig_T, charGroups: ICharacterGroup[]): void {
         this.userConfig = clientConfig.userConfig;
         this.warriorAnimations = clientConfig.warriorAnimations;
-        this.charGroups = charGroups;
+        this.charGroups = charGroups.slice();
         this.getParent().getComponent("render").audioManager.setSubsystemConfig(this.userConfig.alAudio);
     }
 
@@ -424,9 +426,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         updateProgress();
         const startup = Promise.all([
             loadStartup(0, clientConfigLoad),
-            loadStartup(1, this.decodeWorker.getCharGroups(this.loadSettings, isLogin && !allCharacterCreationRacesEnabled
-                ? characterCreationRaces.flatMap(race => characterMeshTypesByRace[race].map(type => PawnMeshType_T[type]))
-                : null)),
+            loadStartup(1, this.decodeWorker.getCharGroups(this.loadSettings, startupCharacterNames)),
             loadStartup(2, this.decodeWorker.decodeEnv(this.loadSettings)),
             loadStartup(3, this.decodeWorker.getMusicInfo()),
             isLogin ? null : loadStartup(4, this.decodeWorker.decodeCharacter(this.loadSettings)),
@@ -1166,14 +1166,13 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public precacheNpcBundle(packageName: string): Promise<void> { return this.decodeWorker.precacheNpcBundle(this.loadSettings, packageName); }
 
     public precacheCharacters(): Promise<void> {
-        if (loginServer && !allCharacterCreationRacesEnabled) return Promise.resolve();
         if (!this.characterPrecache) this.characterPrecache = this.precacheCharacterAssets();
 
         return this.characterPrecache;
     }
 
     protected async precacheCharacterAssets(): Promise<void> {
-        await Promise.all([this.decodeWorker.precacheCharacters(this.loadSettings), loginServer ? this.prefetchCharacterScripts() : null]);
+        await Promise.all([this.decodeWorker.precacheCharacters(this.loadSettings, startupCharacterNames), loginServer ? this.prefetchCharacterScripts() : null]);
 
         if (loginServer) return;
 
@@ -1212,7 +1211,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public async prefetchCharacterScripts(): Promise<void> {
-        const groups = this.charGroups || await this.decodeWorker.getCharGroups(this.loadSettings);
+        const groups = this.charGroups || await this.decodeWorker.getCharGroups(this.loadSettings, startupCharacterNames);
 
         await Promise.all(groups.map(group => this.decodeWorker.prefetchScriptClass(this.loadSettings, `LineageWarrior.${group.name}`)));
     }
