@@ -87,7 +87,8 @@ export function consumeHSV(line: string): [number, number, number, number] {
 
     let t = 0, h = 0, s = 0, b = 0;
 
-    for (const param of line.slice(offsetLeft + 1, offsetRight).split(",")) {
+    // UL2NTimeLight::LoadHSV 0x7bd8b7..0x7bd92c reads each named field independently.
+    for (const param of line.slice(offsetLeft + 1, offsetRight).trim().split(/,\s*|\s+(?=\w+\s*=)/)) {
         const [k, v] = param.split("=").map(v => v.trim());
 
         switch (k.toLowerCase()) {
