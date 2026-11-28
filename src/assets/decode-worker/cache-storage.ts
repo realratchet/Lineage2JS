@@ -1,12 +1,14 @@
 import { serializeLibraryBlob, openLibraryFile, type LibraryBytes_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import { getAssetSourceId } from "../asset-source";
+import { DECODE_CACHE_VERSION } from "../decode-version";
 import requestWebLock from "../web-lock";
 import { startLoadingStep } from "../../loading-profile";
 import { isFirefox } from "../../browser";
 
+let cacheReady: Promise<void>;
+
 const CACHE_TTL_DAYS = 7;
-const CACHE_DIR = "decode-cache";
 export const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 export function isCacheEnabled(settings: LoadSettings_T): boolean {
@@ -27,10 +29,42 @@ export function hashSettings(settings: LoadSettings_T): string {
     return hash.toString(16).padStart(8, "0");
 }
 
+async function removeOldEntries(dir: FileSystemDirectoryHandle, root: boolean): Promise<void> {
+    for await (const entry of dir.values()) {
+        const directory = entry.kind === "directory";
+        const match = directory ? /^packages\.v(\d+)\.[\da-f]{8}$/.exec(entry.name) : /\.v(\d+)\.[\da-f]{8}(?:\.[a-z]\d+)*\.bin(?:\.tmp)?$/.exec(entry.name);
+
+        if (match && Number(match[1]) !== DECODE_CACHE_VERSION)
+            await dir.removeEntry(entry.name, { recursive: directory });
+        else if (root && directory && /^(?:http|files-[\da-f]+)(?:-|$)/.test(entry.name))
+            await removeOldEntries(entry as FileSystemDirectoryHandle, false);
+    }
+}
+
+async function checkCacheVersion(dir: FileSystemDirectoryHandle): Promise<void> {
+    try {
+        await requestWebLock("decode-cache-version", async () => {
+            const marker = await dir.getFileHandle("version", { create: true });
+            const version = String(DECODE_CACHE_VERSION);
+            if (await (await marker.getFile()).text() === version) return;
+
+            await removeOldEntries(dir, true);
+            const writer = await marker.createWritable();
+            await writer.write(version);
+            await writer.close();
+        });
+    } catch (error) {
+        cacheReady = null;
+        throw error;
+    }
+}
+
 export async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
     const root = await navigator.storage.getDirectory();
 
-    const dir = await root.getDirectoryHandle(CACHE_DIR, { create });
+    const dir = await root.getDirectoryHandle("decode-cache", { create });
+    if (!cacheReady) cacheReady = checkCacheVersion(dir);
+    await cacheReady;
 
     return dir.getDirectoryHandle(getAssetSourceId(), { create });
 }
