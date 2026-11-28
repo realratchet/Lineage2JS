@@ -29,7 +29,10 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         const parent = this.getParent(), rider = parent.ridePawn;
 
         if (rider) this.scriptController = rider.getComponent<NpcLifecycleComponent>("npcLifecycle").initializeController();
-        else if (this.scriptController === this.defaultController) this.getComponent<ScriptComponent>("script").getVM().initializeHost(this.scriptController);
+        else if (this.scriptController === this.defaultController) {
+            const vm = this.getComponent<ScriptComponent>("script").getVM();
+            vm.initializeHost(this.scriptController, vm.getHostLibrary(parent));
+        }
 
         parent.setUnrealScriptProperty("Controller", this.scriptController);
         return this.scriptController;

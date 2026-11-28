@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import UnScriptVM, { getLatentAction, resetLatentAction, ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
 import type BaseActor from "../base-actor";
@@ -51,7 +52,7 @@ export class PlayerController extends GameObject implements ScriptHost_T {
     public isEnterChatting = false;
     protected readonly scriptVM: UnScriptVM;
 
-    public constructor(library: DecodeLibrary) {
+    public constructor(library: DecodeLibrary, vm: UnScriptVM = new UnScriptVM(library)) {
         super();
 
         (this as any).isPlayerController = true;
@@ -59,8 +60,8 @@ export class PlayerController extends GameObject implements ScriptHost_T {
 
         if (!this.scriptClassId) throw new Error("UnrealScript class 'Engine.LineagePlayerController' is missing.");
 
-        this.scriptVM = new UnScriptVM(library);
-        this.scriptVM.initializeHost(this);
+        this.scriptVM = vm.registerLibrary(library);
+        vm.initializeHost(this, library);
 
         const script = this.addComponent(new ScriptComponent(this.scriptVM, classId => {
             debugger;
@@ -73,7 +74,6 @@ export class PlayerController extends GameObject implements ScriptHost_T {
 
     public call(name: string, args: ScriptValue_T[] = []): ScriptValue_T { return this.scriptVM.call(this, name, args); }
     public initInputSystem(): void {
-        this.scriptVM.loadFunctions();
         this.call("InitInputSystem");
     }
     public processState(deltaTime: number): void { this.scriptVM.processState(this, deltaTime); }
@@ -95,7 +95,7 @@ export class PlayerController extends GameObject implements ScriptHost_T {
         if (!pawn && previous) {
             this.setCameraMode(0);
             this.scriptVM.gotoState(this, "None");
-            this.scriptVM.invokeNative(this, this, 280, "SetTimer", [0, false]);
+            this.scriptVM.invokeNative(this, this, NativeFunctionIndex_T.SetTimer, "SetTimer", [0, false]);
             if (this.scriptOwner) setActorOwner(this, null);
 
             const ownership = this.getComponent<ActorOwnershipComponent>("actorOwnership"),
@@ -312,7 +312,7 @@ export class PlayerController extends GameObject implements ScriptHost_T {
     public resolveUnrealObject(id: string): string { return id; }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
-        if (call.index === 299 || call.name.toLowerCase() === "setrotation") {
+        if (call.index === NativeFunctionIndex_T.SetRotation || call.name.toLowerCase() === "setrotation") {
             if (call.context !== this) throw new Error(`'${this.scriptClassId}' cannot rotate '${call.context.scriptClassId}'.`);
             if (this.scriptProperties.get("bStatic") || !this.scriptProperties.get("bMovable")) return false;
 

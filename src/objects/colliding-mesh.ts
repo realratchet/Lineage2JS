@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
 import LitActorMesh, { MeshLight_T } from "./lit-actor";
@@ -185,7 +186,10 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             else {
                 if (!record.object) {
                     record.object = new StaticMeshActor(this, record.actor, record.primitive);
-                    if (this.scriptVM) record.object.setScriptRuntime(this.scriptVM, this.scriptObjectFactory);
+                    if (this.scriptVM) {
+                        this.scriptVM.setHostLibrary(record.object, this.scriptVM.getHostLibrary(this));
+                        record.object.setScriptRuntime(this.scriptVM, this.scriptObjectFactory);
+                    }
                 }
                 return record.object;
             }
@@ -208,7 +212,10 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         }
 
         for (const record of this.collisionActors)
-            if (record.object) record.object.setScriptRuntime(vm, objectFactory);
+            if (record.object) {
+                vm.setHostLibrary(record.object, vm.getHostLibrary(this));
+                record.object.setScriptRuntime(vm, objectFactory);
+            }
     }
 
     public getUnrealScriptProperty(id: string): ScriptValue_T {
@@ -219,7 +226,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
-        if ((call.index === 262 || call.name.toLowerCase() === "setcollision") && !this.findComponent<TransformComponent>("transform")) {
+        if ((call.index === NativeFunctionIndex_T.SetCollision || call.name.toLowerCase() === "setcollision") && !this.findComponent<TransformComponent>("transform")) {
             if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
 
             this.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);

@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import { RigidBodyDesc } from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import type BaseActor from "../base-actor";
@@ -55,11 +56,11 @@ export class MovableObject extends CollidingMesh {
         if (call.context !== this) return super.callUnrealNative(call);
 
         switch (call.index) {
-            case 3970:
+            case NativeFunctionIndex_T.SetPhysics:
                 if (call.args[0] !== EPhysics_T.PHYS_MovingBrush) throw new Error(`Mover physics '${call.args[0]}' is not implemented.`);
                 this.setUnrealScriptProperty("Physics", call.args[0]);
                 return undefined;
-            case 266: {
+            case NativeFunctionIndex_T.Move: {
                 const delta = call.args[0] as number[];
 
                 this.unfreezeMover();
@@ -70,7 +71,7 @@ export class MovableObject extends CollidingMesh {
                 this.freezeMover();
                 return true;
             }
-            case 299: {
+            case NativeFunctionIndex_T.SetRotation: {
                 const rotation = call.args[0] as number[];
 
                 this.unfreezeMover();

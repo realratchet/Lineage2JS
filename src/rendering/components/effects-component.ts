@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../../ue-script/native-function-index";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "../../audio/components/sound-component";
 import { Matrix4, Quaternion, Vector3, type Object3D } from "three";
@@ -39,9 +40,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
     }
 
     protected createEffect(classId: string): any {
-        const vm = this.findComponent<ScriptComponent>("script")?.getVM();
-
-        return this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, classId, vm);
+        return this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, classId);
     }
 
     public createDamageEffect(): Object3D {
@@ -186,14 +185,14 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             return undefined;
         }
 
-        if (call.index === 278 || name === "spawn") {
+        if (call.index === NativeFunctionIndex_T.Spawn || name === "spawn") {
             const instigator = getProperty(call.context, "Instigator");
             const script = this.getComponent<ScriptComponent<BaseActor>>("script");
             const vm = script.getVM(), defaults = vm.getDefaultObject(call.args[0] as string);
 
             // ULevel::SpawnActor 0x105889ac..0x10588acc; gameplay admission precedes allocation.
             if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract ||
-                !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
+                !vm.invokeNative(call.self, call.context, NativeFunctionIndex_T.ClassIsChildOf, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
             if (getProperty(defaults, "bStatic") || getProperty(defaults, "bNoDelete")) return null;
             if (getProperty(defaults, "bHighDetail")) {
                 const level = getProperty(call.context, "Level") as ScriptHost_T;

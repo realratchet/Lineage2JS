@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, IObject, ObjectComponent } from "./components";
 import UnScriptVM, { getProperty, setProperty, registerLevelActor, ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import { setActorOwner, type OwnedActor_T } from "../objects/components/actor-ownership-component";
@@ -39,8 +40,10 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
 
         if (this.initializeHost) {
             this.vm.initializeHost(parent);
-            if (this.vm.getLevelInfo()) setProperty(parent, "Level", this.vm.getLevelInfo());
-            if (this.vm.getLevel() && this.vm.invokeNative(parent, parent, 303, "IsA", ["Actor"])) setProperty(parent, "XLevel", this.vm.getLevel());
+            const library = this.vm.getHostLibrary(parent), level = this.vm.getLevel(library), info = this.vm.getLevelInfo(library);
+
+            if (info) setProperty(parent, "Level", info);
+            if (level && this.vm.invokeNative(parent, parent, NativeFunctionIndex_T.IsA, "IsA", ["Actor"])) setProperty(parent, "XLevel", level);
         } else this.vm.bindHost(parent, false);
         registerLevelActor(parent);
     }
@@ -111,11 +114,11 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     }
 
     public dispatchNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T> {
-        if (call.index === 272) {
+        if (call.index === NativeFunctionIndex_T.SetOwner) {
             const parent = this.getParent();
 
             if (call.context !== parent) throw new Error(`SetOwner context does not match '${parent.scriptClassId}'.`);
-            if (!(parent as any).isObject3D || !this.vm.invokeNative(parent, parent, 303, "IsA", ["Actor"])) throw new Error(`SetOwner requires an actor host.`);
+            if (!(parent as any).isObject3D || !this.vm.invokeNative(parent, parent, NativeFunctionIndex_T.IsA, "IsA", ["Actor"])) throw new Error(`SetOwner requires an actor host.`);
             setActorOwner(parent as unknown as OwnedActor_T, (call.args[0] ?? null) as unknown as OwnedActor_T);
             return undefined;
         }
@@ -125,7 +128,7 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     public createObject(classId: string): ScriptHost_T {
         const object = this.objectFactory(classId);
 
-        this.vm.initializeHost(object);
+        this.vm.initializeHost(object, this.vm.getHostLibrary(object) || this.vm.getHostLibrary(this.getParent()));
         return object;
     }
     public hasFunction(name: string): boolean { return this.vm.hasScriptFunction(this.getParent(), name); }

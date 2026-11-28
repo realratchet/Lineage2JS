@@ -24,7 +24,7 @@ import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import UnScriptVM, { getProperty, setProperty, setLevelActors, deleteLevelActors, registerLevelActor, updateLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T, type ScriptTraceQuery_T, type ScriptTraceResult_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, setLevelActors, registerLevelActor, updateLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T, type ScriptTraceQuery_T, type ScriptTraceResult_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
@@ -569,6 +569,7 @@ export class SectorObject extends GameObject {
     protected readonly fadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1, false, 4); // shadow receivers draw 4 projector instances, three clamps to meshPerAttribute * count
     protected readonly meshFadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1, false, 4);
     public scriptVM: UnScriptVM;
+    public decodeLibrary: DecodeLibrary;
     public physicsManager: PhysicsManager = null;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
@@ -734,7 +735,7 @@ export class SectorObject extends GameObject {
     public initializeL2GameEventActor(object: any): boolean {
         if (!object.isEmitterActor || this.initializedL2GameEventActors.has(object)) return false;
 
-        this.scriptVM.initializeHost(object);
+        this.scriptVM.initializeHost(object, this.decodeLibrary);
         Actor.prototype.postBeginPlay.call(object);
         this.initializedL2GameEventActors.add(object);
         return true;
@@ -944,7 +945,7 @@ export class SectorObject extends GameObject {
         if (actor === undefined) {
             const object = new Actor(info as any);
 
-            object.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.setActorScriptRuntime(object);
             this.arrLevelActors[index] = actor = object;
         }
         if (!actor) throw new Error(`Actor '${uuid}' has been removed from '${this.name}'.`);
@@ -985,11 +986,11 @@ export class SectorObject extends GameObject {
         if (!actor) {
             const object = new Actor(info as any);
 
-            object.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.setActorScriptRuntime(object);
             actor = object;
         } else {
-            if (!(actor as any).findComponent || !(actor as any).findComponent("script")) this.scriptVM.initializeHost(actor);
-            setScriptObjectProperty(actor as any, "Level", this.scriptVM.getLevelInfo());
+            if (!(actor as any).findComponent || !(actor as any).findComponent("script")) this.scriptVM.initializeHost(actor, this.decodeLibrary);
+            setScriptObjectProperty(actor as any, "Level", this.levelInfoActor);
             setScriptObjectProperty(actor as any, "XLevel", this);
             registerLevelActor(actor);
         }
@@ -1027,10 +1028,9 @@ export class SectorObject extends GameObject {
         }
         this.projectors.length = 0;
         for (const actor of this.arrLevelActors) if (actor) unregisterLevelActor(actor);
-        deleteLevelActors(this.scriptVM.getLevelInfo());
-        this.scriptVM.setLevelInfo(null);
         this.arrLevelActors.length = 0;
         this.arrLevelActorRecords.length = 0;
+        this.scriptVM.releaseLevel(this.decodeLibrary);
         this.firstDynamicActor = 0;
         this.hasRearrangedLevelActors = false;
         this.hasInitializedL2GameEvents = false;
@@ -1041,17 +1041,22 @@ export class SectorObject extends GameObject {
         this.cacheLevelActorIndices.clear();
     }
 
+    protected setActorScriptRuntime(actor: Actor): void {
+        this.scriptVM.setHostLibrary(actor, this.decodeLibrary);
+        actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+    }
+
     public setPhysicsVolumeScriptRuntime(objectFactory: ScriptObjectFactory_T): void {
         this.physicsVolumeObjectFactory = objectFactory;
         this.createZoneInfoActors();
-        for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
-        for (const projector of this.projectors) projector.setScriptRuntime(this.scriptVM, objectFactory, false);
-        for (const portal of this.antiPortals) portal.setScriptRuntime(this.scriptVM, objectFactory, false);
+        for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) this.setActorScriptRuntime(actor);
+        for (const projector of this.projectors) this.setActorScriptRuntime(projector);
+        for (const portal of this.antiPortals) this.setActorScriptRuntime(portal);
         this.createPhysicsVolumeActors();
-        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
+        for (const actor of this.physicsVolumeActors) this.setActorScriptRuntime(actor);
         this.createMusicVolumeActors();
         const volume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
-        if (volume) volume.setScriptRuntime(this.scriptVM, objectFactory, false);
+        if (volume) this.setActorScriptRuntime(volume);
     }
 
     public createZoneInfoActors(): void {
@@ -1069,7 +1074,7 @@ export class SectorObject extends GameObject {
         }
 
         this.levelInfoActor = create(this.levelInfo);
-        const library = this.scriptVM.getLibrary(), records = library.levelActors;
+        const library = this.decodeLibrary, records = library.levelActors;
 
         this.arrLevelActors.length = records.length;
         this.arrLevelActorRecords.push(...records);
@@ -1077,7 +1082,7 @@ export class SectorObject extends GameObject {
             if (records[index]) this.cacheLevelActorIndices.set(records[index].uuid, index);
             else this.arrLevelActors[index] = null;
         }
-        this.scriptVM.setLevelInfo(this.levelInfoActor);
+        this.scriptVM.setLevelInfo(this.levelInfoActor, this.decodeLibrary);
         setLevelActors(this.levelInfoActor, this);
         for (const info of library.antiPortals || []) {
             const index = this.cacheLevelActorIndices.get(info.uuid);
@@ -1104,11 +1109,11 @@ export class SectorObject extends GameObject {
             setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
             setScriptObjectProperty(volume, "bNoDelete", true);
             setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
-            volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.setActorScriptRuntime(volume);
         } else if (this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume")) {
             throw new Error(`Level '${this.levelInfo.name}' has an unresolved PhysicsVolume.`);
         }
-        for (const actor of actors.values()) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+        for (const actor of actors.values()) this.setActorScriptRuntime(actor);
     }
 
     public releaseZoneInfoActors(): void {
@@ -1131,10 +1136,10 @@ export class SectorObject extends GameObject {
         if (cached) return cached;
 
         const info: PhysicsVolumeDecodeInfo_T = { uuid: `${this.levelInfoActor.actorUuid}.DefaultPhysicsVolume`, type: "PhysicsVolume", name: "DefaultPhysicsVolume", objectPath: "Engine.DefaultPhysicsVolume", scriptClassId: "engine.DefaultPhysicsVolume", scriptProperties: {}, bsp: null };
-        this.scriptVM.initializeHost(info as any);
+        this.scriptVM.initializeHost(info as any, this.decodeLibrary);
         const volume = new PhysicsVolume(info);
         setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
-        volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+        this.setActorScriptRuntime(volume);
         setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
         setScriptObjectProperty(volume, "Priority", -1e6);
         setScriptObjectProperty(volume, "bNoDelete", true);
@@ -1148,7 +1153,7 @@ export class SectorObject extends GameObject {
         const cached = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
         for (const info of this.physicsVolumes) this.physicsVolumeActors.push(cached && cached.actorUuid === info.uuid ? cached : new PhysicsVolume(info));
         for (const actor of this.physicsVolumeActors) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
-        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+        for (const actor of this.physicsVolumeActors) this.setActorScriptRuntime(actor);
     }
 
     public releasePhysicsVolumeActors(): void {
@@ -1164,7 +1169,7 @@ export class SectorObject extends GameObject {
 
             const actor = new MusicVolume(info);
             actor.setUnrealScriptProperty("Level", this.levelInfoActor);
-            actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.setActorScriptRuntime(actor);
             this.musicVolumeActors.push(actor);
         }
     }

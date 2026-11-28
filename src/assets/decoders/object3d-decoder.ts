@@ -459,18 +459,19 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo | ISunLightD
     // };
 }
 
-export function decodeSectorCore(library: DecodeLibrary) { return drainSteps(decodeSectorCoreSteps(library)); }
+export function decodeSectorCore(library: DecodeLibrary, vm?: UnScriptVM) { return drainSteps(decodeSectorCoreSteps(library, vm)); }
 
-export function* decodeSectorCoreSteps(library: DecodeLibrary): Generator<void, SectorObject> {
+export function* decodeSectorCoreSteps(library: DecodeLibrary, vm: UnScriptVM = new UnScriptVM(library, true)): Generator<void, SectorObject> {
     const sector = new SectorObject();
 
     sector.name = library.name;
     sector.brightness = library.brightness;
     sector.levelInfo = library.levelInfo;
     sector.levelActorUuids = library.levelActorUuids;
-    sector.scriptVM = new UnScriptVM(library, true);
-    yield* sector.scriptVM.loadSteps();
-    sector.scriptVM.initializeLevel(sector);
+    sector.scriptVM = vm;
+    sector.decodeLibrary = library;
+    yield* vm.registerLibrarySteps(library);
+    vm.initializeLevel(sector, library);
 
     if (library.sector) {
         sector.index = new Vector2().fromArray(library.sector);
@@ -502,7 +503,6 @@ export function* decodeSectorCoreSteps(library: DecodeLibrary): Generator<void, 
         sector.pawns.add(decodeObject3D(library, pawnInfo));
 
     // traverseBSP/static mesh visibility need these even without renderable BSP sections
-    (sector as any).decodeLibrary = library;
     sector.nodeToSection = library.nodeToSection;
     sector.nodeZoneMasks = library.nodeZoneMasks;
 
@@ -707,8 +707,8 @@ export function decodeSectorStaticMeshes(library: DecodeLibrary, sector: SectorO
     return sector;
 }
 
-export function decodePackage(library: DecodeLibrary) {
-    const sector = decodeSectorCore(library);
+export function decodePackage(library: DecodeLibrary, vm?: UnScriptVM) {
+    const sector = decodeSectorCore(library, vm);
     decodeSectorStaticMeshes(library, sector);
 
     if (library.helpersZoneBounds) {

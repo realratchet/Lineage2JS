@@ -1149,7 +1149,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
                     if (typeof tag !== "string" || tag.toLowerCase() !== name) return;
 
-                    sector.scriptVM.initializeHost(actor);
+                    sector.scriptVM.initializeHost(actor, sector.decodeLibrary);
                     this.arrL2EventActors.push({ actor, sector });
                 });
             }

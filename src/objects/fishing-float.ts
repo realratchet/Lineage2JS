@@ -61,9 +61,10 @@ export class FishingFloat extends GameObject {
         this.nativeRotation.toQuaternion(this.quaternion);
         this.position.copy(location);
         this.originalLocation.copy(location);
-        const vm = renderManager.getParent().getComponent("asset").getEffectVM(library);
+        const vm = renderManager.getParent().getComponent("script").registerLibrary(library);
+        vm.setHostLibrary(this, library);
 
-        this.addComponent(new ScriptComponent(vm, classId => renderManager.getParent().getComponent("asset").createScriptObject(renderManager, library, classId, vm), this.scriptClassId));
+        this.addComponent(new ScriptComponent(vm, classId => renderManager.getParent().getComponent("asset").createScriptObject(renderManager, library, classId), this.scriptClassId));
 
         const rate = this.scriptProperties.get("RotationRate");
         if (!Array.isArray(rate) || rate.some(value => value !== 0)) throw new Error(`L2Float has unsupported RotationRate ${rate}`);

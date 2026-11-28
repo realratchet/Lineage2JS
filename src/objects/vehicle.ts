@@ -4,7 +4,6 @@ import CollidingMesh from "./colliding-mesh";
 import LitActorMesh from "./lit-actor";
 import TransformComponent from "./components/transform-component";
 import decodeObject3D from "../assets/decoders/object3d-decoder";
-import UnScriptVM from "../ue-script/vm";
 import { getRotatorQuaternionElements, sinRotator } from "@l2js/engine/utils/rotator";
 import type RenderManager from "../rendering/render-manager";
 import type DecodeLibrary from "@l2js/engine/decode-library";
@@ -32,8 +31,8 @@ export class Vehicle extends CollidingMesh {
 
         if (!cls) throw new Error(`Vehicle library has no PassengerShip class.`);
 
-        const vm = new UnScriptVM(library), host = { scriptClassId: cls.id, scriptProperties: new Map() };
-        vm.initializeHost(host);
+        const vm = renderManager.getParent().getComponent("script").registerLibrary(library), host = { scriptClassId: cls.id, scriptProperties: new Map() };
+        vm.initializeHost(host, library);
         const properties = host.scriptProperties;
         const baseInfo = library.leafActors.flat().find(info => info.name === "StaticMesh") as IStaticMeshObjectDecodeInfo;
         const mastInfo = library.leafActors.flat().find(info => info.name === "StaticVehicleMast") as IStaticMeshObjectDecodeInfo;
@@ -56,6 +55,7 @@ export class Vehicle extends CollidingMesh {
         this.scriptProperties.set("L2ServerObjectID", objectId);
         this.mast = new VehicleMast({ geometry: mast.geometry.clone(), materials: mast.material, scaledGlow: properties.get("ScaleGlow") as number, ambient });
         this.add(this.mast);
+        vm.setHostLibrary(this, library);
         this.setScriptRuntime(vm, null);
         renderManager.retainMeshResources([this, this.mast], this.resources);
     }

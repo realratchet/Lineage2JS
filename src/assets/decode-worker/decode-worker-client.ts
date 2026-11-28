@@ -1,5 +1,5 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
-import type { GameStrings_T, MatineeScene_T, UITexture_T, PlayerSkillInfo_T, WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T, ConfirmSharedScriptMessage_T } from "./decode-protocol";
+import { getSharedScriptKey, type GameStrings_T, type MatineeScene_T, type UITexture_T, type PlayerSkillInfo_T, type WorkerToMainMessage_T, type PrecacheResult_T, type ClientConfig_T, type WorkerMemoryStats_T, type ConfirmSharedScriptMessage_T } from "./decode-protocol";
 import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
@@ -157,18 +157,19 @@ function shareScript(library: any): void {
         const cache = cacheScript[key], dict = library[key];
 
         for (const id of Object.keys(dict)) {
-            if (cache.has(id)) dict[id] = cache.get(id);
+            const cacheKey = getSharedScriptKey(key, id, dict[id]);
+            if (cache.has(cacheKey)) dict[id] = cache.get(cacheKey);
             else {
-                cache.set(id, dict[id]);
-                received[key].push(id);
+                cache.set(cacheKey, dict[id]);
+                received[key].push(cacheKey);
                 hasNew = true;
             }
         }
 
-        for (const id of sharedScript[key]) {
-            if (!cache.has(id)) throw new Error(`Shared ${key} entry '${id}' never reached the main thread.`);
+        for (const cacheKey of sharedScript[key]) {
+            if (!cache.has(cacheKey)) throw new Error(`Shared ${key} entry '${cacheKey}' never reached the main thread.`);
 
-            dict[id] = cache.get(id);
+            dict[cacheKey.split("\0", 1)[0]] = cache.get(cacheKey);
         }
     }
 

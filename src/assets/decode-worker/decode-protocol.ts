@@ -1,3 +1,4 @@
+import { hasScriptStateCode } from "@l2js/engine/decode-library";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, ICharacterGroup, INpcDefinition, NpcSkillAttack_T, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 
@@ -8,6 +9,15 @@ export type ForgetSharedTexturesMessage_T = { type: "forgetSharedTextures"; keys
 export type ForgetSharedSoundsMessage_T = { type: "forgetSharedSounds"; keys: string[] };
 export type ConfirmSharedTexturesMessage_T = { type: "confirmSharedTextures"; keys: string[] };
 export type ConfirmSharedScriptMessage_T = { type: "confirmSharedScript"; keys: Record<"scriptClasses" | "scriptFunctions" | "scriptStates" | "scriptObjects", string[]> };
+
+export function getSharedScriptKey(group: keyof ConfirmSharedScriptMessage_T["keys"], id: string, value: any): string {
+    if (group === "scriptClasses" && hasScriptStateCode(value)) return id + "\0states";
+    if (group === "scriptObjects") {
+        const path = value.path.toLowerCase();
+        return id + "\0" + value.classId.toLowerCase() + (path === id ? "" : "\0" + path) + (value.properties ? "\0properties" : "");
+    }
+    return id;
+}
 
 export type InitMessage_T = { type: "init"; assetFiles: AssetFiles_T; servedAssets: ServedAssets_T; };
 

@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import { Box3, Matrix4, Object3D, Quaternion, Raycaster, Vector3 } from "three";
 import { decodeSkinnedMesh } from "../assets/decoders/object3d-decoder";
 import type DecodeLibrary from "../assets/unreal/decode-library";
@@ -191,7 +192,7 @@ export class GroundPickup extends Object3D {
 
             const actor = hit.actor as any;
             const script = actor && actor.findComponent("script");
-            const isLevel = actor && (!actor.scriptClassId && actor.getCollisionPrimitive().kind === "bsp" || script && script.getVM().invokeNative(actor, actor, 303, "IsA", arrLevelInfoClass));
+            const isLevel = actor && (!actor.scriptClassId && actor.getCollisionPrimitive().kind === "bsp" || script && script.getVM().invokeNative(actor, actor, NativeFunctionIndex_T.IsA, "IsA", arrLevelInfoClass));
             const height = hit.location.z + (actor && !isLevel ? 2 : 0);
             const time = hit.time * 12;
             const offset = time < minFloorDistance ? floorDistance - time : 0;

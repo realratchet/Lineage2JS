@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../../ue-script/native-function-index";
 import { Object3D } from "three";
 import { ObjectComponent, type ScriptActor_T } from "../../game/components";
 import type { ScriptComponent } from "../../game/script-component";
@@ -51,7 +52,7 @@ export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
         if (!object) return;
         const parent = this.getParent(), vm = this.getComponent<ScriptComponent>("script").getVM();
 
-        if (vm.invokeNative(parent, parent, 303, "IsA", ["L2Pickup"]) && getProperty(parent, "DropEffectActor") === (object as OwnedActor_T)) setScriptObjectProperty(parent, "DropEffectActor", null);
+        if (vm.invokeNative(parent, parent, NativeFunctionIndex_T.IsA, "IsA", ["L2Pickup"]) && getProperty(parent, "DropEffectActor") === (object as OwnedActor_T)) setScriptObjectProperty(parent, "DropEffectActor", null);
         const arrChildren = getProperty(parent, "Child") as OwnedActor_T[];
 
         for (let index = arrChildren.length - 1; index >= 0; index--)

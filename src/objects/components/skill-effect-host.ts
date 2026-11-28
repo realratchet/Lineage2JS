@@ -21,8 +21,6 @@ import type { UnScriptVM, ScriptHost_T } from "../../ue-script/vm";
 import type RibbonEmitter from "../emitters/ribbon-emitter";
 import { EPhysics_T } from "@l2js/engine/un-aactor";
 
-const cacheEffectLibraries = new WeakMap<object, DecodeLibrary>();
-
 const tmpPosition = new Vector3();
 const tmpDirection = new Vector3();
 const tmpAmplitude = new Vector3();
@@ -38,21 +36,20 @@ const tmpMatrix = new Matrix4();
 type RuntimeActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, any>, scriptClassId: string };
 
 export class SkillEffectHost implements SkillEffectHost_T {
-    protected scriptVM: UnScriptVM = null;
+    protected readonly scriptVM: UnScriptVM;
     protected readonly renderManager: RenderManager;
     protected readonly addEffectCallback: (effect: Object3D, owner: SkillActor_T | null) => void;
     protected readonly removeEffectCallback: (effect: Object3D) => void;
 
     public constructor(renderManager: RenderManager, addEffect: (effect: Object3D, owner: SkillActor_T | null) => void, removeEffect: (effect: Object3D) => void) {
         this.renderManager = renderManager;
+        this.scriptVM = renderManager.getParent().getComponent("script");
         this.addEffectCallback = addEffect;
         this.removeEffectCallback = removeEffect;
     }
 
     public createEffect(caster: SkillActor_T, classId: string, assets: DecodeLibrary = null): SkillActor_T {
         const effect = assets ? this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, assets, classId) : this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
-
-        if (assets) cacheEffectLibraries.set(effect, assets);
 
         if (!effect.isObject3D) throw new Error(`Skill effect '${classId}' is not an actor.`);
         return effect;
@@ -80,8 +77,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
     public isAlive(actor: SkillActor_T): boolean { return !!this.object(actor).parent; }
 
-    public isA(actor: SkillActor_T, classId: string, caster: SkillActor_T): boolean {
-        const classes = (cacheEffectLibraries.get(actor) || ((this.scriptVM || this.script(caster).getVM()) as any).library).scriptClasses;
+    public isA(actor: SkillActor_T, classId: string): boolean {
+        const classes = this.scriptVM.getLibrary().scriptClasses;
 
         for (let cls = classes[actor.scriptClassId]; cls; cls = classes[cls.superClassId])
             if (cls.id.toLowerCase() === classId.toLowerCase()) return true;
@@ -206,7 +203,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     protected getWeaponMesh(actor: SkillActor_T, left: boolean) {
-        const library = (this.script(actor).getVM() as any).library;
+        const library = this.scriptVM.getHostLibrary(this.object(actor));
         const equipment = library.pawnEquipment as IPawnEquipmentDecodeInfo;
         const hand = left ? "Left" : "Right";
         const item = equipment && (equipment.items.find(item => item.bone === `${hand}HandBone`) || equipment.items.find(item => item.bone === `${hand}ArmBone`));
@@ -322,7 +319,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public executeProgram(caster: SkillActor_T, context: SkillScriptHost_T, program: IScriptFunctionDecodeInfo): boolean {
-        if (!this.scriptVM) this.scriptVM = this.script(caster).getVM();
+        this.scriptVM.setHostLibrary(context, this.scriptVM.getHostLibrary(this.object(caster)));
         return !!this.scriptVM.invoke(context, program);
     }
 

@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../../ue-script/native-function-index";
 import { AnimationAction, AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, Matrix4, Material, Mesh, Skeleton, Texture, Vector3, Bone } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
@@ -264,12 +265,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             return;
         }
 
-        if (call.index === 259 || call.index === 260 || name === "playanim" || name === "loopanim") {
+        if (call.index === NativeFunctionIndex_T.PlayAnim || call.index === NativeFunctionIndex_T.LoopAnim || name === "playanim" || name === "loopanim") {
             const sequence = call.args[0] as string;
             const rate = call.args.length > 1 ? Number(call.args[1]) : 1;
             const tweenTime = call.args.length > 2 ? Number(call.args[2]) : 0;
             const channel = call.args.length > 3 ? Number(call.args[3]) : 0;
-            const loop = call.index === 260 || name === "loopanim";
+            const loop = call.index === NativeFunctionIndex_T.LoopAnim || name === "loopanim";
 
             if (channel !== 0) throw new Error(`UnrealScript ${call.name} channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
             if (sequence === "None") return;
@@ -279,7 +280,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             return;
         }
 
-        if (call.index === 282 || name === "isanimating") {
+        if (call.index === NativeFunctionIndex_T.IsAnimating || name === "isanimating") {
             const channel = call.args.length > 0 ? Number(call.args[0]) : 0;
 
             if (channel !== 0) throw new Error(`UnrealScript IsAnimating channel '${channel}' is not implemented for '${context.scriptClassId}'.`);

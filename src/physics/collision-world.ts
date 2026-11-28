@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import type RAPIER from "@dimforge/rapier3d";
 import { Box3, Vector3 } from "three";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../objects/objects";
@@ -1651,7 +1652,7 @@ function getTraceProperty(actor: ScriptHost_T, name: string): any {
 }
 
 function isActorClass(actor: ScriptHost_T, name: string, vm: UnScriptVM): boolean {
-    return vm.invokeNative(actor, actor, 303, "IsA", [name]) as boolean;
+    return vm.invokeNative(actor, actor, NativeFunctionIndex_T.IsA, "IsA", [name]) as boolean;
 }
 
 function isPlayerPawn(actor: ScriptHost_T, vm: UnScriptVM): boolean {

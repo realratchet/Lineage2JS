@@ -17,8 +17,8 @@ import prepareLibraryForTransfer, { collectTransferables } from "./collect-trans
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, serializeLibraryBlob, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectClass, dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T, ClientConfig_T, ConfirmSharedScriptMessage_T } from "./decode-protocol";
-import DecodeLibrary from "@l2js/engine/decode-library";
+import { getSharedScriptKey, type GameStrings_T, type SkillInfo_T, type ItemInfo_T, type MatineeScene_T, type MatineeAction_T, type UITexture_T, type PlayerSkillInfo_T, type PrecacheResult_T, type WorkerMemoryStats_T, type ClientConfig_T, type ConfirmSharedScriptMessage_T } from "./decode-protocol";
+import DecodeLibrary, { mergeLibraryScripts } from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
@@ -104,7 +104,8 @@ async function hydrateLibraryAssets(seekable: SeekableLibrary_T, library: Decode
 }
 
 function copyLibraryAssets(target: DecodeLibrary, source: DecodeLibrary): void {
-    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+    mergeLibraryScripts(target, source);
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         for (const [id, value] of Object.entries(source[key])) {
             if (id in target[key]) continue;
 
@@ -711,7 +712,7 @@ export class DecodeEngine {
     }
 
     protected prepareCachedPackageAsset(value: any, name: string, uuid: string): any {
-        if (SCRIPT_KEYS.includes(name as any) && this.sentScriptIds[name as typeof SCRIPT_KEYS[number]].has(uuid)) return null;
+        if ((name === "scriptFunctions" || name === "scriptStates") && this.sentScriptIds[name].has(uuid)) return null;
         if (name === "soundBlobCache" && value.assetName && this.sentSoundIds.has(value.assetName.toLowerCase())) value.data = null;
         if (name !== "materials") return value;
         if (value.materialType === "sprite") value.sprites = value.sprites.map((texture: ITextureDecodeInfo) => ({ ...texture }));
@@ -736,7 +737,7 @@ export class DecodeEngine {
     protected async hydrateSectorTransfer(cached: SeekableLibrary_T): Promise<DecodeLibrary> {
         const library = cached.library;
 
-        for (const key of SCRIPT_KEYS)
+        for (const key of ["scriptFunctions", "scriptStates"] as const)
             for (const id of Object.keys(library[key]))
                 if (this.sentScriptIds[key].has(id)) library[key][id] = null;
 
@@ -1823,10 +1824,11 @@ export class DecodeEngine {
             sharedScript[key] = [];
 
             for (const [id, value] of Object.entries(library[key])) {
-                if (!independent && sent.has(id)) sharedScript[key].push(id);
+                const cacheKey = getSharedScriptKey(key, id, value);
+                if (!independent && sent.has(cacheKey)) sharedScript[key].push(cacheKey);
                 else {
                     kept[id] = value;
-                    fresh.push([sent, id]);
+                    fresh.push([sent, cacheKey]);
                 }
             }
 

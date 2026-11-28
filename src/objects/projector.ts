@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import { Box3, Matrix3, Matrix4, Plane, Vector3, type Texture } from "three";
 import Actor, { type ActorInfo_T } from "./actor";
 import { releaseTouching, type TouchActor_T } from "./components/transform-component";
@@ -71,7 +72,7 @@ export class Projector extends Actor implements ICollidable {
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
-        if (call.index === 262) {
+        if (call.index === NativeFunctionIndex_T.SetCollision) {
             const [collideActors, blockActors, blockPlayers] = call.args;
 
             if (!collideActors && this.collisionProfile.collideActors) this.deactivateCollision();

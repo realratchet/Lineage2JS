@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../../ue-script/native-function-index";
 import { Matrix4, Object3D, Quaternion, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
@@ -52,16 +53,16 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
 
         const call = data as ScriptNativeCall_T;
         const context = call.context as any;
-        const name = call.index === 266 ? "move" : call.index === 267 ? "setlocation" : call.index === 299 ? "setrotation" : call.name.toLowerCase();
+        const name = call.index === NativeFunctionIndex_T.Move ? "move" : call.index === NativeFunctionIndex_T.SetLocation ? "setlocation" : call.index === NativeFunctionIndex_T.SetRotation ? "setrotation" : call.name.toLowerCase();
 
-        if (call.index === 262 || name === "setcollision") {
+        if (call.index === NativeFunctionIndex_T.SetCollision || name === "setcollision") {
             if (context !== this.getParent()) throw new Error(`SetCollision for '${context.scriptClassId}' is not implemented by '${this.getParent().name}'.`);
 
             this.renderManager.getPhysicsManager().setCollision(context, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
             return undefined;
         }
 
-        if (call.index === 298 || name === "setbase") {
+        if (call.index === NativeFunctionIndex_T.SetBase || name === "setbase") {
             const base = call.args[0] as any;
 
             if (typeof context.setBase === "function") context.setBase(base);
@@ -279,7 +280,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
             const controller = actor === this.renderManager.player ? this.renderManager.getParent().getComponent("asset").playerController : actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
 
             if (controller) {
-                if ((controller as any).isPlayerController || actor.getComponent<ScriptComponent>("script").getVM().invokeNative(actor, controller, 303, "IsA", ["PlayerController"])) {
+                if ((controller as any).isPlayerController || actor.getComponent<ScriptComponent>("script").getVM().invokeNative(actor, controller, NativeFunctionIndex_T.IsA, "IsA", ["PlayerController"])) {
                     if (getProperty(controller, "ViewTarget") !== parent) {
                         setProperty(controller, "bUseHoldCamera", true);
                         setProperty(controller, "CompensateYaw", Math.fround((getProperty(controller, "CompensateYaw") as number) + deltaRotation[1]));

@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "./ue-script/native-function-index";
 import { ENetMode_T } from "@l2js/engine/un-level-info";
 import { AnimationAction, AnimationClip, Mesh, Object3D, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
@@ -234,7 +235,7 @@ export class BaseActor extends GameObject implements ICollidable {
         // FNActorResourceLoader::CheckLoadingResource 0x769050..0x769190; browser world runs normal network-client mode.
         const count = this.getUnrealScriptProperty("LoadingResourceRef") as number;
         if (Number.isInteger(count) && count < 0) return false;
-        if (this.scriptComponent.getVM().invokeNative(this, this, 303, "IsA", arrVehicleClass)) return false;
+        if (this.scriptComponent.getVM().invokeNative(this, this, NativeFunctionIndex_T.IsA, "IsA", arrVehicleClass)) return false;
         if (!Number.isInteger(count)) throw new Error(`Pawn '${this.name}' has no loading-resource counter.`);
 
         return includeZero ? count >= 0 : count > 0;

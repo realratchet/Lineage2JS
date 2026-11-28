@@ -127,7 +127,7 @@ export class Actor extends GameObject {
         const path = typeof sound === "string" ? sound : (sound as any).scriptObjectPath;
 
         if (typeof path !== "string") throw new Error(`Actor '${this.name}' has an invalid stepping sound.`);
-        return { sound: path, library: vm.getLibrary() };
+        return { sound: path, library: vm.getHostLibrary(this) };
     }
 
     public getBaseActor(): ICollidable | null {

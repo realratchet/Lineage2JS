@@ -1,3 +1,4 @@
+import { NativeFunctionIndex_T } from "../ue-script/native-function-index";
 import type { Collider, RigidBody, World } from "@dimforge/rapier3d";
 import type { IStaticMeshActorDecodeInfo } from "@l2js/engine/contracts/mesh";
 import Actor from "./actor";
@@ -39,7 +40,7 @@ export class StaticMeshActor extends Actor implements ICollidable {
     public setUnrealScriptProperty(id: string, value: ScriptValue_T): void { this.collisionOwner.setActorProperty(this, id, value); }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
-        if (call.index === 262 || call.name.toLowerCase() === "setcollision") {
+        if (call.index === NativeFunctionIndex_T.SetCollision || call.name.toLowerCase() === "setcollision") {
             if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
 
             this.collisionOwner.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
